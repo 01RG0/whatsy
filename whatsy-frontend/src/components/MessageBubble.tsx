@@ -133,8 +133,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Text Content */}
-        {message.content && (
+        {message.content && message.content !== '[Unsupported message]' && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">{message.content}</div>
+        )}
+        {message.content === '[Unsupported message]' && (!message.attachments || message.attachments.length === 0) && (
+          <div className="flex items-center gap-2 px-3 pt-2 pb-1.5 text-gray-400 dark:text-[#8696a0] italic text-sm">
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>
+              {message.type === 'image' ? '📷 Photo'
+               : message.type === 'video' ? '🎥 Video'
+               : message.type === 'audio' ? '🎵 Audio'
+               : message.type === 'voice_note' ? '🎤 Voice message'
+               : message.type === 'document' ? '📄 Document'
+               : message.type === 'location' ? '📍 Location'
+               : message.type === 'contacts' ? '👤 Contact'
+               : message.type === 'sticker' ? '🎨 Sticker'
+               : 'Unsupported message'}
+            </span>
+          </div>
         )}
 
         {/* Interactive Buttons */}

@@ -179,8 +179,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       )}
                       {conv.lastMessage ? (
                         conv.lastMessage.type === 'image' ? '📷 Photo'
+                        : conv.lastMessage.type === 'video' ? '🎥 Video'
+                        : conv.lastMessage.type === 'audio' ? '🎵 Audio'
                         : conv.lastMessage.type === 'voice_note' ? '🎤 Voice message'
                         : conv.lastMessage.type === 'document' ? '📄 Document'
+                        : conv.lastMessage.type === 'location' ? '📍 Location'
+                        : conv.lastMessage.type === 'contacts' ? '👤 Contact'
+                        : conv.lastMessage.content === '[Unsupported message]' ? '⚠️ Unsupported message'
                         : conv.lastMessage.content
                       ) : (
                         'No messages yet'

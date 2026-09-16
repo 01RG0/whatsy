@@ -20,7 +20,7 @@ func NewConversationRepo(db *sql.DB) *ConversationRepo {
 }
 
 const conversationColumns = `
-	c.id, c.platform, s.id, s.name, s.phone,
+	c.id, c.platform, s.id, s.name, s.phone, COALESCE(s.avatar_url, ''),
 	c.last_message, COALESCE(c.last_message_at, c.updated_at),
 	COALESCE(last_msg.id::text, ''), COALESCE(last_msg.content_type, 'text'),
 	COALESCE(last_msg.direction, ''), COALESCE(last_msg.status, 'sent'),
@@ -168,7 +168,7 @@ func scanConversation(row conversationScanner, accountID string) (domain.Convers
 
 	err := row.Scan(
 		&conversation.ID, &conversation.Platform,
-		&conversation.Participant.ID, &conversation.Participant.DisplayName, &conversation.Participant.PhoneNumber,
+		&conversation.Participant.ID, &conversation.Participant.DisplayName, &conversation.Participant.PhoneNumber, &conversation.Participant.AvatarURL,
 		&conversation.LastMessage.Content, &conversation.LastMessage.CreatedAt,
 		&conversation.LastMessage.ID, &conversation.LastMessage.Type, &conversation.LastMessage.Direction, &conversation.LastMessage.Status,
 		&conversation.UnreadCount, &tags,

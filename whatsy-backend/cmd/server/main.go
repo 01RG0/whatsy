@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -78,6 +79,15 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
+	r.Get("/privacy", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(privacyHTML))
+	})
+	r.Get("/terms", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(termsHTML))
+	})
+
 	presenceMgr := presence.NewManager()
 	hub := websocket.NewHub(presenceMgr)
 	go hub.Run()
@@ -85,6 +95,7 @@ func main() {
 	convRepo := repository.NewConversationRepo(db)
 	msgRepo := repository.NewMessageRepo(db)
 	chatService := service.NewChatService(db, convRepo, msgRepo, zernio.NewClient(cfg.ZernioAPIKey), hub)
+	chatService.SetAutoReplier(service.NewAutoReplyService(db))
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
 	agentHandler := handler.NewAgentHandler(db)
@@ -93,9 +104,10 @@ func main() {
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
 	studentHandler := handler.NewStudentHandler(db)
 	autoReplyHandler := handler.NewAutoReplyHandler(db)
-	templateHandler := handler.NewTemplateHandler(cfg.ZernioAPIKey)
+	templateHandler := handler.NewTemplateHandler(cfg.ZernioAPIKey, db)
 	broadcastHandler := handler.NewBroadcastHandler(cfg.ZernioAPIKey, db)
 	waConnHandler := handler.NewWhatsAppConnectionHandler(db, cfg.ZernioAPIKey)
+	syncHandler := handler.NewSyncHandler(db, cfg.ZernioAPIKey)
 
 	authLimiter := handler.NewRateLimiter(10) // 10 req/min per IP on auth endpoints
 
@@ -144,6 +156,8 @@ func main() {
 		r.Post("/v1/whatsapp/connection/disconnect", waConnHandler.Disconnect)
 		r.Post("/v1/whatsapp/connection/webhook", waConnHandler.SetWebhook)
 		r.Post("/v1/whatsapp/connection/test", waConnHandler.SendTest)
+		r.Get("/v1/sync/stream", syncHandler.Sync)
+		r.Post("/v1/sync", syncHandler.SyncJSON)
 	})
 
 	srv := &http.Server{
@@ -203,12 +217,109 @@ func runMigrations(db *sql.DB) error {
 			return fmt.Errorf("read %s: %w", version, readErr)
 		}
 		if _, execErr := db.Exec(string(data)); execErr != nil {
+			// If tables already exist (from supabase db push), record and continue
+			if isAlreadyExistsErr(execErr) {
+				log.Printf("migration already applied (skipping): %s", version)
+				_, _ = db.Exec("INSERT INTO schema_migrations(version) VALUES($1) ON CONFLICT DO NOTHING", version)
+				continue
+			}
 			return fmt.Errorf("apply %s: %w", version, execErr)
 		}
-		if _, insErr := db.Exec("INSERT INTO schema_migrations(version) VALUES($1)", version); insErr != nil {
+		if _, insErr := db.Exec("INSERT INTO schema_migrations(version) VALUES($1) ON CONFLICT DO NOTHING", version); insErr != nil {
 			return fmt.Errorf("record %s: %w", version, insErr)
 		}
 		log.Printf("migration applied: %s", version)
 	}
 	return nil
 }
+
+func isAlreadyExistsErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "already exists") || strings.Contains(msg, "42P07")
+}
+
+const privacyHTML = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy — Whatsy</title>
+<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:60px auto;padding:0 24px;line-height:1.7;color:#1a1a1a}h1{font-size:2rem;margin-bottom:4px}h2{margin-top:2rem;font-size:1.2rem}p,li{color:#333}a{color:#00a884}.updated{color:#888;font-size:.9rem;margin-bottom:2rem}</style>
+</head>
+<body>
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated: September 17, 2026</p>
+
+<p>Whatsy ("we", "our", or "us") operates a WhatsApp Business messaging platform. This Privacy Policy explains how we collect, use, and protect your information.</p>
+
+<h2>1. Information We Collect</h2>
+<ul>
+<li><strong>Account information:</strong> Name, email address, and password when you register.</li>
+<li><strong>WhatsApp Business data:</strong> Phone numbers, conversation content, and message metadata processed on your behalf through the WhatsApp Business Platform.</li>
+<li><strong>Usage data:</strong> Log data, IP addresses, and browser information for security and analytics.</li>
+</ul>
+
+<h2>2. How We Use Your Information</h2>
+<ul>
+<li>To operate and provide the Whatsy platform.</li>
+<li>To facilitate WhatsApp Business messaging on your behalf.</li>
+<li>To improve our services and ensure security.</li>
+<li>To comply with legal obligations.</li>
+</ul>
+
+<h2>3. WhatsApp Business Platform</h2>
+<p>Whatsy integrates with the WhatsApp Business Platform (Meta Platforms, Inc.). By using our service, you agree to Meta's <a href="https://www.whatsapp.com/legal/business-policy/" target="_blank">WhatsApp Business Policy</a>. We do not sell WhatsApp message data to third parties.</p>
+
+<h2>4. Data Retention</h2>
+<p>Conversation data is retained for up to 6 months unless you request deletion earlier. Account data is retained until you close your account.</p>
+
+<h2>5. Data Security</h2>
+<p>We use industry-standard encryption (TLS in transit, AES-256 at rest) to protect your data. Access is restricted to authorized personnel only.</p>
+
+<h2>6. Your Rights</h2>
+<p>You have the right to access, correct, or delete your personal data at any time. Contact us at <a href="mailto:privacy@whatsy.io">privacy@whatsy.io</a>.</p>
+
+<h2>7. Third-Party Services</h2>
+<p>We use Supabase (database hosting) and Railway (cloud infrastructure). Each operates under their own privacy policies.</p>
+
+<h2>8. Changes</h2>
+<p>We may update this policy periodically. Continued use of the service after changes constitutes acceptance.</p>
+
+<h2>9. Contact</h2>
+<p>Email: <a href="mailto:privacy@whatsy.io">privacy@whatsy.io</a></p>
+</body></html>`
+
+const termsHTML = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms of Service — Whatsy</title>
+<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:60px auto;padding:0 24px;line-height:1.7;color:#1a1a1a}h1{font-size:2rem;margin-bottom:4px}h2{margin-top:2rem;font-size:1.2rem}p,li{color:#333}a{color:#00a884}.updated{color:#888;font-size:.9rem;margin-bottom:2rem}</style>
+</head>
+<body>
+<h1>Terms of Service</h1>
+<p class="updated">Last updated: September 17, 2026</p>
+
+<p>By using Whatsy, you agree to these Terms of Service. Please read them carefully.</p>
+
+<h2>1. Use of Service</h2>
+<p>Whatsy provides a WhatsApp Business messaging platform. You may use it only for lawful business communication purposes and in compliance with WhatsApp's Business Policy.</p>
+
+<h2>2. Account Responsibility</h2>
+<p>You are responsible for maintaining the security of your account credentials and for all activity under your account.</p>
+
+<h2>3. Prohibited Use</h2>
+<p>You must not use Whatsy to send spam, harass users, violate WhatsApp policies, or engage in any unlawful activity.</p>
+
+<h2>4. WhatsApp Compliance</h2>
+<p>All messaging must comply with <a href="https://www.whatsapp.com/legal/business-policy/" target="_blank">WhatsApp Business Policy</a> and applicable laws.</p>
+
+<h2>5. Limitation of Liability</h2>
+<p>Whatsy is provided "as is". We are not liable for indirect, incidental, or consequential damages arising from your use of the service.</p>
+
+<h2>6. Termination</h2>
+<p>We reserve the right to suspend or terminate accounts that violate these terms.</p>
+
+<h2>7. Contact</h2>
+<p>Email: <a href="mailto:hello@whatsy.io">hello@whatsy.io</a></p>
+</body></html>`
