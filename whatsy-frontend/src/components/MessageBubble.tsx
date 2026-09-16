@@ -18,8 +18,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const formattedTime = useMemo(() => {
     try {
-      const date = new Date(message.createdAt);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
       return '';
     }
@@ -66,16 +65,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   return (
-    <div
-      className={`group relative flex w-full my-1 px-4 ${
-        isOutbound ? 'justify-end' : 'justify-start'
-      }`}
-    >
+    <div className={`group relative flex w-full my-1 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] rounded-lg shadow-sm text-[14.2px] leading-[19px] overflow-hidden transition-all ${
           isOutbound
-            ? 'bg-[#005c4b] text-[#e9edef] rounded-tr-none'
-            : 'bg-[#202c33] text-[#d1d7db] rounded-tl-none'
+            ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-gray-900 dark:text-[#e9edef] rounded-tr-none'
+            : 'bg-white dark:bg-[#202c33] text-gray-900 dark:text-[#d1d7db] rounded-tl-none'
         }`}
       >
         {/* Reply Quote Banner */}
@@ -83,13 +78,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div
             className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-l-4 cursor-pointer select-none ${
               isOutbound
-                ? 'bg-[#025144] border-[#25d366]'
-                : 'bg-[#182229] border-[#00a884]'
+                ? 'bg-[#b7e0a0] dark:bg-[#025144] border-[#25d366]'
+                : 'bg-gray-100 dark:bg-[#182229] border-[#00a884]'
             }`}
           >
-            <span className="font-semibold text-[#53bdeb] mb-0.5">
-              {message.replyTo.senderName}
-            </span>
+            <span className="font-semibold text-[#53bdeb] mb-0.5">{message.replyTo.senderName}</span>
             <span className="truncate opacity-80">{message.replyTo.content}</span>
           </div>
         )}
@@ -100,35 +93,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             {message.attachments.map((att, idx) => {
               if (att.type === 'image') {
                 return (
-                  <div
-                    key={idx}
-                    className="relative cursor-pointer overflow-hidden max-h-80 bg-black/20"
-                    onClick={() => onImageClick?.(att.url)}
-                  >
-                    <img
-                      src={att.url}
-                      alt={att.name || 'Attachment'}
-                      className="w-full h-auto object-cover hover:opacity-95 transition"
-                      loading="lazy"
-                    />
+                  <div key={idx} className="relative cursor-pointer overflow-hidden max-h-80 bg-black/10" onClick={() => onImageClick?.(att.url)}>
+                    <img src={att.url} alt={att.name || 'Attachment'} className="w-full h-auto object-cover hover:opacity-95 transition" loading="lazy" />
                   </div>
                 );
               }
-
               if (att.type === 'audio' || message.type === 'voice_note') {
                 return (
-                  <div key={idx} className="flex items-center gap-3 p-3 bg-black/10">
-                    <button
-                      type="button"
-                      className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0 shadow hover:opacity-90 transition"
-                      title="Play Voice Note"
-                    >
-                      <svg className="w-4 h-4 ml-0.5 fill-current" viewBox="0 0 24 24">
-                        <polygon points="5 3 19 12 5 21 5 3" />
-                      </svg>
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-black/5 dark:bg-black/10">
+                    <button type="button" className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0 shadow hover:opacity-90 transition" title="Play">
+                      <svg className="w-4 h-4 ml-0.5 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                     </button>
                     <div className="flex-1">
-                      <div className="h-1.5 bg-gray-600 rounded-full w-full overflow-hidden">
+                      <div className="h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full w-full overflow-hidden">
                         <div className="h-full bg-[#00a884] w-1/3" />
                       </div>
                       <div className="flex justify-between text-[11px] opacity-75 mt-1">
@@ -139,29 +116,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </div>
                 );
               }
-
               if (att.type === 'document') {
                 return (
-                  <a
-                    key={idx}
-                    href={att.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 p-3 m-1.5 rounded bg-black/15 hover:bg-black/25 transition"
-                  >
-                    <div className="w-10 h-10 rounded bg-[#ff5252]/20 flex items-center justify-center text-[#ff5252] shrink-0 font-bold text-xs uppercase">
-                      PDF
-                    </div>
+                  <a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 m-1.5 rounded bg-black/5 dark:bg-black/15 hover:bg-black/10 dark:hover:bg-black/25 transition">
+                    <div className="w-10 h-10 rounded bg-red-100 dark:bg-[#ff5252]/20 flex items-center justify-center text-red-500 dark:text-[#ff5252] shrink-0 font-bold text-xs uppercase">PDF</div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{att.name || 'Document'}</p>
-                      <p className="text-[11px] opacity-70">
-                        {att.sizeBytes ? `${(att.sizeBytes / 1024).toFixed(1)} KB` : 'Document'}
-                      </p>
+                      <p className="text-[11px] opacity-70">{att.sizeBytes ? `${(att.sizeBytes / 1024).toFixed(1)} KB` : 'Document'}</p>
                     </div>
                   </a>
                 );
               }
-
               return null;
             })}
           </div>
@@ -169,26 +134,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Text Content */}
         {message.content && (
-          <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
-            {message.content}
-          </div>
+          <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">{message.content}</div>
         )}
 
-        {/* Interactive Template Buttons */}
-        {message.interactive && message.interactive.buttons && (
+        {/* Interactive Buttons */}
+        {message.interactive?.buttons && (
           <div className="border-t border-black/10 mt-1 flex flex-col divide-y divide-black/10">
             {message.interactive.buttons.map((btn) => (
               <button
                 key={btn.id}
                 type="button"
                 onClick={() => onButtonClick?.(btn.id, btn.title)}
-                className="py-2 px-3 text-center text-sm font-medium text-[#53bdeb] hover:bg-black/10 transition flex items-center justify-center gap-2"
+                className="py-2 px-3 text-center text-sm font-medium text-[#53bdeb] hover:bg-black/5 dark:hover:bg-black/10 transition flex items-center justify-center gap-2"
               >
                 {btn.type === 'url' && (
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                   </svg>
                 )}
                 {btn.type === 'call' && (
@@ -202,30 +163,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
-        {/* Timestamp and Delivery Status */}
-        <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right opacity-70 ml-2 mt-[-4px]">
+        {/* Timestamp + Status */}
+        <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right opacity-60 ml-2 mt-[-4px]">
           <span>{formattedTime}</span>
           {isOutbound && renderStatusTicks(message.status)}
         </div>
 
-        {/* Quick Reaction Badges */}
+        {/* Reaction Badges */}
         {message.reactions && message.reactions.length > 0 && (
-          <div className="absolute -bottom-2 right-2 bg-[#2a3942] rounded-full px-1.5 py-0.5 shadow border border-[#111b21] flex items-center gap-0.5 text-xs">
+          <div className="absolute -bottom-2 right-2 bg-white dark:bg-[#2a3942] rounded-full px-1.5 py-0.5 shadow border border-gray-200 dark:border-[#111b21] flex items-center gap-0.5 text-xs">
             {message.reactions.map((r, i) => (
-              <span key={i} title={r.senderName || ''}>
-                {r.emoji}
-              </span>
+              <span key={i} title={r.senderName || ''}>{r.emoji}</span>
             ))}
           </div>
         )}
 
-        {/* Hover Quick Action Buttons */}
-        <div className="absolute top-1 right-1 hidden group-hover:flex items-center gap-1 bg-[#111b21]/80 rounded px-1 py-0.5 backdrop-blur-sm">
+        {/* Hover Quick Actions */}
+        <div className="absolute top-1 right-1 hidden group-hover:flex items-center gap-1 bg-white/90 dark:bg-[#111b21]/80 rounded px-1 py-0.5 backdrop-blur-sm shadow">
           <button
             type="button"
             onClick={() => onReply?.(message)}
             title="Reply"
-            className="text-gray-300 hover:text-white p-0.5"
+            className="text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white p-0.5"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 10h10a5 5 0 015 5v3M3 10l6-6M3 10l6 6" />

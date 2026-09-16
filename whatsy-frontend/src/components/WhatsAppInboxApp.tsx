@@ -82,7 +82,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   );
 
   return (
-    <div className="w-full h-screen flex bg-[#111b21] overflow-hidden">
+    <div className="w-full h-screen flex bg-gray-100 dark:bg-[#111b21] overflow-hidden">
       <Sidebar
         conversations={filteredConversations}
         activeConversationId={activeConversationId ?? ''}
