@@ -90,6 +90,11 @@ func (h *SyncHandler) SyncJSON(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"synced": count, "syncedAt": time.Now().UTC().Format(time.RFC3339)})
 }
 
+// SyncSince is called by the background worker — incremental sync since a given time.
+func (h *SyncHandler) SyncSince(ctx context.Context, since time.Time) (int, error) {
+	return h.syncConversations(ctx, since, nil)
+}
+
 func parseSince(s string) time.Time {
 	if s == "" {
 		return time.Time{}

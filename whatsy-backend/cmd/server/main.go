@@ -109,6 +109,29 @@ func main() {
 	waConnHandler := handler.NewWhatsAppConnectionHandler(db, cfg.ZernioAPIKey)
 	syncHandler := handler.NewSyncHandler(db, cfg.ZernioAPIKey)
 
+	// Background sync worker — runs every 5 minutes, keeps Supabase up to date
+	go func() {
+		// Wait 30s after startup before first sync
+		time.Sleep(30 * time.Second)
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+				defer cancel()
+				// Incremental: only fetch conversations updated in the last 6 minutes
+				since := time.Now().Add(-6 * time.Minute)
+				n, err := syncHandler.SyncSince(ctx, since)
+				if err != nil {
+					log.Printf("background sync error: %v", err)
+				} else if n > 0 {
+					log.Printf("background sync: %d conversations updated", n)
+				}
+			}()
+			<-ticker.C
+		}
+	}()
+
 	authLimiter := handler.NewRateLimiter(10) // 10 req/min per IP on auth endpoints
 
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
