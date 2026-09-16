@@ -1,13 +1,21 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/whatsy/backend/internal/config"
@@ -35,20 +43,45 @@ func main() {
 	}
 	defer db.Close()
 
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping database: %v", err)
 	}
 
+	if err := runMigrations(db); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
+
 	r := chi.NewRouter()
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, 52<<20) // 52 MB
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
 	presenceMgr := presence.NewManager()
-	hub := websocket.NewHub()
+	hub := websocket.NewHub(presenceMgr)
 	go hub.Run()
+
 	convRepo := repository.NewConversationRepo(db)
 	msgRepo := repository.NewMessageRepo(db)
 	chatService := service.NewChatService(db, convRepo, msgRepo, zernio.NewClient(cfg.ZernioAPIKey), hub)
@@ -63,9 +96,13 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(cfg.ZernioAPIKey)
 	broadcastHandler := handler.NewBroadcastHandler(cfg.ZernioAPIKey, db)
 
+	authLimiter := handler.NewRateLimiter(10) // 10 req/min per IP on auth endpoints
+
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
-	r.Post("/v1/auth/register", authHandler.Register)
-	r.Post("/v1/auth/login", authHandler.Login)
+
+	r.With(authLimiter.Middleware).Post("/v1/auth/register", authHandler.Register)
+	r.With(authLimiter.Middleware).Post("/v1/auth/login", authHandler.Login)
+
 	r.Group(func(r chi.Router) {
 		r.Use(handler.JWTMiddleware(cfg.JWTSecret))
 		r.Get("/v1/whatsapp/media/{mediaId}", mediaHandler.Get)
@@ -98,6 +135,69 @@ func main() {
 		r.Post("/v1/whatsapp/broadcasts", broadcastHandler.SendBroadcast)
 	})
 
-	log.Printf("server listening on :%s", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, r))
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("server listening on :%s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %v", err)
+		}
+	}()
+
+	<-quit
+	log.Println("shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("forced shutdown: %v", err)
+	}
+	log.Println("server exited")
+}
+
+func runMigrations(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version TEXT PRIMARY KEY,
+		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`)
+	if err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		return fmt.Errorf("read migrations dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".sql" {
+			continue
+		}
+		version := entry.Name()
+		var applied bool
+		row := db.QueryRow("SELECT true FROM schema_migrations WHERE version=$1", version)
+		if scanErr := row.Scan(&applied); scanErr == nil && applied {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join("migrations", version))
+		if readErr != nil {
+			return fmt.Errorf("read %s: %w", version, readErr)
+		}
+		if _, execErr := db.Exec(string(data)); execErr != nil {
+			return fmt.Errorf("apply %s: %w", version, execErr)
+		}
+		if _, insErr := db.Exec("INSERT INTO schema_migrations(version) VALUES($1)", version); insErr != nil {
+			return fmt.Errorf("record %s: %w", version, insErr)
+		}
+		log.Printf("migration applied: %s", version)
+	}
+	return nil
 }

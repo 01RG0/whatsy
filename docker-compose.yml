@@ -1,43 +1,26 @@
 version: '3.9'
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: whatsy
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./whatsy-backend/migrations:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    ports:
-      - "5432:5432"
+# Database is Supabase cloud (eu-central-1) — no local postgres service needed.
+# Dashboard: https://supabase.com/dashboard/project/ymlgvsgavfarbxomfhdt
 
+services:
   backend:
     build: ./whatsy-backend
-    env_file: ./whatsy-backend/.env.example
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/whatsy?sslmode=disable
-      PORT: "8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    env_file: ./whatsy-backend/.env
     ports:
       - "8080:8080"
     restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build: ./whatsy-frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "80:80"
     restart: on-failure
-
-volumes:
-  postgres_data: {}

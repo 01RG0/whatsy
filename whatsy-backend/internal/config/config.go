@@ -32,6 +32,12 @@ func Load() (Config, error) {
 	if config.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
 	}
+	if config.JWTSecret == "" {
+		return Config{}, errors.New("JWT_SECRET is required")
+	}
+	if config.ZernioAPIKey == "" {
+		return Config{}, errors.New("ZERNIO_API_KEY is required")
+	}
 
 	return config, nil
 }

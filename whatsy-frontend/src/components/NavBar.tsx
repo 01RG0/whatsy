@@ -1,6 +1,5 @@
 import DarkModeToggle from './DarkModeToggle'
-
-const path = window.location.pathname
+import { navigate } from '../App'
 
 const navItems = [
   { href: '/', icon: '💬', label: 'Inbox' },
@@ -9,11 +8,11 @@ const navItems = [
   { href: '/settings', icon: '⚙️', label: 'Settings' },
 ]
 
-function NavIcon({ href, icon, label }: { href: string; icon: string; label: string }) {
+function NavIcon({ href, icon, label, path }: { href: string; icon: string; label: string; path: string }) {
   const active = path === href || (href !== '/' && path.startsWith(href))
   return (
-    <a
-      href={href}
+    <button
+      onClick={() => navigate(href)}
       title={label}
       className={`flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg transition-colors min-h-[44px] min-w-[44px]
         md:w-full md:flex-row md:gap-3 md:px-3 md:justify-start
@@ -21,11 +20,11 @@ function NavIcon({ href, icon, label }: { href: string; icon: string; label: str
     >
       <span className="text-lg leading-none">{icon}</span>
       <span className="text-[10px] md:text-sm font-medium">{label}</span>
-    </a>
+    </button>
   )
 }
 
-export default function NavBar() {
+export default function NavBar({ path }: { path: string }) {
   const agentRaw = localStorage.getItem('whatsy_agent')
   const agent = agentRaw ? JSON.parse(agentRaw) : null
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
@@ -41,7 +40,7 @@ export default function NavBar() {
         <DarkModeToggle />
         <div className="flex flex-col gap-1 mt-2 flex-1">
           {navItems.map((item) => (
-            <NavIcon key={item.href} {...item} />
+            <NavIcon key={item.href} {...item} path={path} />
           ))}
         </div>
         {agent && (
@@ -60,7 +59,7 @@ export default function NavBar() {
       {/* Mobile: bottom tab bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#111b21] border-t border-[#222e35] flex justify-around items-center h-14 px-2">
         {navItems.map((item) => (
-          <NavIcon key={item.href} {...item} />
+          <NavIcon key={item.href} {...item} path={path} />
         ))}
       </nav>
     </>

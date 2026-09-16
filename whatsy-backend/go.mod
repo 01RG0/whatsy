@@ -11,3 +11,5 @@ require (
 )
 
 require nhooyr.io/websocket v1.8.17
+
+require github.com/go-chi/cors v1.2.2 // indirect
