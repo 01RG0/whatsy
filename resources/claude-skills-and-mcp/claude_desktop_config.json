@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "zernio": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "tsx",
+        "D:\\pRoG\\whatsy\\resources\\claude-skills-and-mcp\\zernio-mcp-server.ts"
+      ],
+      "env": {
+        "ZERNIO_API_KEY": "YOUR_ZERNIO_API_KEY_HERE",
+        "ZERNIO_BASE_URL": "https://api.zernio.com/v1"
+      }
+    }
+  }
+}

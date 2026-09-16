@@ -1,0 +1,40 @@
+# Large reference docs (893 files — not needed in repo)
+docs/
+llms-full.txt
+llms.txt
+FILE_MAP.md
+CLAUDE_ZERNIO_API_MASTER.md
+build_file_map.py
+generate_api_master.py
+organize_docs.py
+openapi.yaml
+
+# CLI swarm internals
+scripts/
+references/
+.claude/
+
+# Go
+whatsy-backend/whatsy-backend
+whatsy-backend/*.exe
+whatsy-backend/vendor/
+
+# Node
+whatsy-frontend/node_modules/
+whatsy-frontend/dist/
+
+# Env
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Test output
+ui-test-screenshots/
+ui-test-report.md

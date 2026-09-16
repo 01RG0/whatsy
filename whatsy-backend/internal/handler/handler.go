@@ -1,0 +1,261 @@
+// Package handler implements the HTTP and WebSocket transport layer.
+package handler
+
+import (
+	"database/sql"
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/whatsy/backend/internal/config"
+	"github.com/whatsy/backend/internal/domain"
+	"github.com/whatsy/backend/internal/presence"
+	"github.com/whatsy/backend/internal/repository"
+	"github.com/whatsy/backend/internal/service"
+	ws "github.com/whatsy/backend/internal/websocket"
+	"github.com/whatsy/backend/internal/zernio"
+	"nhooyr.io/websocket"
+)
+
+type Handler struct {
+	db          *sql.DB
+	convRepo    *repository.ConversationRepo
+	msgRepo     *repository.MessageRepo
+	chatService *service.ChatService
+	hub         *ws.Hub
+	presenceMgr *presence.Manager
+	cfg         *config.Config
+}
+
+func New(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, chatService *service.ChatService, hub *ws.Hub, presenceMgr *presence.Manager, cfg *config.Config) *Handler {
+	return &Handler{db: db, convRepo: convRepo, msgRepo: msgRepo, chatService: chatService, hub: hub, presenceMgr: presenceMgr, cfg: cfg}
+}
+
+func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
+	claims, _ := ClaimsFromContext(r.Context())
+	accountID := ""
+	if claims != nil {
+		accountID = claims.AgentID
+	}
+	platform := r.URL.Query().Get("platform")
+	if platform != "" {
+		accountID = platform
+	}
+
+	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), queryLimit(r, 50))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list conversations"})
+		return
+	}
+	writeJSON(w, http.StatusOK, conversations)
+}
+
+func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	messages, err := h.msgRepo.ListByConversation(r.Context(), chi.URLParam(r, "id"), queryLimit(r, 100), r.URL.Query().Get("before"))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list messages"})
+		return
+	}
+	writeJSON(w, http.StatusOK, messages)
+}
+
+// SearchMessages returns messages matching q, newest first, together with
+// the participant information for each message's conversation.
+func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if len([]rune(query)) < 2 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "q must be at least 2 characters"})
+		return
+	}
+
+	const searchQuery = `SELECT m.id, m.conversation_id, m.content, m.direction, m.timestamp,
+		s.name AS student_name, s.phone AS student_phone
+		FROM messages m
+		JOIN conversations c ON c.id = m.conversation_id
+		JOIN students s ON s.id = c.student_id
+		WHERE m.content ILIKE '%' || $1 || '%'
+		ORDER BY m.timestamp DESC
+		LIMIT $2`
+	rows, err := h.db.QueryContext(r.Context(), searchQuery, query, queryLimit(r, 20))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search messages"})
+		return
+	}
+	defer rows.Close()
+
+	type searchResult struct {
+		ID             string `json:"id"`
+		ConversationID string `json:"conversationId"`
+		Content        string `json:"content"`
+		Direction      string `json:"direction"`
+		Timestamp      any    `json:"timestamp"`
+		StudentName    string `json:"studentName"`
+		StudentPhone   string `json:"studentPhone"`
+	}
+	results := make([]searchResult, 0)
+	for rows.Next() {
+		var result searchResult
+		if err := rows.Scan(&result.ID, &result.ConversationID, &result.Content, &result.Direction, &result.Timestamp, &result.StudentName, &result.StudentPhone); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search messages"})
+			return
+		}
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search messages"})
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
+func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var payload zernio.SendMessagePayload
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	message, err := h.chatService.SendOutboundMessage(r.Context(), chi.URLParam(r, "id"), payload)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "send message"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, message)
+}
+
+func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	if err := h.chatService.MarkConversationRead(r.Context(), chi.URLParam(r, "id")); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark conversation read"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// AssignConversation assigns an agent to a conversation and notifies all clients.
+func (h *Handler) AssignConversation(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var payload struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil || payload.AgentID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agentId is required"})
+		return
+	}
+
+	conversationID := chi.URLParam(r, "id")
+	updated, err := h.convRepo.AssignAgent(r.Context(), conversationID, payload.AgentID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "assign conversation"})
+		return
+	}
+	if !updated {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "conversation not found"})
+		return
+	}
+
+	conversation, err := h.convRepo.GetByID(r.Context(), conversationID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "get conversation"})
+		return
+	}
+	if conversation == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "conversation not found"})
+		return
+	}
+	h.hub.BroadcastToAll(ws.ConversationUpdatedEvent{Event: ws.EventConversationUpdated, Conversation: *conversation})
+	writeJSON(w, http.StatusOK, conversation)
+}
+
+func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read webhook body"})
+		return
+	}
+	if h.cfg == nil || !zernio.ValidateSignature([]byte(h.cfg.ZernioWebhookSecret), body, r.Header.Get("x-hub-signature-256")) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
+		return
+	}
+
+	event, err := zernio.ParseWebhookEvent(body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook event"})
+		return
+	}
+
+	switch event.Type {
+	case zernio.EventInboxMessageCreated:
+		var payload zernio.InboundMessagePayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			log.Printf("webhook: decode inbound message: %v", err)
+		} else if err := h.chatService.HandleInboundMessage(r.Context(), payload); err != nil {
+			log.Printf("webhook: handle inbound message: %v", err)
+		}
+	case zernio.EventInboxMessageStatus:
+		var payload zernio.MessageStatusPayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			log.Printf("webhook: decode message status: %v", err)
+		} else {
+			if err := h.msgRepo.UpdateStatus(r.Context(), payload.MessageID, domain.DeliveryStatus(payload.Status)); err != nil {
+				log.Printf("webhook: update message status: %v", err)
+			}
+			h.hub.BroadcastToRoom(payload.ConversationID, ws.MessageStatusEvent{Event: ws.EventMessageStatus, MessageID: payload.MessageID, Status: payload.Status})
+		}
+	case zernio.EventConversationUpdated:
+		var payload zernio.ConversationUpdatedPayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			log.Printf("webhook: decode conversation update: %v", err)
+		} else {
+			h.hub.BroadcastToAll(payload)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *Handler) ServeWebSocket(w http.ResponseWriter, r *http.Request) {
+	claims, ok := ClaimsFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	conn, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		log.Printf("websocket upgrade: %v", err)
+		return
+	}
+	client := ws.NewClient(h.hub, conn, claims.AgentID, claims.Name, claims.Avatar)
+	h.hub.Register(client)
+	go client.ReadPump(r.Context())
+	go client.WritePump(r.Context())
+}
+
+func queryLimit(r *http.Request, defaultLimit int) int {
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		return defaultLimit
+	}
+	return limit
+}
+
+func queryOffset(r *http.Request, defaultOffset int) int {
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil || offset < 0 {
+		return defaultOffset
+	}
+	return offset
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("write JSON response: %v", err)
+	}
+}

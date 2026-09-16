@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: whatsy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./whatsy-backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./whatsy-backend
+    env_file: ./whatsy-backend/.env.example
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/whatsy?sslmode=disable
+      PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: on-failure
+
+  frontend:
+    build: ./whatsy-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: on-failure
+
+volumes:
+  postgres_data: {}
