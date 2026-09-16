@@ -35,6 +35,31 @@ const navItems = [
     ),
   },
   {
+    href: '/team',
+    label: 'Team',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 4.354a4 4 0 1 1 0 5.292" />
+        <path d="M15 21H3v-1a6 6 0 0 1 12 0v1z" />
+        <path d="M21 21v-1a6 6 0 0 0-4.343-5.747" />
+        <circle cx="9" cy="7" r="4" />
+      </svg>
+    ),
+  },
+  {
+    href: '/connection',
+    label: 'Connection',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8.56 2.9A7 7 0 0 1 19 9v4" />
+        <path d="M4.15 6.24A7 7 0 0 0 5 9v4" />
+        <path d="M12 13a3 3 0 0 0 3-3V9a3 3 0 0 0-6 0v1a3 3 0 0 0 3 3z" />
+        <path d="M12 13v8" />
+        <path d="M8 21h8" />
+      </svg>
+    ),
+  },
+  {
     href: '/settings',
     label: 'Settings',
     icon: (
