@@ -1,13 +1,17 @@
 package handler
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"io"
+	"math/big"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // AgentHandler serves agent profile endpoints.
@@ -103,6 +107,139 @@ func (h *AgentHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 // Get returns an agent by id.
 func (h *AgentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	h.getByID(w, r, chi.URLParam(r, "id"))
+}
+
+// TeamStats returns aggregated team KPIs.
+func (h *AgentHandler) TeamStats(w http.ResponseWriter, r *http.Request) {
+	var totalAgents int
+	if err := h.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM agents").Scan(&totalAgents); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "stats"})
+		return
+	}
+	var messagesToday int
+	h.db.QueryRowContext(r.Context(),
+		"SELECT COUNT(*) FROM messages WHERE direction='outbound' AND timestamp >= NOW() - INTERVAL '24 hours'",
+	).Scan(&messagesToday) //nolint:errcheck — zero is a safe default
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"totalAgents":     totalAgents,
+		"onlineNow":       0,
+		"messagesToday":   messagesToday,
+		"avgResponseTime": "—",
+	})
+}
+
+// InviteAgent creates a new agent with a generated temporary password.
+func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var req struct {
+		Email string `json:"email"`
+		Role  string `json:"role"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if req.Email == "" || req.Name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email and name are required"})
+		return
+	}
+	if req.Role == "" {
+		req.Role = "agent"
+	}
+
+	tempPass := randomPassword(12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(tempPass), 12)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+		return
+	}
+
+	var a agent
+	err = h.db.QueryRowContext(r.Context(),
+		`INSERT INTO agents (name, email, password_hash, role)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id::text, name, email, role, avatar, created_at`,
+		req.Name, req.Email, string(hash), req.Role,
+	).Scan(&a.ID, &a.Name, &a.Email, &a.Role, &a.Avatar, &a.CreatedAt)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "email already exists"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create agent"})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"agent":        a,
+		"tempPassword": tempPass,
+	})
+}
+
+// UpdateAgent updates any agent's role/name/avatar (admin operation).
+func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	defer r.Body.Close()
+	var req struct {
+		Name   *string `json:"name"`
+		Avatar *string `json:"avatar"`
+		Role   *string `json:"role"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(),
+		`UPDATE agents SET
+			name   = COALESCE($1, name),
+			avatar = COALESCE($2, avatar),
+			role   = COALESCE($3, role),
+			updated_at = NOW()
+		 WHERE id = $4`,
+		req.Name, req.Avatar, req.Role, id,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "update agent"})
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})
+		return
+	}
+	h.getByID(w, r, id)
+}
+
+// DeleteAgent permanently removes an agent (cannot delete yourself).
+func (h *AgentHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	claims, ok := ClaimsFromContext(r.Context())
+	if ok && claims.AgentID == id {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot delete yourself"})
+		return
+	}
+	res, err := h.db.ExecContext(r.Context(), "DELETE FROM agents WHERE id = $1", id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete agent"})
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "agent removed"})
+}
+
+const passwordChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func randomPassword(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(passwordChars))))
+		b[i] = passwordChars[idx.Int64()]
+	}
+	return string(b)
 }
 
 func (h *AgentHandler) getByID(w http.ResponseWriter, r *http.Request, id string) {

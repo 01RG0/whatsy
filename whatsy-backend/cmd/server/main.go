@@ -95,6 +95,7 @@ func main() {
 	autoReplyHandler := handler.NewAutoReplyHandler(db)
 	templateHandler := handler.NewTemplateHandler(cfg.ZernioAPIKey)
 	broadcastHandler := handler.NewBroadcastHandler(cfg.ZernioAPIKey, db)
+	waConnHandler := handler.NewWhatsAppConnectionHandler(db, cfg.ZernioAPIKey)
 
 	authLimiter := handler.NewRateLimiter(10) // 10 req/min per IP on auth endpoints
 
@@ -110,7 +111,11 @@ func main() {
 		r.Get("/v1/agents", agentHandler.List)
 		r.Get("/v1/agents/me", agentHandler.Me)
 		r.Patch("/v1/agents/me", agentHandler.UpdateMe)
+		r.Get("/v1/agents/stats", agentHandler.TeamStats)
+		r.Post("/v1/agents/invite", agentHandler.InviteAgent)
 		r.Get("/v1/agents/{id}", agentHandler.Get)
+		r.Patch("/v1/agents/{id}", agentHandler.UpdateAgent)
+		r.Delete("/v1/agents/{id}", agentHandler.DeleteAgent)
 		r.Get("/v1/inbox/conversations", h.ListConversations)
 		r.Get("/v1/inbox/search", h.SearchMessages)
 		r.Get("/v1/inbox/conversations/{id}/messages", h.GetMessages)
@@ -133,6 +138,12 @@ func main() {
 		r.Get("/v1/whatsapp/templates", templateHandler.ListTemplates)
 		r.Post("/v1/whatsapp/templates", templateHandler.CreateTemplate)
 		r.Post("/v1/whatsapp/broadcasts", broadcastHandler.SendBroadcast)
+		r.Get("/v1/whatsapp/connection/status", waConnHandler.Status)
+		r.Get("/v1/whatsapp/connection/qr", waConnHandler.QRCode)
+		r.Post("/v1/whatsapp/connection/connect", waConnHandler.Connect)
+		r.Post("/v1/whatsapp/connection/disconnect", waConnHandler.Disconnect)
+		r.Post("/v1/whatsapp/connection/webhook", waConnHandler.SetWebhook)
+		r.Post("/v1/whatsapp/connection/test", waConnHandler.SendTest)
 	})
 
 	srv := &http.Server{
