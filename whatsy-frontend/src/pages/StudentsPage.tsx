@@ -34,22 +34,29 @@ export default function StudentsPage() {
   const [form, setForm] = useState({ name: '', phone: '', grade: '', enrolledCourse: '', paymentStatus: 'Pending' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const PAGE_SIZE = 50
 
   useEffect(() => {
-    fetchStudents()
+    fetchStudents(0, true)
   }, [])
 
-  async function fetchStudents() {
-    setLoading(true)
+  async function fetchStudents(newOffset = 0, reset = false) {
+    reset ? setLoading(true) : setLoadingMore(true)
     try {
-      const res = await fetch('/v1/students', { headers: getAuthHeader() })
+      const res = await fetch(`/v1/students?limit=${PAGE_SIZE}&offset=${newOffset}`, { headers: getAuthHeader() })
       if (!res.ok) throw new Error(`[${res.status}]`)
       const data = await res.json() as Student[] | { students: Student[] }
-      setStudents(Array.isArray(data) ? data : (data.students ?? []))
-    } catch (e) {
+      const page = Array.isArray(data) ? data : (data.students ?? [])
+      setStudents((prev) => reset ? page : [...prev, ...page])
+      setOffset(newOffset + page.length)
+      setHasMore(page.length === PAGE_SIZE)
+    } catch {
       setError('Failed to load students')
     } finally {
-      setLoading(false)
+      reset ? setLoading(false) : setLoadingMore(false)
     }
   }
 
@@ -206,6 +213,19 @@ export default function StudentsPage() {
             </table>
           </div>
         )}
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700 text-sm text-gray-400">
+          <span>Showing {filtered.length} of {students.length} students</span>
+          {hasMore && (
+            <button
+              onClick={() => fetchStudents(offset)}
+              disabled={loadingMore}
+              className="bg-[#202c33] hover:bg-[#2a3942] text-[#e9edef] px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Add Student Modal */}

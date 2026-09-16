@@ -1,6 +1,6 @@
 import type { ZernioConversation, ZernioMessage, SendMessagePayload, ConversationFilter } from '../components/types'
 
-function getAuthHeader(): Record<string, string> {
+export function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('whatsy_jwt')
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
