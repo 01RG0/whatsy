@@ -1,0 +1,12 @@
+[build]
+dockerfilePath = "Dockerfile"
+
+[[services]]
+name = "helpful-flow"
+[services.build]
+dockerfilePath = "Dockerfile"
+
+[[services]]
+name = "whatsy-worker"
+[services.build]
+dockerfilePath = "Dockerfile.worker"
