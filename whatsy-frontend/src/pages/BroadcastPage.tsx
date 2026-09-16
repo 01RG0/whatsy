@@ -60,34 +60,34 @@ export default function BroadcastPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0b141a] p-6">
-      <h1 className="text-[#e9edef] text-2xl font-semibold mb-6">Send Broadcast</h1>
+    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0b141a] p-6">
+      <h1 className="text-gray-900 dark:text-[#e9edef] text-2xl font-semibold mb-6">Send Broadcast</h1>
 
       <div className="max-w-xl space-y-5">
         {/* Template name */}
         <div>
-          <label className="block text-[#8696a0] text-sm mb-1">Template Name</label>
+          <label className="block text-gray-500 dark:text-[#8696a0] text-sm mb-1">Template Name</label>
           <input
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder="e.g. class_reminder"
-            className="w-full bg-[#202c33] text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00a884] placeholder-[#8696a0]"
+            className="w-full bg-white dark:bg-[#202c33] border border-gray-200 dark:border-transparent text-gray-900 dark:text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00a884] placeholder-gray-400 dark:placeholder-[#8696a0]"
           />
         </div>
 
         {/* Template params */}
         <div>
-          <label className="block text-[#8696a0] text-sm mb-1">Template Parameters</label>
+          <label className="block text-gray-500 dark:text-[#8696a0] text-sm mb-1">Template Parameters</label>
           {params.map((p, i) => (
             <div key={i} className="flex gap-2 mb-2">
               <input
                 value={p}
                 onChange={(e) => setParam(i, e.target.value)}
                 placeholder={`{{${i + 1}}}`}
-                className="flex-1 bg-[#202c33] text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00a884] placeholder-[#8696a0]"
+                className="flex-1 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-transparent text-gray-900 dark:text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00a884] placeholder-gray-400 dark:placeholder-[#8696a0]"
               />
               {params.length > 1 && (
-                <button onClick={() => removeParam(i)} className="text-[#8696a0] hover:text-red-400 px-2">✕</button>
+                <button onClick={() => removeParam(i)} className="text-gray-400 dark:text-[#8696a0] hover:text-red-500 dark:hover:text-red-400 px-2">✕</button>
               )}
             </div>
           ))}
@@ -96,31 +96,31 @@ export default function BroadcastPage() {
 
         {/* Recipients */}
         <div>
-          <label className="block text-[#8696a0] text-sm mb-1">Recipient Phone Numbers (one per line)</label>
+          <label className="block text-gray-500 dark:text-[#8696a0] text-sm mb-1">Recipient Phone Numbers (one per line)</label>
           <textarea
             value={phones}
             onChange={(e) => setPhones(e.target.value)}
             rows={6}
             placeholder="+201234567890&#10;+201098765432"
-            className="w-full bg-[#202c33] text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00a884] placeholder-[#8696a0] resize-y"
+            className="w-full bg-white dark:bg-[#202c33] border border-gray-200 dark:border-transparent text-gray-900 dark:text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00a884] placeholder-gray-400 dark:placeholder-[#8696a0] resize-y"
           />
-          <p className="text-[#8696a0] text-xs mt-1">
+          <p className="text-gray-400 dark:text-[#8696a0] text-xs mt-1">
             {phones.split('\n').filter((p) => p.trim()).length} recipient(s)
           </p>
         </div>
 
         {/* Scheduled time */}
         <div>
-          <label className="block text-[#8696a0] text-sm mb-1">Schedule (optional)</label>
+          <label className="block text-gray-500 dark:text-[#8696a0] text-sm mb-1">Schedule (optional)</label>
           <input
             type="datetime-local"
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
-            className="bg-[#202c33] text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00a884]"
+            className="bg-white dark:bg-[#202c33] border border-gray-200 dark:border-transparent text-gray-900 dark:text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
           />
         </div>
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
 
         <button
           onClick={handleSend}
@@ -131,11 +131,11 @@ export default function BroadcastPage() {
         </button>
 
         {result && (
-          <div className="bg-[#202c33] rounded-lg p-4 space-y-1">
-            <p className="text-green-400 font-medium">✓ {result.success} sent</p>
-            {result.failed > 0 && <p className="text-red-400 font-medium">✗ {result.failed} failed</p>}
+          <div className="bg-white dark:bg-[#202c33] border border-gray-100 dark:border-transparent rounded-lg p-4 space-y-1">
+            <p className="text-green-600 dark:text-green-400 font-medium">✓ {result.success} sent</p>
+            {result.failed > 0 && <p className="text-red-500 dark:text-red-400 font-medium">✗ {result.failed} failed</p>}
             {result.errors?.map((e, i) => (
-              <p key={i} className="text-[#8696a0] text-xs">{e}</p>
+              <p key={i} className="text-gray-500 dark:text-[#8696a0] text-xs">{e}</p>
             ))}
           </div>
         )}
