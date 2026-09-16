@@ -39,17 +39,20 @@ func NewClient(apiKey string) *Client {
 	}
 }
 
-// SendMessagePayload is the JSON body for POST .../messages.
+// SendMessagePayload is the JSON body for POST /v1/inbox/conversations/{id}/messages.
+// accountId is required by the Zernio send-message endpoint; message, or an
+// attachment, must be present. attachmentType is one of image, video, audio,
+// file. quickReplies and buttons are mutually exclusive (max 13 / max 3).
 type SendMessagePayload struct {
 	AccountID      string   `json:"accountId"`
 	ConversationID string   `json:"conversationId,omitempty"`
 	ParticipantID  string   `json:"participantId,omitempty"`
 	Message        string   `json:"message"`
 	AttachmentURL  string   `json:"attachmentUrl,omitempty"`
-	AttachmentType string   `json:"attachmentType,omitempty"`
-	AttachmentName string   `json:"attachmentName,omitempty"`
-	VoiceNote      bool     `json:"voiceNote,omitempty"`
-	ReplyTo        string   `json:"replyTo,omitempty"`
+	AttachmentType string   `json:"attachmentType,omitempty"` // image, video, audio, file
+	AttachmentName string   `json:"attachmentName,omitempty"` // WhatsApp document display name
+	VoiceNote      bool     `json:"voiceNote,omitempty"`      // WhatsApp audio -> PTT (.ogg OPUS)
+	ReplyTo        string   `json:"replyTo,omitempty"`        // WhatsApp: platform message id (wamid)
 	Buttons        []string `json:"buttons,omitempty"`
 }
 
@@ -98,21 +101,30 @@ func (c *Client) SendMessage(ctx context.Context, conversationID string, payload
 }
 
 // MarkRead marks all unread incoming messages in a conversation as read.
-func (c *Client) MarkRead(ctx context.Context, conversationID string) error {
+// accountId is a required body field per the Zernio docs.
+func (c *Client) MarkRead(ctx context.Context, conversationID, accountID string) error {
 	if conversationID == "" {
 		return fmt.Errorf("zernio: conversation id is required")
 	}
+	if accountID == "" {
+		return fmt.Errorf("zernio: account id is required")
+	}
 	path := "/inbox/conversations/" + url.PathEscape(conversationID) + "/read"
-	return c.doJSON(ctx, http.MethodPost, path, struct{}{}, nil)
+	return c.doJSON(ctx, http.MethodPost, path, map[string]string{"accountId": accountID}, nil)
 }
 
 // SendTypingIndicator shows a typing indicator in a conversation.
-func (c *Client) SendTypingIndicator(ctx context.Context, conversationID string) error {
+// accountId is a required body field per the Zernio docs. The endpoint is
+// best-effort: it returns 200 with success=false when the platform call fails.
+func (c *Client) SendTypingIndicator(ctx context.Context, conversationID, accountID string) error {
 	if conversationID == "" {
 		return fmt.Errorf("zernio: conversation id is required")
 	}
+	if accountID == "" {
+		return fmt.Errorf("zernio: account id is required")
+	}
 	path := "/inbox/conversations/" + url.PathEscape(conversationID) + "/typing"
-	return c.doJSON(ctx, http.MethodPost, path, struct{}{}, nil)
+	return c.doJSON(ctx, http.MethodPost, path, map[string]string{"accountId": accountID}, nil)
 }
 
 type sendMessageResponse struct {

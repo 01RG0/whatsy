@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/whatsy/backend/internal/config"
-	"github.com/whatsy/backend/internal/domain"
 	"github.com/whatsy/backend/internal/presence"
 	"github.com/whatsy/backend/internal/repository"
 	"github.com/whatsy/backend/internal/service"
@@ -40,10 +39,9 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	if claims != nil {
 		accountID = claims.AgentID
 	}
-	platform := r.URL.Query().Get("platform")
-	if platform != "" {
-		accountID = platform
-	}
+	// "platform" is accepted for API compatibility but is a platform name, not
+	// an agent id; it must not overwrite the assigned_to_me filter key.
+	_ = r.URL.Query().Get("platform")
 
 	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), queryLimit(r, 50))
 	if err != nil {
@@ -189,29 +187,38 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch event.Type {
-	case zernio.EventInboxMessageCreated:
+	case zernio.EventInboxMessageCreated, zernio.LegacyEventInboxMessageCreated:
 		var payload zernio.InboundMessagePayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			log.Printf("webhook: decode inbound message: %v", err)
+		} else if payload.ConversationID == "" {
+			log.Printf("webhook: inbound message missing conversationId")
 		} else if err := h.chatService.HandleInboundMessage(r.Context(), payload); err != nil {
 			log.Printf("webhook: handle inbound message: %v", err)
 		}
-	case zernio.EventInboxMessageStatus:
-		var payload zernio.MessageStatusPayload
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			log.Printf("webhook: decode message status: %v", err)
-		} else {
-			if err := h.msgRepo.UpdateStatus(r.Context(), payload.MessageID, domain.DeliveryStatus(payload.Status)); err != nil {
-				log.Printf("webhook: update message status: %v", err)
-			}
-			h.hub.BroadcastToRoom(payload.ConversationID, ws.MessageStatusEvent{Event: ws.EventMessageStatus, MessageID: payload.MessageID, Status: payload.Status})
-		}
-	case zernio.EventConversationUpdated:
+	case zernio.EventInboxMessageSent:
+		// Outgoing echo: the send endpoint already persisted the message.
+	case zernio.EventConversationStarted, zernio.LegacyEventConversationUpdated:
 		var payload zernio.ConversationUpdatedPayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			log.Printf("webhook: decode conversation update: %v", err)
 		} else {
 			h.hub.BroadcastToAll(payload)
+		}
+	default:
+		if zernio.IsStatusEvent(event.Type) {
+			var payload zernio.MessageStatusPayload
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				log.Printf("webhook: decode message status: %v", err)
+			} else if err := h.chatService.HandleMessageStatus(r.Context(), payload); err != nil {
+				log.Printf("webhook: update message status: %v", err)
+			} else {
+				h.hub.BroadcastToAll(ws.MessageStatusEvent{
+					Event:     ws.EventMessageStatus,
+					MessageID: firstNonEmpty(payload.PlatformMessageID, payload.MessageID),
+					Status:    payload.Status,
+				})
+			}
 		}
 	}
 
@@ -242,6 +249,15 @@ func queryLimit(r *http.Request, defaultLimit int) int {
 		return defaultLimit
 	}
 	return limit
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func queryOffset(r *http.Request, defaultOffset int) int {

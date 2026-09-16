@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"database/sql"
 	"io"
 	"net/http"
 	"sync"
@@ -17,18 +18,35 @@ type templateCacheEntry struct {
 type TemplateHandler struct {
 	apiKey  string
 	baseURL string
+	db      *sql.DB
 	cache   sync.Map
 }
 
-func NewTemplateHandler(apiKey string) *TemplateHandler {
+func NewTemplateHandler(apiKey string, db *sql.DB) *TemplateHandler {
 	return &TemplateHandler{
 		apiKey:  apiKey,
 		baseURL: "https://zernio.com/api/v1",
+		db:      db,
 	}
 }
 
 func (h *TemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) {
-	if v, ok := h.cache.Load("templates"); ok {
+	// accountId is required by Zernio; accept from query or look up from DB
+	accountID := r.URL.Query().Get("accountId")
+	if accountID == "" {
+		var dbID sql.NullString
+		_ = h.db.QueryRowContext(r.Context(),
+			`SELECT account_id FROM whatsapp_connections WHERE status='connected' ORDER BY id DESC LIMIT 1`,
+		).Scan(&dbID)
+		accountID = dbID.String
+	}
+	if accountID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "accountId is required; connect a WhatsApp number first"})
+		return
+	}
+
+	cacheKey := "templates:" + accountID
+	if v, ok := h.cache.Load(cacheKey); ok {
 		entry := v.(templateCacheEntry)
 		if time.Now().Before(entry.expires) {
 			w.Header().Set("Content-Type", "application/json")
@@ -37,7 +55,15 @@ func (h *TemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, h.baseURL+"/whatsapp/templates", nil)
+	url := h.baseURL + "/whatsapp/templates?accountId=" + accountID
+	if name := r.URL.Query().Get("name"); name != "" {
+		url += "&name=" + name
+	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		url += "&status=" + status
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
 	if err != nil {
 		http.Error(w, `{"error":"failed to build request"}`, http.StatusInternalServerError)
 		return
@@ -58,7 +84,7 @@ func (h *TemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if resp.StatusCode == http.StatusOK {
-		h.cache.Store("templates", templateCacheEntry{
+		h.cache.Store(cacheKey, templateCacheEntry{
 			data:    body,
 			expires: time.Now().Add(5 * time.Minute),
 		})

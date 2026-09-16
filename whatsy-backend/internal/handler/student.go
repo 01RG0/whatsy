@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/lib/pq"
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 )
 
 // StudentHandler exposes CRUD endpoints for students.
@@ -119,12 +119,14 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var s studentResponse
+	var cfRaw []byte
 	err := h.db.QueryRow(
 		`INSERT INTO students (name, phone, grade, enrolled_course, payment_status)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at`,
 		req.Name, req.Phone, req.Grade, req.EnrolledCourse, req.PaymentStatus,
-	).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus, &s.Tags, &s.CustomFields, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus,
+		pq.Array(&s.Tags), &cfRaw, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "phone already registered"})
@@ -133,6 +135,12 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create student"})
 		return
 	}
+	if len(cfRaw) > 0 {
+		_ = json.Unmarshal(cfRaw, &s.CustomFields)
+	}
+	if s.CustomFields == nil {
+		s.CustomFields = map[string]string{}
+	}
 	writeJSON(w, http.StatusCreated, s)
 }
 
@@ -140,13 +148,21 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *StudentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var s studentResponse
+	var cfRaw []byte
 	err := h.db.QueryRow(
 		`SELECT id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at FROM students WHERE id = $1`,
 		id,
-	).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus, &s.Tags, &s.CustomFields, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus,
+		pq.Array(&s.Tags), &cfRaw, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "student not found"})
 		return
+	}
+	if len(cfRaw) > 0 {
+		_ = json.Unmarshal(cfRaw, &s.CustomFields)
+	}
+	if s.CustomFields == nil {
+		s.CustomFields = map[string]string{}
 	}
 	writeJSON(w, http.StatusOK, s)
 }
@@ -186,10 +202,18 @@ func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	args = append(args, id)
 
 	var s studentResponse
-	err := h.db.QueryRow(query, args...).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus, &s.Tags, &s.CustomFields, &s.CreatedAt, &s.UpdatedAt)
+	var cfRaw []byte
+	err := h.db.QueryRow(query, args...).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus,
+		pq.Array(&s.Tags), &cfRaw, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "student not found"})
 		return
+	}
+	if len(cfRaw) > 0 {
+		_ = json.Unmarshal(cfRaw, &s.CustomFields)
+	}
+	if s.CustomFields == nil {
+		s.CustomFields = map[string]string{}
 	}
 	writeJSON(w, http.StatusOK, s)
 }
@@ -211,12 +235,17 @@ func (h *StudentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func scanStudent(rows *sql.Rows) (studentResponse, error) {
 	var s studentResponse
-	var createdAt, updatedAt string
-	err := rows.Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus, &s.Tags, &s.CustomFields, &createdAt, &updatedAt)
+	var cfRaw []byte
+	err := rows.Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus,
+		pq.Array(&s.Tags), &cfRaw, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return studentResponse{}, err
 	}
-	s.CreatedAt = createdAt
-	s.UpdatedAt = updatedAt
+	if len(cfRaw) > 0 {
+		_ = json.Unmarshal(cfRaw, &s.CustomFields)
+	}
+	if s.CustomFields == nil {
+		s.CustomFields = map[string]string{}
+	}
 	return s, nil
 }

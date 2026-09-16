@@ -2,7 +2,9 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useInboxStore, type ViewerInfo, type TypingLock } from './useInboxStore';
 import type { ZernioMessage, ZernioConversation } from '../components/types';
 
-const WS_URL = 'ws://localhost:8080/ws';
+// Same-origin ws(s) via the Vite proxy (vite.config.ts proxies /ws to the
+// backend). Falls back to localhost for non-browser tooling.
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 const MAX_BACKOFF_MS = 30_000;
 
 type WSAction =

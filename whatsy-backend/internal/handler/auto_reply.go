@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -31,11 +32,19 @@ type autoReplyRule struct {
 }
 
 type createAutoReplyRuleRequest struct {
-	Trigger    string `json:"trigger"`
+	Trigger     string `json:"trigger"`
 	TriggerType string `json:"trigger_type"`
-	Response   string `json:"response"`
-	Priority   int    `json:"priority"`
-	IsActive   bool   `json:"is_active"`
+	Response    string `json:"response"`
+	Priority    int    `json:"priority"`
+	IsActive    *bool  `json:"is_active"`
+}
+
+// patchAutoReplyRuleRequest is a partial-update body: only provided fields change.
+type patchAutoReplyRuleRequest struct {
+	Trigger  *string `json:"trigger"`
+	Response *string `json:"response"`
+	IsActive *bool   `json:"is_active"`
+	Priority *int    `json:"priority"`
 }
 
 // List handles GET /v1/auto-reply-rules.
@@ -75,13 +84,17 @@ func (h *AutoReplyHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
 	var rule autoReplyRule
 	var createdAt string
 	err := h.db.QueryRow(
 		`INSERT INTO auto_reply_rules (trigger, trigger_type, response, is_active, priority)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, trigger, trigger_type, response, is_active, priority, created_at`,
-		req.Trigger, req.TriggerType, req.Response, req.IsActive, req.Priority,
+		req.Trigger, req.TriggerType, req.Response, isActive, req.Priority,
 	).Scan(&rule.ID, &rule.Trigger, &rule.TriggerType, &rule.Response, &rule.IsActive, &rule.Priority, &createdAt)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
@@ -95,24 +108,45 @@ func (h *AutoReplyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, rule)
 }
 
-// Update handles PATCH /v1/auto-reply-rules/{id}.
+// Update handles PATCH /v1/auto-reply-rules/{id} as a partial update:
+// only fields present in the body are changed (a toggle sending only
+// {"is_active": false} must not wipe the response text).
 func (h *AutoReplyHandler) Update(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	var req createAutoReplyRuleRequest
+	var req patchAutoReplyRuleRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
 	id := chi.URLParam(r, "id")
+	query := `UPDATE auto_reply_rules SET id = id`
+	var args []any
+	addSet := func(col string, val any) {
+		args = append(args, val)
+		query += fmt.Sprintf(", %s = $%d", col, len(args))
+	}
+	if req.Trigger != nil {
+		addSet("trigger", *req.Trigger)
+	}
+	if req.Response != nil {
+		addSet("response", *req.Response)
+	}
+	if req.IsActive != nil {
+		addSet("is_active", *req.IsActive)
+	}
+	if req.Priority != nil {
+		addSet("priority", *req.Priority)
+	}
+	query += fmt.Sprintf(" WHERE id = $%d", len(args)+1)
+	query += ` RETURNING id, trigger, trigger_type, response, is_active, priority, created_at`
+	args = append(args, id)
+
 	var rule autoReplyRule
 	var createdAt string
-	err := h.db.QueryRow(
-		`UPDATE auto_reply_rules SET response = $1, is_active = $2 WHERE id = $3
-		 RETURNING id, trigger, trigger_type, response, is_active, priority, created_at`,
-		req.Response, req.IsActive, id,
-	).Scan(&rule.ID, &rule.Trigger, &rule.TriggerType, &rule.Response, &rule.IsActive, &rule.Priority, &createdAt)
+	err := h.db.QueryRow(query, args...).
+		Scan(&rule.ID, &rule.Trigger, &rule.TriggerType, &rule.Response, &rule.IsActive, &rule.Priority, &createdAt)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "auto-reply rule not found"})
 		return

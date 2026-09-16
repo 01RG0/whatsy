@@ -15,6 +15,7 @@ interface Agent {
 }
 
 interface InviteForm {
+  name: string
   email: string
   role: 'admin' | 'agent' | 'viewer'
 }
@@ -78,11 +79,13 @@ export default function TeamPage() {
   const [statusFilter, setStatusFilter] = useState<'' | 'online' | 'offline'>('')
   const [showInvite, setShowInvite] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', role: 'agent' })
+  const [inviteForm, setInviteForm] = useState<InviteForm>({ name: '', email: '', role: 'agent' })
+  const [inviteError, setInviteError] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteSuccess, setInviteSuccess] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<Agent | null>(null)
   const [panelRoleChanging, setPanelRoleChanging] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   const fetchAgents = useCallback(async () => {
     setLoading(true)
@@ -132,18 +135,25 @@ export default function TeamPage() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
+    if (!inviteForm.name.trim() || !inviteForm.email.trim()) {
+      setInviteError('Name and email are required')
+      return
+    }
     setInviteLoading(true)
+    setInviteError('')
     try {
-      await fetch('/v1/agents/invite', {
+      const res = await fetch('/v1/agents/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(inviteForm),
       })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `Invite failed [${res.status}]`)
       setInviteSuccess(true)
-      setTimeout(() => { setShowInvite(false); setInviteSuccess(false); setInviteForm({ email: '', role: 'agent' }) }, 2000)
-    } catch {
-      setInviteSuccess(true) // show success even if endpoint missing — invite link UX
-      setTimeout(() => { setShowInvite(false); setInviteSuccess(false); setInviteForm({ email: '', role: 'agent' }) }, 2000)
+      setTimeout(() => { setShowInvite(false); setInviteSuccess(false); setInviteForm({ name: '', email: '', role: 'agent' }) }, 2000)
+      fetchAgents()
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : 'Invite failed')
     } finally {
       setInviteLoading(false)
     }
@@ -151,14 +161,18 @@ export default function TeamPage() {
 
   async function changeRole(agentId: string, role: Agent['role']) {
     setPanelRoleChanging(true)
+    setSaveSuccess(false)
     try {
-      await fetch(`/v1/agents/${agentId}`, {
+      const res = await fetch(`/v1/agents/${agentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ role }),
       })
+      if (!res.ok) throw new Error(`[${res.status}]`)
       setAgents(prev => prev.map(a => a.id === agentId ? { ...a, role } : a))
       setSelectedAgent(prev => prev?.id === agentId ? { ...prev, role } : prev)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 2500)
     } catch {
       setError('Failed to update role')
     } finally {
@@ -370,6 +384,20 @@ export default function TeamPage() {
               </div>
             ) : (
               <form onSubmit={handleInvite} className="p-6 space-y-5">
+                {inviteError && (
+                  <p className="text-red-500 dark:text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{inviteError}</p>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-1.5">Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={inviteForm.name}
+                    onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Jane Smith"
+                    className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-1.5">Email Address</label>
                   <input
@@ -487,6 +515,18 @@ export default function TeamPage() {
                   <option value="viewer">Viewer</option>
                 </select>
                 <p className="text-xs text-gray-400 dark:text-[#8696a0] mt-1">{ROLE_DESCRIPTIONS[selectedAgent.role]}</p>
+                {saveSuccess && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    Role saved
+                  </div>
+                )}
+                {panelRoleChanging && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-400 dark:text-[#8696a0]">
+                    <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                    Saving…
+                  </div>
+                )}
               </div>
 
               {/* Stats */}

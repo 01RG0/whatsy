@@ -15,27 +15,19 @@ import (
 // on webhook deliveries.
 const SignatureHeader = "X-Hub-Signature-256"
 
-// Known webhook event types.
-const (
-	EventInboxMessageCreated = "inbox.message.created"
-	EventInboxMessageStatus  = "inbox.message.status"
-	EventConversationUpdated = "conversation.updated"
-)
-
-const signaturePrefix = "sha256="
-
-// WebhookEvent is the envelope delivered to the webhook endpoint.
-// Type is one of inbox.message.created, inbox.message.status, or
-// conversation.updated. Payload holds the typed event body as raw JSON
-// so callers can unmarshal into InboundMessagePayload,
-// MessageStatusPayload, or ConversationUpdatedPayload.
+// WebhookEvent is the envelope delivered to the webhook endpoint. The docs
+// describe a flat shape: {id, event: "message.received", message: {...},
+// conversation: {...}, account: {...}, timestamp}. Payload holds the raw body
+// so callers can unmarshal into InboundMessagePayload, MessageStatusPayload,
+// or ConversationUpdatedPayload.
 type WebhookEvent struct {
 	Type    string          `json:"type"`
+	Event   string          `json:"event"`
 	Payload json.RawMessage `json:"payload"`
 }
 
-// UnmarshalJSON accepts both {type,payload} and the {event,data} aliases
-// used by some Zernio inbox deliveries.
+// UnmarshalJSON accepts both the documented flat shape ({event, ...}) and the
+// legacy {type,payload} envelope.
 func (e *WebhookEvent) UnmarshalJSON(data []byte) error {
 	var aux struct {
 		Type    string          `json:"type"`
@@ -47,14 +39,20 @@ func (e *WebhookEvent) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	e.Event = aux.Event
 	e.Type = aux.Type
 	if e.Type == "" {
 		e.Type = aux.Event
 	}
-
+	// Payload is the whole body for the flat shape; Payload()/Data() for the
+	// legacy envelope.
 	e.Payload = aux.Payload
 	if len(e.Payload) == 0 {
 		e.Payload = aux.Data
+	}
+	if len(e.Payload) == 0 {
+		// Flat event shape: the payload is the whole body itself.
+		e.Payload = data
 	}
 	return nil
 }
@@ -84,6 +82,8 @@ func ValidateSignature(secret, payload []byte, sigHeader string) bool {
 	return subtle.ConstantTimeCompare(provided, expected) == 1
 }
 
+const signaturePrefix = "sha256="
+
 // ParseWebhookEvent unmarshals a webhook JSON body into a WebhookEvent.
 func ParseWebhookEvent(body []byte) (*WebhookEvent, error) {
 	if len(body) == 0 {
@@ -99,7 +99,11 @@ func ParseWebhookEvent(body []byte) (*WebhookEvent, error) {
 	}
 
 	switch event.Type {
-	case EventInboxMessageCreated, EventInboxMessageStatus, EventConversationUpdated:
+	case EventInboxMessageCreated, EventInboxMessageSent,
+		EventInboxMessageStatus, EventMessageRead, EventMessageFailed,
+		EventConversationStarted,
+		LegacyEventInboxMessageCreated, LegacyEventInboxMessageStatus,
+		LegacyEventConversationUpdated:
 	default:
 		// log and ignore unknown event types for forward-compatibility
 		log.Printf("[zernio] ignoring unknown webhook event type %q", event.Type)

@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { getAuthHeader } from '../api/inbox'
 
 interface BroadcastResult {
-  success: number
-  failed: number
-  errors: string[]
+  broadcastId: string
+  status: string
+  recipientCount: number
 }
 
 export default function BroadcastPage() {
@@ -46,7 +46,9 @@ export default function BroadcastPage() {
           templateName: templateName.trim(),
           templateParams: params.filter(Boolean),
           recipientPhones,
-          scheduledAt: scheduledAt || undefined,
+          // datetime-local yields "2026-01-17T09:30" (no timezone); the backend
+          // and Zernio need a real RFC3339 instant.
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       })
       const data = await res.json()
@@ -132,11 +134,10 @@ export default function BroadcastPage() {
 
         {result && (
           <div className="bg-white dark:bg-[#202c33] border border-gray-100 dark:border-transparent rounded-lg p-4 space-y-1">
-            <p className="text-green-600 dark:text-green-400 font-medium">✓ {result.success} sent</p>
-            {result.failed > 0 && <p className="text-red-500 dark:text-red-400 font-medium">✗ {result.failed} failed</p>}
-            {result.errors?.map((e, i) => (
-              <p key={i} className="text-gray-500 dark:text-[#8696a0] text-xs">{e}</p>
-            ))}
+            <p className="text-green-600 dark:text-green-400 font-medium">
+              ✓ Broadcast {result.status} — {result.recipientCount} recipient(s)
+            </p>
+            <p className="text-gray-400 dark:text-[#8696a0] text-xs font-mono">ID: {result.broadcastId}</p>
           </div>
         )}
       </div>

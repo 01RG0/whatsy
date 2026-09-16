@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -19,16 +20,23 @@ func NewMessageRepo(db *sql.DB) *MessageRepo {
 }
 
 const messageColumns = `id, conversation_id, direction, content_type, content, status,
-	COALESCE(zernio_message_id, ''), timestamp`
+	COALESCE(zernio_message_id, ''), attachments, timestamp`
 
 func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	if msg == nil {
 		return fmt.Errorf("create message: message is nil")
 	}
 
+	attachments := "[]"
+	if len(msg.Attachments) > 0 {
+		if b, err := json.Marshal(msg.Attachments); err == nil {
+			attachments = string(b)
+		}
+	}
+
 	const query = `INSERT INTO messages
-		(conversation_id, direction, content_type, content, status, zernio_message_id, timestamp)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), COALESCE($7, NOW()))
+		(conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7::jsonb, COALESCE($8, NOW()))
 		RETURNING id, timestamp`
 	var createdAt any
 	if !msg.CreatedAt.IsZero() {
@@ -36,7 +44,7 @@ func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	}
 	err := r.db.QueryRowContext(ctx, query,
 		msg.ConversationID, msg.Direction, msg.Type, msg.Content, msg.Status,
-		msg.ZernioMessageID, createdAt,
+		msg.ZernioMessageID, attachments, createdAt,
 	).Scan(&msg.ID, &msg.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("create message: %w", err)
@@ -88,6 +96,19 @@ func (r *MessageRepo) UpdateStatus(ctx context.Context, messageID string, status
 	return nil
 }
 
+// UpdateStatusByZernioID updates the status of the message carrying the given
+// platform message id (WhatsApp wamid), which is the key status webhooks use.
+func (r *MessageRepo) UpdateStatusByZernioID(ctx context.Context, zernioMsgID string, status domain.DeliveryStatus) error {
+	result, err := r.db.ExecContext(ctx, "UPDATE messages SET status = $2 WHERE zernio_message_id = $1", zernioMsgID, status)
+	if err != nil {
+		return fmt.Errorf("update message status by zernio ID: %w", err)
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return fmt.Errorf("no message with zernio_message_id %q", zernioMsgID)
+	}
+	return nil
+}
+
 func (r *MessageRepo) GetByZernioID(ctx context.Context, zernioMsgID string) (*domain.Message, error) {
 	query := "SELECT " + messageColumns + " FROM messages WHERE zernio_message_id = $1"
 	message, err := scanMessage(r.db.QueryRowContext(ctx, query, zernioMsgID))
@@ -106,9 +127,17 @@ type messageScanner interface {
 
 func scanMessage(row messageScanner) (domain.Message, error) {
 	var message domain.Message
+	var attachments []byte
 	err := row.Scan(
 		&message.ID, &message.ConversationID, &message.Direction, &message.Type,
-		&message.Content, &message.Status, &message.ZernioMessageID, &message.CreatedAt,
+		&message.Content, &message.Status, &message.ZernioMessageID, &attachments, &message.CreatedAt,
 	)
-	return message, err
+	if err != nil {
+		return message, err
+	}
+	message.Attachments = []domain.Attachment{}
+	if len(attachments) > 0 {
+		_ = json.Unmarshal(attachments, &message.Attachments)
+	}
+	return message, nil
 }
