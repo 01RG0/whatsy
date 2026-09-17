@@ -1,6 +1,6 @@
 import type { ZernioConversation, ZernioMessage, SendMessagePayload, ConversationFilter } from '../components/types'
 
-export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+export const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 export function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('whatsy_jwt')

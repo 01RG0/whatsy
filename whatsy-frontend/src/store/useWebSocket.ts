@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useInboxStore, type ViewerInfo, type TypingLock } from './useInboxStore';
 import type { ZernioMessage, ZernioConversation } from '../components/types';
 
-const _apiBase = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+const _apiBase = import.meta.env.VITE_API_URL ?? ''
 const WS_URL = _apiBase
   ? _apiBase.replace(/^http/, 'ws') + '/ws'
   : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
