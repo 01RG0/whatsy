@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -159,6 +160,21 @@ func main() {
 		r.Get("/v1/sync/stream", syncHandler.Sync)
 		r.Post("/v1/sync", syncHandler.SyncJSON)
 	})
+
+	// Serve React SPA from ./public if it exists (production Docker image).
+	if _, err := os.Stat("public"); err == nil {
+		publicFS := os.DirFS("public")
+		fileServer := http.FileServer(http.FS(publicFS))
+		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+			path := strings.TrimPrefix(req.URL.Path, "/")
+			if _, err := fs.Stat(publicFS, path); err != nil {
+				// Not a real file — serve index.html for SPA routing.
+				http.ServeFileFS(w, req, publicFS, "index.html")
+				return
+			}
+			fileServer.ServeHTTP(w, req)
+		})
+	}
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,

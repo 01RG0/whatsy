@@ -1,12 +1,15 @@
 [build]
-dockerfilePath = "Dockerfile"
+dockerfilePath = "whatsy-backend/Dockerfile"
+buildContext = ".."
 
 [[services]]
 name = "helpful-flow"
 [services.build]
-dockerfilePath = "Dockerfile"
+dockerfilePath = "whatsy-backend/Dockerfile"
+buildContext = ".."
 
 [[services]]
 name = "whatsy-worker"
 [services.build]
-dockerfilePath = "Dockerfile.worker"
+dockerfilePath = "whatsy-backend/Dockerfile.worker"
+buildContext = ".."
