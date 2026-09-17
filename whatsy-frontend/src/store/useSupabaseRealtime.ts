@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useInboxStore } from './useInboxStore'
-import { getMessagesDirect as getMessages } from '../api/inbox'
+import { getMessagesDirect, getMessages as getMessagesAPI } from '../api/inbox'
 import type { ZernioMessage, MessageDirection, MessageType, DeliveryStatus } from '../components/types'
 
 // Raw columns that actually exist in the messages table (no JOINs in realtime)
@@ -48,29 +48,40 @@ export function useSupabaseRealtime() {
   const receiveMessage = useInboxStore((s) => s.receiveMessage)
   const bumpConversation = useInboxStore((s) => s.bumpConversation)
   const mergeMessages = useInboxStore((s) => s.mergeMessages)
+  const activeConversationId = useInboxStore((s) => s.activeConversationId)
   // Keep stable refs so the effect never re-runs due to store selector changes
   const receiveRef = useRef(receiveMessage)
   const bumpRef = useRef(bumpConversation)
   const mergeRef = useRef(mergeMessages)
+  const activeIdRef = useRef(activeConversationId)
   receiveRef.current = receiveMessage
   bumpRef.current = bumpConversation
   mergeRef.current = mergeMessages
+  activeIdRef.current = activeConversationId
 
   useEffect(() => {
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) return;
 
-    // Fetch fresh messages for a conversation and merge into the store.
-    // Used by both broadcast ping and WAL fallback so both paths stay in sync.
-    function refreshConversation(conversationId: string) {
-      getMessages(conversationId)
+    // Only fetch messages for the active conversation — fetching all broadcasted
+    // conversations in parallel floods Supabase and slows down the chat load.
+    function refreshActiveIfMatch(conversationId: string) {
+      if (conversationId !== activeIdRef.current) return
+      getMessagesDirect(conversationId)
         .then((msgs) => mergeRef.current(conversationId, [...msgs].reverse()))
-        .catch(() => undefined)
+        .catch(() => {
+          getMessagesAPI(conversationId)
+            .then((msgs) => mergeRef.current(conversationId, [...msgs].reverse()))
+            .catch(() => undefined)
+        })
     }
 
     function handleWALRow(row: DBMessage) {
       if (!row?.id || !row?.conversation_id) return
       const msg = mapDBMessage(row)
-      receiveRef.current(msg.conversationId, msg)
+      // For the active conversation: refresh messages. For others: just bump sidebar.
+      if (row.conversation_id === activeIdRef.current) {
+        refreshActiveIfMatch(row.conversation_id)
+      }
       bumpRef.current(msg.conversationId, {
         lastMessage: {
           id: msg.id,
@@ -93,7 +104,7 @@ export function useSupabaseRealtime() {
       .on('broadcast', { event: 'new-message' }, (payload) => {
         const ping = payload.payload as BroadcastPing
         if (ping?.conversationId) {
-          refreshConversation(ping.conversationId)
+          refreshActiveIfMatch(ping.conversationId)
         }
       })
       .subscribe((status) => {
