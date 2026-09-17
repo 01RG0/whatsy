@@ -1,8 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "whatsy-backend/Dockerfile"
-buildContext = "whatsy-backend"
+dockerfilePath = "whatsy-backend/Dockerfile.worker"
 
 [deploy]
-healthcheckPath = "/health"
 restartPolicyType = "on_failure"
