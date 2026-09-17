@@ -187,12 +187,11 @@ func (s *ChatService) HandleMessageStatus(ctx context.Context, payload zernio.Me
 	return nil
 }
 
-// SendOutboundMessage sends a message through Zernio, then persists and
-// broadcasts the confirmed message. agentID is stored on the message so the
-// inbox can show which team member replied.
+// SendOutboundMessage persists the message immediately and returns it to the
+// caller, then delivers it to Zernio asynchronously. This makes the send feel
+// instant in the UI — the message appears right away with status "pending" and
+// flips to "sent" (or "failed") once Zernio responds.
 func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID string, payload zernio.SendMessagePayload, agentID string) (*domain.Message, error) {
-	// The send-message endpoint requires accountId; resolve the connected
-	// account when the caller did not pin one.
 	if payload.AccountID == "" {
 		payload.AccountID = s.zernioAccountID(ctx)
 	}
@@ -200,7 +199,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		return nil, fmt.Errorf("send message: no connected WhatsApp account; connect a number first")
 	}
 
-	// Zernio's API needs its own conversation ID, not our local UUID.
+	// Resolve Zernio conversation ID upfront — needed by the background goroutine.
 	zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve zernio conversation id: %w", err)
@@ -209,23 +208,14 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		return nil, fmt.Errorf("send message: conversation %q has no zernio_conversation_id", conversationID)
 	}
 
-	sent, err := s.zernioClient.SendMessage(ctx, zernioConvID, payload)
-	if err != nil {
-		return nil, fmt.Errorf("send Zernio message: %w", err)
-	}
-	if sent == nil {
-		return nil, fmt.Errorf("send Zernio message: empty response")
-	}
-
+	// Persist immediately with StatusPending so the message appears in the UI at once.
 	message := domain.Message{
-		ConversationID:  conversationID,
-		Direction:       "outbound",
-		Type:            outboundContentType(payload),
-		Content:         payload.Message,
-		Status:          domain.StatusSent,
-		ZernioMessageID: sent.ID, // WhatsApp wamid: the key status updates arrive on
-		SentByAgentID:   agentID,
-		CreatedAt:       sent.Timestamp,
+		ConversationID: conversationID,
+		Direction:      "outbound",
+		Type:           outboundContentType(payload),
+		Content:        payload.Message,
+		Status:         domain.StatusPending,
+		SentByAgentID:  agentID,
 	}
 	if payload.AttachmentURL != "" {
 		attType := payload.AttachmentType
@@ -243,8 +233,6 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return nil, fmt.Errorf("create outbound message: %w", err)
 	}
-	// Populate sender display fields so the live WebSocket broadcast shows the
-	// agent name without requiring a page reload.
 	if agentID != "" && message.SenderName == "" {
 		var name, avatar string
 		_ = s.db.QueryRowContext(ctx, "SELECT name, avatar FROM agents WHERE id = $1", agentID).Scan(&name, &avatar)
@@ -267,13 +255,23 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		StudentID: conversationID,
 		Message:   message,
 	})
-	// Notify all agents' sidebars of the updated conversation.
 	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
 	})
-	// Instant push via Supabase Realtime broadcast (<200ms vs 3-5s WAL).
-	go s.supabaseBroadcastMessage(ctx, message)
+	go s.supabaseBroadcastMessage(context.Background(), message)
+
+	// Deliver to Zernio in the background — update status when done.
+	go func() {
+		sent, err := s.zernioClient.SendMessage(context.Background(), zernioConvID, payload)
+		if err != nil {
+			log.Printf("[SendOutboundMessage] zernio delivery failed for message %s: %v", message.ID, err)
+			_ = s.msgRepo.UpdateZernioIDAndStatus(context.Background(), message.ID, "", domain.StatusFailed)
+			return
+		}
+		_ = s.msgRepo.UpdateZernioIDAndStatus(context.Background(), message.ID, sent.ID, domain.StatusSent)
+	}()
+
 	return &message, nil
 }
 

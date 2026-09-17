@@ -99,6 +99,19 @@ func (r *MessageRepo) UpdateStatus(ctx context.Context, messageID string, status
 	return nil
 }
 
+// UpdateZernioIDAndStatus sets the Zernio message ID (wamid) and delivery status
+// after an async send completes. Used by the fire-and-forget send path.
+func (r *MessageRepo) UpdateZernioIDAndStatus(ctx context.Context, messageID, zernioMsgID string, status domain.DeliveryStatus) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE messages SET status = $2, zernio_message_id = NULLIF($3, '') WHERE id = $1",
+		messageID, status, zernioMsgID,
+	)
+	if err != nil {
+		return fmt.Errorf("update message zernio id and status: %w", err)
+	}
+	return nil
+}
+
 // UpdateStatusByZernioID updates the status of the message carrying the given
 // platform message id (WhatsApp wamid), which is the key status webhooks use.
 func (r *MessageRepo) UpdateStatusByZernioID(ctx context.Context, zernioMsgID string, status domain.DeliveryStatus) error {
