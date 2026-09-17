@@ -46,6 +46,7 @@ export function useSupabaseRealtime() {
   bumpRef.current = bumpConversation
 
   useEffect(() => {
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) return;
     const channel = supabase
       .channel('db-messages', { config: { broadcast: { self: false } } })
       .on(
