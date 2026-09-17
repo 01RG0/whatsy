@@ -3,14 +3,12 @@ import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
-import { useSupabaseRealtime } from '../store/useSupabaseRealtime';
-import { getMessagesDirect as getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
+import { getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ConversationFilter, SendMessagePayload } from './types';
 
 export const WhatsAppInboxApp: React.FC = () => {
   const { onInputFocus, onInputBlur } = useWebSocket();
-  useSupabaseRealtime();
 
   const conversations = useInboxStore((s) => s.conversations);
   const setConversations = useInboxStore((s) => s.setConversations);
@@ -41,16 +39,18 @@ export const WhatsAppInboxApp: React.FC = () => {
     });
   }, [filter, searchQuery, setConversations]);
 
-  // Always reload full message history when switching conversations.
-  // API returns DESC (newest first) — reverse to ASC (oldest first) for chat display.
+  // Reload message history when switching conversations.
+  // Use mergeMessages (not setMessages) so any realtime messages that arrived
+  // during the fetch are not wiped — deduplication handles the overlap.
   useEffect(() => {
     if (!activeConversationId) return;
+    const id = activeConversationId;
     setIsLoadingMessages(true);
-    getMessages(activeConversationId)
-      .then((msgs) => setMessages(activeConversationId, [...msgs].reverse()))
+    getMessages(id)
+      .then((msgs) => mergeMessages(id, [...msgs].reverse()))
       .catch((err) => console.error('[WhatsAppInboxApp] getMessages:', err))
       .finally(() => setIsLoadingMessages(false));
-  }, [activeConversationId, setMessages]);
+  }, [activeConversationId, mergeMessages]);
 
   // Silently prefetch messages for the top 5 conversations after list loads.
   // This makes clicking them feel instant — messages are already in the store.
@@ -76,33 +76,43 @@ export const WhatsAppInboxApp: React.FC = () => {
   }, []);
 
 
-  // Refetch messages when the tab becomes visible again after being hidden.
+  // Refetch conversations + messages when the tab becomes visible again.
   useEffect(() => {
-    if (!activeConversationId) return;
-    const id = activeConversationId;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        getMessages(id)
-          .then((msgs) => mergeMessages(id, [...msgs].reverse()))
+      if (document.visibilityState !== 'visible') return;
+      import('../api/inbox').then(({ getConversations }) => {
+        getConversations(filter, searchQuery)
+          .then(setConversations)
+          .catch(() => undefined);
+      });
+      if (activeConversationId) {
+        getMessages(activeConversationId)
+          .then((msgs) => mergeMessages(activeConversationId, [...msgs].reverse()))
           .catch(() => undefined);
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [activeConversationId, mergeMessages]);
+  }, [activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
 
-  // When WebSocket reconnects, immediately refresh messages to catch anything missed.
+  // When WebSocket reconnects, refresh both conversation list and active messages.
   const prevWsConnected = useRef(wsConnected);
   useEffect(() => {
-    if (!activeConversationId) return;
     if (wsConnected && !prevWsConnected.current) {
-      const id = activeConversationId;
-      getMessages(id)
-        .then((msgs) => mergeMessages(id, [...msgs].reverse()))
-        .catch(() => undefined);
+      import('../api/inbox').then(({ getConversations }) => {
+        getConversations(filter, searchQuery)
+          .then(setConversations)
+          .catch(() => undefined);
+      });
+      if (activeConversationId) {
+        const id = activeConversationId;
+        getMessages(id)
+          .then((msgs) => mergeMessages(id, [...msgs].reverse()))
+          .catch(() => undefined);
+      }
     }
     prevWsConnected.current = wsConnected;
-  }, [wsConnected, activeConversationId, mergeMessages]);
+  }, [wsConnected, activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -178,7 +188,14 @@ export const WhatsAppInboxApp: React.FC = () => {
   );
 
   return (
-    <div className="w-full flex-1 min-h-0 flex bg-gray-100 dark:bg-[#111b21] overflow-hidden">
+    <div className="w-full flex-1 min-h-0 flex flex-col bg-gray-100 dark:bg-[#111b21] overflow-hidden">
+      {!wsConnected && (
+        <div className="flex items-center justify-center gap-2 bg-yellow-500/90 text-white text-xs py-1 px-3 shrink-0">
+          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          Reconnecting…
+        </div>
+      )}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* On mobile: show sidebar OR chat, not both. On desktop: always show both. */}
       <div className={showChatOnMobile ? 'hidden md:contents' : 'contents'}>
         <Sidebar
@@ -207,6 +224,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           onAssign={handleAssign}
           onBack={() => setShowChatOnMobile(false)}
         />
+      </div>
       </div>
     </div>
   );

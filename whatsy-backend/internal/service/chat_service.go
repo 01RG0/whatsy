@@ -9,7 +9,6 @@ import (
 
 	"github.com/whatsy/backend/internal/domain"
 	"github.com/whatsy/backend/internal/repository"
-	"github.com/whatsy/backend/internal/supabase"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
@@ -36,10 +35,9 @@ type ChatService struct {
 	db                  *sql.DB
 	convRepo            *repository.ConversationRepo
 	msgRepo             *repository.MessageRepo
-	zernioClient        ZernioSender
-	hub                 WSBroadcaster
-	autoReplier         AutoReplier
-	supabaseBroadcaster *supabase.Broadcaster
+	zernioClient  ZernioSender
+	hub           WSBroadcaster
+	autoReplier   AutoReplier
 }
 
 func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, zernioClient ZernioSender, hub WSBroadcaster) *ChatService {
@@ -50,12 +48,6 @@ func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *
 		zernioClient: zernioClient,
 		hub:          hub,
 	}
-}
-
-// SetSupabaseBroadcaster wires the Supabase Realtime broadcaster for instant
-// push to connected browser clients (<200ms vs 3-5s WAL replication).
-func (s *ChatService) SetSupabaseBroadcaster(b *supabase.Broadcaster) {
-	s.supabaseBroadcaster = b
 }
 
 // SetAutoReplier wires the database-driven auto-reply evaluator.
@@ -156,8 +148,6 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
 	})
-	// Instant push via Supabase Realtime broadcast (<200ms vs 3-5s WAL).
-	go s.supabaseBroadcastMessage(ctx, message)
 
 	// Fire the database-driven auto-reply rules (best-effort).
 	if s.autoReplier != nil && message.Direction == "inbound" {
@@ -259,7 +249,6 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
 	})
-	go s.supabaseBroadcastMessage(context.Background(), message)
 
 	// Deliver to Zernio in the background — update status when done.
 	go func() {
@@ -339,19 +328,3 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// supabaseBroadcastMessage fires a Supabase Realtime broadcast for a new
-// message. Runs in a goroutine so it never blocks the request path.
-// Security: only the message ID and conversation ID are broadcast — no
-// message content — so intercepting the public channel reveals nothing
-// sensitive. Clients fetch the actual content via the authenticated REST API.
-func (s *ChatService) supabaseBroadcastMessage(_ context.Context, msg domain.Message) {
-	if s.supabaseBroadcaster == nil {
-		return
-	}
-	ping := map[string]interface{}{
-		"id":             msg.ID,
-		"conversationId": msg.ConversationID,
-	}
-	// Use Background so the HTTP call isn't cancelled when the request context ends.
-	s.supabaseBroadcaster.Send(context.Background(), "inbox", "new-message", ping)
-}

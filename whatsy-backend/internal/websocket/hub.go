@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -17,6 +18,11 @@ type roomMessage struct {
 type PresenceManager interface {
 	AcquireLock(studentID string, agent domain.ViewerInfo) (expiresInMs int64, err error)
 	ReleaseLock(studentID string, agentID string) error
+}
+
+// RedisPublisher publishes events to Redis for cross-instance relay.
+type RedisPublisher interface {
+	Publish(ctx context.Context, event interface{})
 }
 
 // Hub maintains the set of active clients, room subscriptions, and broadcasts messages.
@@ -43,6 +49,9 @@ type Hub struct {
 
 	// Optional presence manager
 	presence PresenceManager
+
+	// Optional Redis relay for multi-instance
+	redis RedisPublisher
 }
 
 // NewHub creates a new Hub instance.
@@ -127,7 +136,13 @@ func (h *Hub) BroadcastToRoom(studentID string, event interface{}) {
 	}
 }
 
+// SetRedis wires an optional Redis publisher for cross-instance broadcast.
+func (h *Hub) SetRedis(r RedisPublisher) {
+	h.redis = r
+}
+
 // BroadcastToAll marshals the event to JSON and sends it to all connected clients.
+// If Redis is wired, also publishes so other instances relay the event.
 func (h *Hub) BroadcastToAll(event interface{}) {
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -135,6 +150,15 @@ func (h *Hub) BroadcastToAll(event interface{}) {
 		return
 	}
 
+	h.broadcastAll <- data
+	if h.redis != nil {
+		go h.redis.Publish(context.Background(), event)
+	}
+}
+
+// InjectBroadcast sends raw JSON to all local clients. Used by Redis
+// subscriber to relay events from other instances without re-publishing.
+func (h *Hub) InjectBroadcast(data []byte) {
 	h.broadcastAll <- data
 }
 

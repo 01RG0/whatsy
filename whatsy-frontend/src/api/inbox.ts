@@ -1,6 +1,4 @@
 import type { ZernioConversation, ZernioMessage, SendMessagePayload, ConversationFilter } from '../components/types'
-import { supabase } from '../lib/supabase'
-
 export const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 export function getAuthHeader(): Record<string, string> {
@@ -47,35 +45,6 @@ export async function getMessages(
   await throwIfError(res)
   const json = await res.json() as { messages?: ZernioMessage[] } | ZernioMessage[]
   return Array.isArray(json) ? json : (json.messages ?? [])
-}
-
-export async function getMessagesDirect(
-  conversationId: string,
-  limit = 100,
-): Promise<ZernioMessage[]> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('id, conversation_id, direction, content_type, content, status, timestamp, attachments')
-    .eq('conversation_id', conversationId)
-    .order('timestamp', { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return (data ?? []).map((row: Record<string, unknown>) => ({
-    id: row.id as string,
-    conversationId: row.conversation_id as string,
-    direction: (row.direction as string) || 'inbound',
-    type: (row.content_type as string) || 'text',
-    content: (row.content as string) || '',
-    status: (row.status as string) || 'sent',
-    createdAt: row.timestamp as string,
-    attachments: Array.isArray(row.attachments) && (row.attachments as unknown[]).length > 0
-      ? (row.attachments as Array<{ url: string; type: string; name?: string }>).map((a) => ({
-          url: a.url,
-          type: a.type as 'image' | 'audio' | 'video' | 'document',
-          name: a.name,
-        }))
-      : undefined,
-  })) as ZernioMessage[]
 }
 
 export async function sendMessage(

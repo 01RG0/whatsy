@@ -69,11 +69,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [assignOpen]);
 
   // Scroll to the latest message whenever messages change OR a new conversation is opened.
-  // Using scrollIntoView on the sentinel div is more reliable than scrollTop = scrollHeight
-  // because it fires after the DOM is fully laid out, and handles the conversation-switch
-  // case where the messages reference may not have changed (cached data).
+  // Scroll to bottom whenever messages change or conversation switches.
+  // Direct scrollTop manipulation avoids scrollIntoView ancestor-traversal bugs
+  // that can silently scroll an overflow:hidden parent instead of this container.
   useLayoutEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, conversation?.id]);
 
   const groupedMessages = useMemo(() => {

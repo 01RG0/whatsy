@@ -23,9 +23,9 @@ import (
 	"github.com/whatsy/backend/internal/config"
 	"github.com/whatsy/backend/internal/handler"
 	"github.com/whatsy/backend/internal/presence"
+	"github.com/whatsy/backend/internal/redispub"
 	"github.com/whatsy/backend/internal/repository"
 	"github.com/whatsy/backend/internal/service"
-	supabasebroadcast "github.com/whatsy/backend/internal/supabase"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
@@ -113,11 +113,15 @@ func main() {
 	hub := websocket.NewHub(presenceMgr)
 	go hub.Run()
 
+	if relay := redispub.NewRelay(cfg.RedisURL, hub); relay != nil {
+		hub.SetRedis(relay)
+		go relay.Subscribe(context.Background())
+	}
+
 	convRepo := repository.NewConversationRepo(db)
 	msgRepo := repository.NewMessageRepo(db)
 	chatService := service.NewChatService(db, convRepo, msgRepo, zernio.NewClient(cfg.ZernioAPIKey), hub)
 	chatService.SetAutoReplier(service.NewAutoReplyService(db))
-	chatService.SetSupabaseBroadcaster(supabasebroadcast.NewBroadcaster(cfg.SupabaseURL, cfg.SupabaseServiceKey))
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
 	agentHandler := handler.NewAgentHandler(db)

@@ -17,7 +17,6 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/whatsy/backend/internal/supabase"
 )
 
 func main() {
@@ -42,11 +41,7 @@ func main() {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	broadcaster := supabase.NewBroadcaster(os.Getenv("SUPABASE_URL"), os.Getenv("SUPABASE_SERVICE_KEY"))
-	if broadcaster == nil {
-		log.Println("SUPABASE_URL or SUPABASE_SERVICE_KEY not set — realtime broadcast disabled")
-	}
-	w := &worker{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1", broadcaster: broadcaster}
+	w := &worker{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1"}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -84,10 +79,9 @@ func main() {
 }
 
 type worker struct {
-	db          *sql.DB
-	zernioKey   string
-	zernioBase  string
-	broadcaster *supabase.Broadcaster
+	db         *sql.DB
+	zernioKey  string
+	zernioBase string
 }
 
 type zernioConv struct {
@@ -351,13 +345,6 @@ func (w *worker) upsertMessage(ctx context.Context, dbConvID string, msg zernioM
 	}
 	if err != nil {
 		return err
-	}
-	// New message inserted — fire realtime broadcast so clients update instantly.
-	if w.broadcaster != nil {
-		go w.broadcaster.Send(context.Background(), "inbox", "new-message", map[string]interface{}{
-			"id":             msgID,
-			"conversationId": dbConvID,
-		})
 	}
 	return nil
 }
