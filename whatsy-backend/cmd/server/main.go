@@ -47,11 +47,18 @@ func main() {
 	defer db.Close()
 
 	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
+	db.SetMaxIdleConns(10)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping database: %v", err)
 	}
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			_ = db.PingContext(context.Background())
+		}
+	}()
 
 	if err := runMigrations(db); err != nil {
 		log.Fatalf("migrations: %v", err)

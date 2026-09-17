@@ -35,6 +35,7 @@ func New(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.
 }
 
 func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, max-age=10")
 	claims, _ := ClaimsFromContext(r.Context())
 	accountID := ""
 	if claims != nil {

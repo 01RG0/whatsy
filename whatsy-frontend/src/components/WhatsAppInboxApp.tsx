@@ -4,7 +4,7 @@ import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
 import { useSupabaseRealtime } from '../store/useSupabaseRealtime';
-import { getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
+import { getMessagesDirect as getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ConversationFilter, SendMessagePayload } from './types';
 
