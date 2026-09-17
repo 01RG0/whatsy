@@ -69,6 +69,9 @@ func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search s
 		where = append(where, "FALSE")
 	case "assigned_to_me":
 		where = append(where, "c.assigned_agent_id = "+addArg(accountID)+"::uuid")
+	case "unanswered":
+		// Conversations where the last message came from the customer (no agent reply yet).
+		where = append(where, "(last_msg.direction = 'inbound' OR last_msg.direction IS NULL)")
 	default:
 		return nil, fmt.Errorf("unsupported conversation filter %q", filter)
 	}
@@ -158,8 +161,15 @@ func (r *ConversationRepo) ResetUnread(ctx context.Context, conversationID strin
 }
 
 // AssignAgent assigns a conversation to an agent and reports whether it existed.
+// An empty agentID clears the assignment (sets NULL).
 func (r *ConversationRepo) AssignAgent(ctx context.Context, conversationID, agentID string) (bool, error) {
-	result, err := r.db.ExecContext(ctx, "UPDATE conversations SET assigned_agent_id = $1, updated_at = NOW() WHERE id = $2", agentID, conversationID)
+	var result sql.Result
+	var err error
+	if agentID == "" {
+		result, err = r.db.ExecContext(ctx, "UPDATE conversations SET assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1", conversationID)
+	} else {
+		result, err = r.db.ExecContext(ctx, "UPDATE conversations SET assigned_agent_id = $1, updated_at = NOW() WHERE id = $2", agentID, conversationID)
+	}
 	if err != nil {
 		return false, fmt.Errorf("assign conversation: %w", err)
 	}

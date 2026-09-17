@@ -140,4 +140,4 @@ export interface SendMessagePayload {
   buttons?: InteractiveButton[];
 }
 
-export type ConversationFilter = 'all' | 'unread' | 'groups' | 'assigned_to_me';
+export type ConversationFilter = 'all' | 'unread' | 'groups' | 'assigned_to_me' | 'unanswered';

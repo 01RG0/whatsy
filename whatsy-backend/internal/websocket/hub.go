@@ -156,7 +156,7 @@ func (h *Hub) HandleTypingStart(client *Client, studentID string) {
 		expiresInMs = exp
 	}
 
-	h.BroadcastToRoom(studentID, AgentTypingLockEvent{
+	h.BroadcastToAll(AgentTypingLockEvent{
 		Event:       EventAgentTypingLock,
 		StudentID:   studentID,
 		LockedBy:    viewer,
@@ -174,7 +174,7 @@ func (h *Hub) HandleTypingStop(client *Client, studentID string) {
 		_ = h.presence.ReleaseLock(studentID, client.agentID)
 	}
 
-	h.BroadcastToRoom(studentID, TypingLockReleasedEvent{
+	h.BroadcastToAll(TypingLockReleasedEvent{
 		Event:     EventTypingLockReleased,
 		StudentID: studentID,
 	})

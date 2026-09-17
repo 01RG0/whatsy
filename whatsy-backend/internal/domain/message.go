@@ -77,6 +77,9 @@ type Message struct {
 	Content          string         `json:"content"`
 	Status           DeliveryStatus `json:"status"`
 	ZernioMessageID  string         `json:"zernioMessageId,omitempty"`
+	SentByAgentID    string         `json:"sentByAgentId,omitempty"`
+	SenderName       string         `json:"senderName,omitempty"`
+	SenderAvatar     string         `json:"senderAvatar,omitempty"`
 	CreatedAt        time.Time      `json:"createdAt"`
 	Attachments      []Attachment   `json:"attachments,omitempty"`
 	Interactive      *Interactive   `json:"interactive,omitempty"`

@@ -4,3 +4,4 @@ dockerfilePath = "whatsy-backend/Dockerfile.worker"
 
 [deploy]
 restartPolicyType = "on_failure"
+region = "europe-west4"

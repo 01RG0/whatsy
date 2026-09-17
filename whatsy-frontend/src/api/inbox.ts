@@ -68,3 +68,26 @@ export async function markRead(conversationId: string): Promise<void> {
   })
   await throwIfError(res)
 }
+
+export async function assignConversation(conversationId: string, agentId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/assign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ agentId }),
+  })
+  await throwIfError(res)
+}
+
+export interface AgentSummary {
+  id: string
+  name: string
+  email: string
+  role: string
+  avatar: string
+}
+
+export async function getAgents(): Promise<AgentSummary[]> {
+  const res = await fetch(`${API_BASE}/v1/agents`, { headers: getAuthHeader() })
+  await throwIfError(res)
+  return res.json() as Promise<AgentSummary[]>
+}

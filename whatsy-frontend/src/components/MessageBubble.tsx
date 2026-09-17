@@ -181,6 +181,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Timestamp + Status */}
         <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right opacity-60 ml-2 mt-[-4px]">
+          {isOutbound && message.senderName && (
+            <span className="opacity-80 mr-1">{message.senderName}</span>
+          )}
           <span>{formattedTime}</span>
           {isOutbound && renderStatusTicks(message.status)}
         </div>

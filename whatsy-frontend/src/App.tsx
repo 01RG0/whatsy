@@ -1,7 +1,5 @@
 import React, { useEffect } from 'react'
-import { useInboxStore } from './store/useInboxStore'
 import { useWebSocket } from './store/useWebSocket'
-import { getConversations } from './api/inbox'
 import { WhatsAppInboxApp } from './components/WhatsAppInboxApp'
 import NavBar from './components/NavBar'
 import LoginPage from './pages/LoginPage'
@@ -58,14 +56,6 @@ function AppContent({ path }: { path: string }) {
 
 function InboxApp() {
   useWebSocket()
-  const setConversations = useInboxStore((s) => s.setConversations)
-
-  useEffect(() => {
-    getConversations()
-      .then(setConversations)
-      .catch((err) => console.error('[App] failed to load conversations:', err))
-  }, [setConversations])
-
   return <WhatsAppInboxApp />
 }
 

@@ -3,6 +3,7 @@ import type {
   ZernioConversation,
   ZernioMessage,
 } from '../components/types';
+export type { ZernioConversation };
 
 export interface ViewerInfo {
   agentId: string;
@@ -29,6 +30,7 @@ interface InboxState {
   receiveMessage: (conversationId: string, message: ZernioMessage) => void;
   updateMessageStatus: (messageId: string, status: ZernioMessage['status']) => void;
   updateConversation: (conv: Partial<ZernioConversation> & { id: string }) => void;
+  bumpConversation: (id: string, patch?: Partial<ZernioConversation>) => void;
   setViewers: (studentId: string, viewers: ViewerInfo[]) => void;
   setTypingLock: (studentId: string, lock: TypingLock | null) => void;
   setWsConnected: (connected: boolean) => void;
@@ -76,6 +78,22 @@ export const useInboxStore = create<InboxState>((set) => ({
         c.id === conv.id ? { ...c, ...conv } : c
       ),
     })),
+
+  bumpConversation: (id, patch) =>
+    set((state) => {
+      const idx = state.conversations.findIndex((c) => c.id === id);
+      if (idx === -1) {
+        // Brand-new conversation (first message from a new contact) — prepend if we
+        // received a full enough patch to render it.
+        if (patch && patch.participant && patch.id) {
+          return { conversations: [patch as ZernioConversation, ...state.conversations] };
+        }
+        return state;
+      }
+      const updated = patch ? { ...state.conversations[idx], ...patch } : state.conversations[idx];
+      const rest = state.conversations.filter((c) => c.id !== id);
+      return { conversations: [updated, ...rest] };
+    }),
 
   setViewers: (studentId, viewers) =>
     set((state) => ({

@@ -82,7 +82,7 @@ func (s *AutoReplyService) CheckAndReply(ctx context.Context, message domain.Mes
 			continue
 		}
 
-		if _, err := chatService.SendOutboundMessage(ctx, convID, zernio.SendMessagePayload{Message: response}); err != nil {
+		if _, err := chatService.SendOutboundMessage(ctx, convID, zernio.SendMessagePayload{Message: response}, ""); err != nil {
 			return false, fmt.Errorf("send auto-reply: %w", err)
 		}
 		return true, nil

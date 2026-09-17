@@ -94,9 +94,23 @@ export function useWebSocket() {
       }
 
       switch (data.event) {
-        case 'NEW_MESSAGE':
-          store.receiveMessage(data.message.conversationId, data.message);
+        case 'NEW_MESSAGE': {
+          const msg = data.message;
+          store.receiveMessage(msg.conversationId, msg);
+          // Move the conversation to the top and update last message preview.
+          store.bumpConversation(msg.conversationId, {
+            lastMessage: {
+              id: msg.id,
+              content: msg.content || '',
+              type: msg.type,
+              direction: msg.direction,
+              createdAt: msg.createdAt,
+              status: msg.status,
+            },
+            updatedAt: msg.createdAt,
+          });
           break;
+        }
         case 'MESSAGE_STATUS':
           store.updateMessageStatus(data.messageId, data.status);
           break;
@@ -111,9 +125,20 @@ export function useWebSocket() {
         case 'TYPING_LOCK_RELEASED':
           store.setTypingLock(data.studentId, null);
           break;
-        case 'CONVERSATION_UPDATED':
-          store.updateConversation(data.conversation);
+        case 'CONVERSATION_UPDATED': {
+          const patch = { ...data.conversation } as Partial<ZernioConversation> & { id: string };
+          // For the active conversation, only apply unreadCount if it's going to 0
+          // (someone else marked it read). Suppress increments to avoid badge flash.
+          if (
+            patch.id === store.activeConversationId &&
+            typeof patch.unreadCount === 'number' &&
+            patch.unreadCount > 0
+          ) {
+            delete (patch as Record<string, unknown>).unreadCount;
+          }
+          store.bumpConversation(patch.id, patch);
           break;
+        }
       }
     };
 

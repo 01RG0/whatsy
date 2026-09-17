@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { ZernioConversation, ZernioMessage, SendMessagePayload } from './types';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
+import type { AgentSummary } from '../api/inbox';
 
 export interface ViewerInfo {
   agentId: string;
@@ -27,6 +28,8 @@ interface ChatWindowProps {
   typingLock?: TypingLock | null;
   onInputFocus?: () => void;
   onInputBlur?: () => void;
+  agents?: AgentSummary[];
+  onAssign?: (agentId: string) => void;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -42,14 +45,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   typingLock = null,
   onInputFocus,
   onInputBlur,
+  agents = [],
+  onAssign,
 }) => {
   type ReplyPreview = { id: string; senderName: string; content: string };
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [assignOpen, setAssignOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const assignRef = useRef<HTMLDivElement>(null);
 
+  // Close assign dropdown on outside click.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!assignOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (assignRef.current && !assignRef.current.contains(e.target as Node)) {
+        setAssignOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [assignOpen]);
+
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const groupedMessages = useMemo(() => {
@@ -131,20 +152,96 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <h2 className="text-sm font-semibold text-gray-900 dark:text-[#e9edef] leading-tight">
               {conversation.participant.displayName}
             </h2>
-            <span className="text-[12px] text-gray-500 dark:text-[#8696a0] leading-tight mt-0.5">
-              {conversation.participant.isOnline
-                ? 'online'
-                : (() => {
-                    const ls = conversation.participant.lastSeen;
-                    if (!ls || ls.startsWith('0001-')) return conversation.participant.phoneNumber || 'offline';
-                    const d = new Date(ls);
-                    return `last seen ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-                  })()}
-            </span>
+            {typingLock ? (
+              <span className="flex items-center gap-1 text-[12px] text-[#00a884] leading-tight mt-0.5">
+                <span>{typingLock.lockedBy.name} is typing</span>
+                <span className="flex items-center gap-[3px] text-[#00a884]">
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </span>
+              </span>
+            ) : (
+              <span className="text-[12px] text-gray-500 dark:text-[#8696a0] leading-tight mt-0.5">
+                {conversation.participant.isOnline
+                  ? 'online'
+                  : (() => {
+                      const ls = conversation.participant.lastSeen;
+                      if (!ls || ls.startsWith('0001-')) return conversation.participant.phoneNumber || 'offline';
+                      const d = new Date(ls);
+                      return `last seen ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                    })()}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-1 text-gray-500 dark:text-[#aebac1]">
+          {/* Assigned agent chip + assign dropdown */}
+          {onAssign && agents.length > 0 && (
+            <div className="relative" ref={assignRef}>
+              <button
+                type="button"
+                onClick={() => setAssignOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-[#374248] hover:bg-gray-200 dark:hover:bg-[#2a3942] transition"
+                title="Assign conversation"
+              >
+                {conversation.assignedAgent ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full bg-[#00a884] flex items-center justify-center text-white text-[9px] font-bold shrink-0">
+                      {conversation.assignedAgent.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="max-w-[80px] truncate">{conversation.assignedAgent.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span>Assign</span>
+                  </>
+                )}
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+              {assignOpen && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-200 dark:border-[#374248] z-50 py-1 overflow-hidden">
+                  {conversation.assignedAgent && (
+                    <button
+                      type="button"
+                      onClick={() => { onAssign(''); setAssignOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-gray-50 dark:hover:bg-[#2a3942]"
+                    >
+                      Unassign
+                    </button>
+                  )}
+                  {agents.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => { onAssign(a.id); setAssignOpen(false); }}
+                      className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-[#2a3942] transition ${conversation.assignedAgent?.id === a.id ? 'text-[#00a884]' : 'text-gray-800 dark:text-[#e9edef]'}`}
+                    >
+                      <span className="w-6 h-6 rounded-full bg-[#00a884] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                        {a.name.charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{a.name}</div>
+                        <div className="text-[11px] text-gray-400 dark:text-[#8696a0] truncate">{a.role}</div>
+                      </div>
+                      {conversation.assignedAgent?.id === a.id && (
+                        <svg className="w-3.5 h-3.5 ml-auto shrink-0 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button type="button" onClick={onSearchInChat} className="p-2 hover:bg-gray-100 dark:hover:bg-[#374248] rounded-full transition" title="Search in chat">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
@@ -162,7 +259,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </header>
 
       {/* Message Stream */}
-      <div className="flex-1 overflow-y-auto px-2 py-4 relative">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-4 relative">
         {isLoadingMessages && (
           <div className="flex justify-center p-4">
             <div className="w-6 h-6 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
@@ -216,15 +313,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* Typing Lock Banner */}
-      {typingLock && (
-        <div className="px-4 py-2 bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-[#313d45] flex items-center gap-2">
-          <span className="text-[#25D366]">🔒</span>
-          <span className="text-sm text-gray-500 dark:text-[#8696a0]">
-            <span className="text-gray-900 dark:text-[#e9edef] font-medium">{typingLock.lockedBy.name}</span> is replying right now…
-          </span>
-        </div>
-      )}
 
       {lightboxUrl && (
         <div
@@ -242,7 +330,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         disabled={typingLock !== null}
         onSendMessage={(payload) => onSendMessage({
           ...payload,
-          accountId: conversation.accountId,
           conversationId: conversation.id,
           participantId: conversation.participant.id,
         })}

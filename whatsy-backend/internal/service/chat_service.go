@@ -137,10 +137,16 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		return fmt.Errorf("get updated conversation: conversation %q not found", message.ConversationID)
 	}
 
-	s.hub.BroadcastToRoom(message.ConversationID, websocket.NewMessageEvent{
+	s.hub.BroadcastToAll(websocket.NewMessageEvent{
 		Event:     websocket.EventNewMessage,
 		StudentID: message.ConversationID,
 		Message:   message,
+	})
+	// Also push the updated conversation to every connected client so all
+	// agents' sidebars reorder and show the new unread count without refresh.
+	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
+		Event:        websocket.EventConversationUpdated,
+		Conversation: *conversation,
 	})
 
 	// Fire the database-driven auto-reply rules (best-effort).
@@ -172,8 +178,9 @@ func (s *ChatService) HandleMessageStatus(ctx context.Context, payload zernio.Me
 }
 
 // SendOutboundMessage sends a message through Zernio, then persists and
-// broadcasts the confirmed message.
-func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID string, payload zernio.SendMessagePayload) (*domain.Message, error) {
+// broadcasts the confirmed message. agentID is stored on the message so the
+// inbox can show which team member replied.
+func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID string, payload zernio.SendMessagePayload, agentID string) (*domain.Message, error) {
 	// The send-message endpoint requires accountId; resolve the connected
 	// account when the caller did not pin one.
 	if payload.AccountID == "" {
@@ -207,6 +214,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		Content:         payload.Message,
 		Status:          domain.StatusSent,
 		ZernioMessageID: sent.ID, // WhatsApp wamid: the key status updates arrive on
+		SentByAgentID:   agentID,
 		CreatedAt:       sent.Timestamp,
 	}
 	if payload.AttachmentURL != "" {
@@ -225,6 +233,14 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return nil, fmt.Errorf("create outbound message: %w", err)
 	}
+	// Populate sender display fields so the live WebSocket broadcast shows the
+	// agent name without requiring a page reload.
+	if agentID != "" && message.SenderName == "" {
+		var name, avatar string
+		_ = s.db.QueryRowContext(ctx, "SELECT name, avatar FROM agents WHERE id = $1", agentID).Scan(&name, &avatar)
+		message.SenderName = name
+		message.SenderAvatar = avatar
+	}
 	if err := s.convRepo.UpdateLastMessage(ctx, conversationID, message.Content, string(message.Type)); err != nil {
 		return nil, fmt.Errorf("update conversation last message: %w", err)
 	}
@@ -236,10 +252,15 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	if conversation == nil {
 		return nil, fmt.Errorf("get updated conversation: conversation %q not found", conversationID)
 	}
-	s.hub.BroadcastToRoom(conversationID, websocket.NewMessageEvent{
+	s.hub.BroadcastToAll(websocket.NewMessageEvent{
 		Event:     websocket.EventNewMessage,
 		StudentID: conversationID,
 		Message:   message,
+	})
+	// Notify all agents' sidebars of the updated conversation.
+	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
+		Event:        websocket.EventConversationUpdated,
+		Conversation: *conversation,
 	})
 	return &message, nil
 }

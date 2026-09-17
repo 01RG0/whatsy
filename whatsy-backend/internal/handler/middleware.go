@@ -47,3 +47,15 @@ func ClaimsFromContext(ctx context.Context) (*utils.JWTClaims, bool) {
 	claims, ok := ctx.Value(claimsContextKey).(*utils.JWTClaims)
 	return claims, ok
 }
+
+// RequireAdmin rejects requests from non-admin agents with 403.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := ClaimsFromContext(r.Context())
+		if !ok || claims.Role != "admin" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin access required"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

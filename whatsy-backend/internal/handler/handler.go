@@ -117,7 +117,12 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.chatService.SendOutboundMessage(r.Context(), chi.URLParam(r, "id"), payload)
+	agentID := ""
+	if claims, ok := ClaimsFromContext(r.Context()); ok {
+		agentID = claims.AgentID
+	}
+
+	message, err := h.chatService.SendOutboundMessage(r.Context(), chi.URLParam(r, "id"), payload, agentID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "send message"})
 		return
@@ -139,10 +144,11 @@ func (h *Handler) AssignConversation(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		AgentID string `json:"agentId"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil || payload.AgentID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agentId is required"})
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
+	// Empty agentId means unassign.
 
 	conversationID := chi.URLParam(r, "id")
 	updated, err := h.convRepo.AssignAgent(r.Context(), conversationID, payload.AgentID)
@@ -175,9 +181,13 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read webhook body"})
 		return
 	}
-	if h.cfg == nil || !zernio.ValidateSignature([]byte(h.cfg.ZernioWebhookSecret), body, r.Header.Get("x-hub-signature-256")) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
-		return
+	// Only validate HMAC when a secret is configured. If no secret is set,
+	// webhooks are accepted without verification (development / initial setup).
+	if h.cfg != nil && h.cfg.ZernioWebhookSecret != "" {
+		if !zernio.ValidateSignature([]byte(h.cfg.ZernioWebhookSecret), body, r.Header.Get("x-hub-signature-256")) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
+			return
+		}
 	}
 
 	event, err := zernio.ParseWebhookEvent(body)
@@ -232,7 +242,9 @@ func (h *Handler) ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := websocket.Accept(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
 	if err != nil {
 		log.Printf("websocket upgrade: %v", err)
 		return

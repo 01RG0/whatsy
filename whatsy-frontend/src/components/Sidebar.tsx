@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { ZernioConversation, ConversationFilter } from './types';
+import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -9,6 +10,8 @@ interface SidebarProps {
   onFilterChange: (filter: ConversationFilter) => void;
   onSearchChange: (query: string) => void;
   searchQuery: string;
+  viewers?: Record<string, ViewerInfo[]>;
+  typingLocks?: Record<string, TypingLock | null>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -19,6 +22,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onFilterChange,
   onSearchChange,
   searchQuery,
+  viewers = {},
+  typingLocks = {},
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -26,8 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filters: { id: ConversationFilter; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'unread', label: 'Unread' },
-    { id: 'groups', label: 'Groups' },
-    { id: 'assigned_to_me', label: 'Assigned' },
+    { id: 'unanswered', label: 'Unanswered' },
+    { id: 'assigned_to_me', label: 'Mine' },
   ];
 
   const formatLastMessageTime = (dateStr?: string) => {
@@ -136,6 +141,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           conversations.map((conv) => {
             const isSelected = conv.id === activeConversationId;
+            const convViewers = viewers[conv.id] ?? [];
+            const convTyping = typingLocks[conv.id] ?? null;
             return (
               <div
                 key={conv.id}
@@ -146,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'hover:bg-gray-100 dark:hover:bg-[#202c33]/70'
                 }`}
               >
-                {/* Avatar */}
+                {/* Avatar + team presence overlay */}
                 <div className="relative shrink-0">
                   <img
                     src={
@@ -156,8 +163,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     alt={conv.participant.displayName}
                     className="w-12 h-12 rounded-full object-cover"
                   />
-                  {conv.participant.isOnline && (
+                  {conv.participant.isOnline && convViewers.length === 0 && (
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#111b21]" />
+                  )}
+                  {/* Stacked agent avatars — team members viewing this chat */}
+                  {convViewers.length > 0 && (
+                    <div className="absolute -bottom-1 -right-1 flex">
+                      {convViewers.slice(0, 3).map((v, i) => (
+                        <span
+                          key={v.agentId}
+                          title={v.name}
+                          style={{ zIndex: 10 - i, marginLeft: i === 0 ? 0 : -6 }}
+                          className="w-5 h-5 rounded-full bg-[#00a884] ring-2 ring-white dark:ring-[#111b21] flex items-center justify-center text-white text-[8px] font-bold shrink-0"
+                        >
+                          {v.name.charAt(0).toUpperCase()}
+                        </span>
+                      ))}
+                      {convViewers.length > 3 && (
+                        <span
+                          style={{ zIndex: 7, marginLeft: -6 }}
+                          className="w-5 h-5 rounded-full bg-gray-400 ring-2 ring-white dark:ring-[#111b21] flex items-center justify-center text-white text-[8px] font-bold shrink-0"
+                        >
+                          +{convViewers.length - 3}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -173,22 +203,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500 dark:text-[#8696a0] truncate pr-2">
-                      {conv.lastMessage?.direction === 'outbound' && (
-                        <span className="mr-1 text-gray-400">You:</span>
-                      )}
-                      {conv.lastMessage ? (
-                        conv.lastMessage.type === 'image' ? '📷 Photo'
-                        : conv.lastMessage.type === 'video' ? '🎥 Video'
-                        : conv.lastMessage.type === 'audio' ? '🎵 Audio'
-                        : conv.lastMessage.type === 'voice_note' ? '🎤 Voice message'
-                        : conv.lastMessage.type === 'document' ? '📄 Document'
-                        : conv.lastMessage.type === 'location' ? '📍 Location'
-                        : conv.lastMessage.type === 'contacts' ? '👤 Contact'
-                        : conv.lastMessage.content === '[Unsupported message]' ? '⚠️ Unsupported message'
-                        : conv.lastMessage.content
+                    <p className="text-xs truncate pr-2 flex items-center gap-1">
+                      {convTyping ? (
+                        <span className="flex items-center gap-1 text-[#00a884]">
+                          <span>{convTyping.lockedBy.name} is typing</span>
+                          <span className="flex items-center gap-[3px]">
+                            <span className="typing-dot" />
+                            <span className="typing-dot" />
+                            <span className="typing-dot" />
+                          </span>
+                        </span>
                       ) : (
-                        'No messages yet'
+                        <span className="text-gray-500 dark:text-[#8696a0] truncate">
+                          {conv.lastMessage?.direction === 'outbound' && (
+                            <span className="mr-1 text-gray-400">You:</span>
+                          )}
+                          {conv.lastMessage ? (
+                            conv.lastMessage.type === 'image' ? '📷 Photo'
+                            : conv.lastMessage.type === 'video' ? '🎥 Video'
+                            : conv.lastMessage.type === 'audio' ? '🎵 Audio'
+                            : conv.lastMessage.type === 'voice_note' ? '🎤 Voice message'
+                            : conv.lastMessage.type === 'document' ? '📄 Document'
+                            : conv.lastMessage.type === 'location' ? '📍 Location'
+                            : conv.lastMessage.type === 'contacts' ? '👤 Contact'
+                            : conv.lastMessage.content === '[Unsupported message]' ? '⚠️ Unsupported message'
+                            : conv.lastMessage.content
+                          ) : (
+                            'No messages yet'
+                          )}
+                        </span>
                       )}
                     </p>
                     <div className="flex items-center gap-1 shrink-0">

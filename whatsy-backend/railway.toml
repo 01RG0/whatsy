@@ -5,3 +5,4 @@ dockerfilePath = "Dockerfile"
 [deploy]
 healthcheckPath = "/health"
 restartPolicyType = "on_failure"
+region = "europe-west4"
