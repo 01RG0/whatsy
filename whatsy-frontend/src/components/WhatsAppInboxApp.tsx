@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
@@ -16,8 +16,10 @@ export const WhatsAppInboxApp: React.FC = () => {
   const messages = useInboxStore((s) => s.messages);
   const viewers = useInboxStore((s) => s.viewers);
   const typingLock = useInboxStore((s) => s.typingLock);
+  const wsConnected = useInboxStore((s) => s.wsConnected);
   const setActiveConversation = useInboxStore((s) => s.setActiveConversation);
   const setMessages = useInboxStore((s) => s.setMessages);
+  const mergeMessages = useInboxStore((s) => s.mergeMessages);
   const updateConversation = useInboxStore((s) => s.updateConversation);
   const receiveMessage = useInboxStore((s) => s.receiveMessage);
   const bumpConversation = useInboxStore((s) => s.bumpConversation);
@@ -70,6 +72,48 @@ export const WhatsAppInboxApp: React.FC = () => {
       .then(setAgents)
       .catch(() => undefined);
   }, []);
+
+  // Polling fallback: merge any missed inbound messages every 5s.
+  // This catches up when WebSocket drops or a message is lost in transit.
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const id = activeConversationId;
+    const poll = () => {
+      getMessages(id)
+        .then((msgs) => mergeMessages(id, [...msgs].reverse()))
+        .catch(() => undefined);
+    };
+    const timer = setInterval(poll, 1000);
+    return () => clearInterval(timer);
+  }, [activeConversationId, mergeMessages]);
+
+  // Refetch messages when the tab becomes visible again after being hidden.
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const id = activeConversationId;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        getMessages(id)
+          .then((msgs) => mergeMessages(id, [...msgs].reverse()))
+          .catch(() => undefined);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [activeConversationId, mergeMessages]);
+
+  // When WebSocket reconnects, immediately refresh messages to catch anything missed.
+  const prevWsConnected = useRef(wsConnected);
+  useEffect(() => {
+    if (!activeConversationId) return;
+    if (wsConnected && !prevWsConnected.current) {
+      const id = activeConversationId;
+      getMessages(id)
+        .then((msgs) => mergeMessages(id, [...msgs].reverse()))
+        .catch(() => undefined);
+    }
+    prevWsConnected.current = wsConnected;
+  }, [wsConnected, activeConversationId, mergeMessages]);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;

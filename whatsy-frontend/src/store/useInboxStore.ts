@@ -27,6 +27,7 @@ interface InboxState {
   setConversations: (convs: ZernioConversation[]) => void;
   setActiveConversation: (id: string) => void;
   setMessages: (conversationId: string, msgs: ZernioMessage[]) => void;
+  mergeMessages: (conversationId: string, msgs: ZernioMessage[]) => void;
   receiveMessage: (conversationId: string, message: ZernioMessage) => void;
   updateMessageStatus: (messageId: string, status: ZernioMessage['status']) => void;
   updateConversation: (conv: Partial<ZernioConversation> & { id: string }) => void;
@@ -52,6 +53,18 @@ export const useInboxStore = create<InboxState>((set) => ({
     set((state) => ({
       messages: { ...state.messages, [conversationId]: msgs },
     })),
+
+  mergeMessages: (conversationId, msgs) =>
+    set((state) => {
+      const existing = state.messages[conversationId] ?? [];
+      const existingIds = new Set(existing.map((m) => m.id));
+      const toAdd = msgs.filter((m) => !existingIds.has(m.id));
+      if (toAdd.length === 0) return state;
+      const merged = [...existing, ...toAdd].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      return { messages: { ...state.messages, [conversationId]: merged } };
+    }),
 
   receiveMessage: (conversationId, message) =>
     set((state) => {

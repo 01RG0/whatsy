@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react'
-import { useWebSocket } from './store/useWebSocket'
 import { WhatsAppInboxApp } from './components/WhatsAppInboxApp'
 import NavBar from './components/NavBar'
 import LoginPage from './pages/LoginPage'
@@ -55,7 +54,6 @@ function AppContent({ path }: { path: string }) {
 }
 
 function InboxApp() {
-  useWebSocket()
   return <WhatsAppInboxApp />
 }
 
