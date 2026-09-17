@@ -36,7 +36,7 @@ function Router() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-[#0b141a] overflow-hidden">
+    <div className="flex h-[100dvh] bg-gray-100 dark:bg-[#0b141a] overflow-hidden">
       <NavBar path={path} />
       <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
         <AppContent path={path} />

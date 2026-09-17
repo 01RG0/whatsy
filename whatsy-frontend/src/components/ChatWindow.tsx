@@ -68,10 +68,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, [assignOpen]);
 
+  // Scroll to the latest message whenever messages change OR a new conversation is opened.
+  // Using scrollIntoView on the sentinel div is more reliable than scrollTop = scrollHeight
+  // because it fires after the DOM is fully laid out, and handles the conversation-switch
+  // case where the messages reference may not have changed (cached data).
   useLayoutEffect(() => {
-    const el = scrollContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, conversation?.id]);
 
   const groupedMessages = useMemo(() => {
     const groups: { dateLabel: string; items: ZernioMessage[] }[] = [];

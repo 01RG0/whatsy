@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SendMessagePayload } from './types';
 import { API_BASE } from '../api/inbox';
 
@@ -43,7 +43,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showAttachMenu) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [showAttachMenu]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -143,7 +159,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-[#222e35] px-4 py-2 relative flex flex-col select-none">
+    <div
+      className="bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-[#222e35] px-4 pt-2 pb-2 relative flex flex-col select-none"
+      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    >
       {/* Reply Preview */}
       {replyingTo && (
         <div className="flex items-center justify-between bg-gray-100 dark:bg-[#182229] border-l-4 border-[#00a884] p-2.5 mb-2 rounded text-xs">
@@ -165,7 +184,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Attachment Popover */}
       {showAttachMenu && (
-        <div className="absolute bottom-16 left-4 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div ref={attachMenuRef} className="absolute bottom-full left-4 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
           <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
             <span className="w-8 h-8 rounded-full bg-[#bf59cf] flex items-center justify-center text-white">🖼️</span>
             <span>Photos &amp; Videos</span>
