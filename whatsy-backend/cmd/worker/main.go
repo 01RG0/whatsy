@@ -17,6 +17,7 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/whatsy/backend/internal/supabase"
 )
 
 func main() {
@@ -41,7 +42,11 @@ func main() {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	w := &worker{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1"}
+	broadcaster := supabase.NewBroadcaster(os.Getenv("SUPABASE_URL"), os.Getenv("SUPABASE_SERVICE_KEY"))
+	if broadcaster == nil {
+		log.Println("SUPABASE_URL or SUPABASE_SERVICE_KEY not set — realtime broadcast disabled")
+	}
+	w := &worker{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1", broadcaster: broadcaster}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -79,9 +84,10 @@ func main() {
 }
 
 type worker struct {
-	db         *sql.DB
-	zernioKey  string
-	zernioBase string
+	db          *sql.DB
+	zernioKey   string
+	zernioBase  string
+	broadcaster *supabase.Broadcaster
 }
 
 type zernioConv struct {
@@ -329,15 +335,31 @@ func (w *worker) upsertMessage(ctx context.Context, dbConvID string, msg zernioM
 		contentType = "text"
 	}
 
-	_, err := w.db.ExecContext(ctx,
+	var msgID string
+	err := w.db.QueryRowContext(ctx,
 		`INSERT INTO messages
 		    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
-		 ON CONFLICT (zernio_message_id) DO NOTHING`,
+		 ON CONFLICT (zernio_message_id) DO NOTHING
+		 RETURNING id`,
 		dbConvID, direction, contentType, msg.Message, status,
 		msg.ID, attachmentsJSON, ts,
-	)
-	return err
+	).Scan(&msgID)
+	if err == sql.ErrNoRows {
+		// Row already existed — nothing to broadcast.
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// New message inserted — fire realtime broadcast so clients update instantly.
+	if w.broadcaster != nil {
+		go w.broadcaster.Send(context.Background(), "inbox", "new-message", map[string]interface{}{
+			"id":             msgID,
+			"conversationId": dbConvID,
+		})
+	}
+	return nil
 }
 
 func firstNonEmpty(values ...string) string {
