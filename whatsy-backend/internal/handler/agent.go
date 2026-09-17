@@ -129,13 +129,14 @@ func (h *AgentHandler) TeamStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// InviteAgent creates a new agent with a generated temporary password.
+// InviteAgent creates a new agent account directly with the provided (or auto-generated) password.
 func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var req struct {
-		Email string `json:"email"`
-		Role  string `json:"role"`
-		Name  string `json:"name"`
+		Email    string `json:"email"`
+		Role     string `json:"role"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -148,9 +149,15 @@ func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = "agent"
 	}
+	if req.Password == "" {
+		req.Password = randomPassword(12)
+	}
+	if len(req.Password) < 8 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+		return
+	}
 
-	tempPass := randomPassword(12)
-	hash, err := bcrypt.GenerateFromPassword([]byte(tempPass), 12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
 		return
@@ -172,10 +179,7 @@ func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"agent":        a,
-		"tempPassword": tempPass,
-	})
+	writeJSON(w, http.StatusCreated, map[string]any{"agent": a})
 }
 
 // UpdateAgent updates any agent's role/name/avatar (admin operation).

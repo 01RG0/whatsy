@@ -18,6 +18,7 @@ interface InviteForm {
   name: string
   email: string
   role: 'admin' | 'agent' | 'viewer'
+  password: string
 }
 
 const ROLE_BADGE: Record<Agent['role'], string> = {
@@ -79,7 +80,7 @@ export default function TeamPage() {
   const [statusFilter, setStatusFilter] = useState<'' | 'online' | 'offline'>('')
   const [showInvite, setShowInvite] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [inviteForm, setInviteForm] = useState<InviteForm>({ name: '', email: '', role: 'agent' })
+  const [inviteForm, setInviteForm] = useState<InviteForm>({ name: '', email: '', role: 'agent', password: '' })
   const [inviteError, setInviteError] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteSuccess, setInviteSuccess] = useState(false)
@@ -139,6 +140,10 @@ export default function TeamPage() {
       setInviteError('Name and email are required')
       return
     }
+    if (!inviteForm.password.trim() || inviteForm.password.length < 8) {
+      setInviteError('Password must be at least 8 characters')
+      return
+    }
     setInviteLoading(true)
     setInviteError('')
     try {
@@ -148,12 +153,12 @@ export default function TeamPage() {
         body: JSON.stringify(inviteForm),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? `Invite failed [${res.status}]`)
+      if (!res.ok) throw new Error(data.error ?? `Failed to create agent [${res.status}]`)
       setInviteSuccess(true)
-      setTimeout(() => { setShowInvite(false); setInviteSuccess(false); setInviteForm({ name: '', email: '', role: 'agent' }) }, 2000)
+      setTimeout(() => { setShowInvite(false); setInviteSuccess(false); setInviteForm({ name: '', email: '', role: 'agent', password: '' }) }, 2000)
       fetchAgents()
     } catch (err: unknown) {
-      setInviteError(err instanceof Error ? err.message : 'Invite failed')
+      setInviteError(err instanceof Error ? err.message : 'Failed to create agent')
     } finally {
       setInviteLoading(false)
     }
@@ -207,7 +212,7 @@ export default function TeamPage() {
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          Invite Agent
+          Create Agent
         </button>
       </div>
 
@@ -369,7 +374,7 @@ export default function TeamPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-[#111b21] rounded-2xl border border-gray-200 dark:border-[#222e35] w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-[#222e35]">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-[#e9edef]">Invite Agent</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-[#e9edef]">Create Agent</h2>
               <button onClick={() => { setShowInvite(false); setInviteSuccess(false) }} className="text-gray-400 hover:text-gray-600 dark:hover:text-[#e9edef] transition">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -379,8 +384,8 @@ export default function TeamPage() {
                 <div className="w-14 h-14 rounded-full bg-[#00a884]/10 flex items-center justify-center">
                   <svg className="w-8 h-8 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <p className="text-gray-900 dark:text-[#e9edef] font-semibold">Invite sent!</p>
-                <p className="text-gray-500 dark:text-[#8696a0] text-sm text-center">An invitation link has been sent to {inviteForm.email}</p>
+                <p className="text-gray-900 dark:text-[#e9edef] font-semibold">Agent created!</p>
+                <p className="text-gray-500 dark:text-[#8696a0] text-sm text-center">{inviteForm.name} can now sign in with {inviteForm.email}</p>
               </div>
             ) : (
               <form onSubmit={handleInvite} className="p-6 space-y-5">
@@ -410,6 +415,18 @@ export default function TeamPage() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-1.5">Password</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={inviteForm.password}
+                    onChange={e => setInviteForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Min. 8 characters"
+                    className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-2">Role</label>
                   <div className="space-y-2">
                     {(['admin', 'agent', 'viewer'] as const).map(r => (
@@ -433,7 +450,7 @@ export default function TeamPage() {
                   </button>
                   <button type="submit" disabled={inviteLoading}
                     className="flex-1 py-2.5 bg-[#00a884] hover:bg-[#00967a] disabled:opacity-50 text-white rounded-lg text-sm font-medium transition">
-                    {inviteLoading ? 'Sending…' : 'Send Invite'}
+                    {inviteLoading ? 'Creating…' : 'Create Agent'}
                   </button>
                 </div>
               </form>
