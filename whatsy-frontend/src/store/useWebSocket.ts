@@ -56,6 +56,17 @@ function getToken(): string {
   return localStorage.getItem('whatsy_jwt') ?? '';
 }
 
+function getMyAgentId(): string {
+  try {
+    const token = getToken();
+    if (!token) return '';
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.agent_id ?? payload.sub ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,6 +137,8 @@ export function useWebSocket() {
           setViewers(data.studentId, data.viewers);
           break;
         case 'AGENT_TYPING_LOCK': {
+          // Ignore lock events originating from this agent — we don't lock ourselves out.
+          if (data.lockedBy.agentId === getMyAgentId()) break;
           const lock: TypingLock = { lockedBy: data.lockedBy, expiresInMs: data.expiresInMs };
           setTypingLock(data.studentId, lock);
           break;
