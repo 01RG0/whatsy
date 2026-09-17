@@ -53,6 +53,7 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	messages, err := h.msgRepo.ListByConversation(r.Context(), chi.URLParam(r, "id"), queryLimit(r, 100), r.URL.Query().Get("before"))
 	if err != nil {
 		log.Printf("list messages for conversation %s: %v", chi.URLParam(r, "id"), err)

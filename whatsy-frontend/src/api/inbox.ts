@@ -38,10 +38,10 @@ export async function getMessages(
   limit = 100,
   before?: string,
 ): Promise<ZernioMessage[]> {
-  const params = new URLSearchParams({ limit: String(limit) })
+  const params = new URLSearchParams({ limit: String(limit), _t: String(Date.now()) })
   if (before) params.set('before', before)
   const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/messages?${params}`, {
-    headers: getAuthHeader(),
+    headers: { ...getAuthHeader(), 'Cache-Control': 'no-cache' },
   })
   await throwIfError(res)
   const json = await res.json() as { messages?: ZernioMessage[] } | ZernioMessage[]
