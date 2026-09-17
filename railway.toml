@@ -1,9 +1,2 @@
-[[services]]
-name = "helpful-flow"
-[services.build]
+[build]
 dockerfilePath = "whatsy-backend/Dockerfile"
-
-[[services]]
-name = "whatsy-worker"
-[services.build]
-dockerfilePath = "whatsy-backend/Dockerfile.worker"
