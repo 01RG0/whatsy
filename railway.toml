@@ -1,2 +1,3 @@
 [build]
 dockerfilePath = "whatsy-backend/Dockerfile"
+buildContext = "."
