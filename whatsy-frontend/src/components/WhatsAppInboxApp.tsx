@@ -2,13 +2,15 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
-import { useWebSocket } from '../store/useWebSocket';
+import { useWebSocket } from '../store/useWebSocket'
+import { useSupabaseRealtime } from '../store/useSupabaseRealtime';
 import { getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ConversationFilter, SendMessagePayload } from './types';
 
 export const WhatsAppInboxApp: React.FC = () => {
   const { onInputFocus, onInputBlur } = useWebSocket();
+  useSupabaseRealtime();
 
   const conversations = useInboxStore((s) => s.conversations);
   const setConversations = useInboxStore((s) => s.setConversations);
@@ -73,19 +75,6 @@ export const WhatsAppInboxApp: React.FC = () => {
       .catch(() => undefined);
   }, []);
 
-  // Polling fallback: merge any missed inbound messages every 5s.
-  // This catches up when WebSocket drops or a message is lost in transit.
-  useEffect(() => {
-    if (!activeConversationId) return;
-    const id = activeConversationId;
-    const poll = () => {
-      getMessages(id)
-        .then((msgs) => mergeMessages(id, [...msgs].reverse()))
-        .catch(() => undefined);
-    };
-    const timer = setInterval(poll, 1000);
-    return () => clearInterval(timer);
-  }, [activeConversationId, mergeMessages]);
 
   // Refetch messages when the tab becomes visible again after being hidden.
   useEffect(() => {
