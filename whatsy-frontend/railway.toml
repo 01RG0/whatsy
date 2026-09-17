@@ -1,6 +1,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+rootDirectory = "whatsy-frontend"
 
 [deploy]
 restartPolicyType = "on_failure"
