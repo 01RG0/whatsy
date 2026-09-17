@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAuthHeader } from '../api/inbox'
+import { getAuthHeader, API_BASE } from '../api/inbox'
 
 interface Rule {
   id: string
@@ -42,7 +42,7 @@ export default function AutoReplyPage() {
   async function fetchRules() {
     setLoading(true)
     try {
-      const res = await fetch('/v1/auto-reply-rules', { headers: getAuthHeader() })
+      const res = await fetch(`${API_BASE}/v1/auto-reply-rules`, { headers: getAuthHeader() })
       const data = await res.json()
       setRules(Array.isArray(data) ? data : [])
     } catch {
@@ -57,7 +57,7 @@ export default function AutoReplyPage() {
   async function toggleRule(id: string, current: boolean) {
     setRules(r => r.map(rule => rule.id === id ? { ...rule, is_active: !current } : rule))
     try {
-      await fetch(`/v1/auto-reply-rules/${id}`, {
+      await fetch(`${API_BASE}/v1/auto-reply-rules/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ is_active: !current }),
@@ -71,7 +71,7 @@ export default function AutoReplyPage() {
   async function deleteRule(id: string) {
     setRules(r => r.filter(rule => rule.id !== id))
     try {
-      await fetch(`/v1/auto-reply-rules/${id}`, { method: 'DELETE', headers: getAuthHeader() })
+      await fetch(`${API_BASE}/v1/auto-reply-rules/${id}`, { method: 'DELETE', headers: getAuthHeader() })
     } catch {
       setError('Failed to delete rule')
       fetchRules()
@@ -83,7 +83,7 @@ export default function AutoReplyPage() {
     setSaving(true)
     setError('')
     try {
-      const res = await fetch('/v1/auto-reply-rules', {
+      const res = await fetch(`${API_BASE}/v1/auto-reply-rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ trigger: trigger.trim(), response: response.trim(), priority: rules.length + 1 }),

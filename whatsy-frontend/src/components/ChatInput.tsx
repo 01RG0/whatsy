@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SendMessagePayload } from './types';
+import { API_BASE } from '../api/inbox';
 
 interface ChatInputProps {
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
@@ -11,7 +12,7 @@ interface ChatInputProps {
   onBlur?: () => void;
 }
 
-const UPLOAD_URL = '/v1/whatsapp/upload';
+const UPLOAD_URL = `${API_BASE}/v1/whatsapp/upload`;
 
 async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
   const token = localStorage.getItem('whatsy_jwt');

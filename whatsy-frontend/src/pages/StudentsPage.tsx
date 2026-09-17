@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { API_BASE } from '../api/inbox'
 
 interface Student {
   id: string
@@ -44,7 +45,7 @@ export default function StudentsPage() {
   async function fetchStudents(newOffset = 0, reset = false) {
     reset ? setLoading(true) : setLoadingMore(true)
     try {
-      const res = await fetch(`/v1/students?limit=${PAGE_SIZE}&offset=${newOffset}`, { headers: getAuthHeader() })
+      const res = await fetch(`${API_BASE}/v1/students?limit=${PAGE_SIZE}&offset=${newOffset}`, { headers: getAuthHeader() })
       if (!res.ok) throw new Error(`[${res.status}]`)
       const data = await res.json() as Student[] | { students: Student[] }
       const page = Array.isArray(data) ? data : (data.students ?? [])
@@ -63,7 +64,7 @@ export default function StudentsPage() {
     setSaving(true)
     setFormError('')
     try {
-      const res = await fetch('/v1/students', {
+      const res = await fetch(`${API_BASE}/v1/students`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(form),

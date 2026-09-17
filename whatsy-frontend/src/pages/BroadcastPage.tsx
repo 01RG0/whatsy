@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getAuthHeader } from '../api/inbox'
+import { getAuthHeader, API_BASE } from '../api/inbox'
 
 interface BroadcastResult {
   broadcastId: string
@@ -39,7 +39,7 @@ export default function BroadcastPage() {
     setError('')
     setResult(null)
     try {
-      const res = await fetch('/v1/whatsapp/broadcasts', {
+      const res = await fetch(`${API_BASE}/v1/whatsapp/broadcasts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({

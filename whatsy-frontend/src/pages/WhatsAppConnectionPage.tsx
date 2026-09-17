@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { API_BASE } from '../api/inbox'
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('whatsy_jwt')
@@ -63,7 +64,7 @@ function ConnectWizard({
       const onboarding = placementMethod === 'coexistence' ? 'business_app' : 'api'
       const redirectUrl = encodeURIComponent(window.location.href)
       const res = await fetch(
-        `/v1/whatsapp/connection/qr?redirectUrl=${redirectUrl}&onboarding=${onboarding}`,
+        `${API_BASE}/v1/whatsapp/connection/qr?redirectUrl=${redirectUrl}&onboarding=${onboarding}`,
         { headers: getAuthHeader() }
       )
       const data = await res.json()
@@ -93,7 +94,7 @@ function ConnectWizard({
     setConnectLoading(true)
     setError('')
     try {
-      const res = await fetch('/v1/whatsapp/connection/connect', {
+      const res = await fetch(`${API_BASE}/v1/whatsapp/connection/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ phoneNumberId, wabaId, accessToken, pin: pin || undefined }),
@@ -379,7 +380,7 @@ export default function WhatsAppConnectionPage() {
   async function loadSenders() {
     setLoading(true)
     try {
-      const res = await fetch('/v1/whatsapp/connection/status', { headers: getAuthHeader() })
+      const res = await fetch(`${API_BASE}/v1/whatsapp/connection/status`, { headers: getAuthHeader() })
       const data = await res.json()
       if (res.ok && data.status) {
         if (data.status === 'disconnected') {
@@ -417,8 +418,8 @@ export default function WhatsAppConnectionPage() {
   async function backgroundSync(since?: Date) {
     try {
       const url = since
-        ? `/v1/sync?since=${encodeURIComponent(since.toISOString())}`
-        : '/v1/sync'
+        ? `${API_BASE}/v1/sync?since=${encodeURIComponent(since.toISOString())}`
+        : `${API_BASE}/v1/sync`
       const res = await fetch(url, { method: 'POST', headers: getAuthHeader() })
       if (!res.ok) return
       const data = await res.json()
@@ -433,7 +434,7 @@ export default function WhatsAppConnectionPage() {
     syncAbortRef.current = ctrl
     setSync({ phase: 'counting', synced: 0, total: 0, percent: 0, message: 'Connecting to Zernio…' })
     try {
-      const res = await fetch('/v1/sync/stream', {
+      const res = await fetch(`${API_BASE}/v1/sync/stream`, {
         headers: getAuthHeader(),
         signal: ctrl.signal,
       })
@@ -465,7 +466,7 @@ export default function WhatsAppConnectionPage() {
   async function disconnect(accountId: string) {
     setDisconnecting(true)
     try {
-      const res = await fetch('/v1/whatsapp/connection/disconnect', { method: 'POST', headers: getAuthHeader() })
+      const res = await fetch(`${API_BASE}/v1/whatsapp/connection/disconnect`, { method: 'POST', headers: getAuthHeader() })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? `Disconnect failed [${res.status}]`)
@@ -485,7 +486,7 @@ export default function WhatsAppConnectionPage() {
     setWebhookTestResult(null)
     const t0 = Date.now()
     try {
-      const res = await fetch('/v1/whatsapp/connection/status', { headers: getAuthHeader() })
+      const res = await fetch(`${API_BASE}/v1/whatsapp/connection/status`, { headers: getAuthHeader() })
       const ms = Date.now() - t0
       setWebhookTestResult(res.ok ? `✓ ${res.status} OK — ${ms}ms` : `✕ ${res.status} — ${ms}ms`)
     } catch { setWebhookTestResult('✕ Connection failed') }
@@ -497,7 +498,7 @@ export default function WhatsAppConnectionPage() {
     setSendingTest(true)
     setTestResult(null)
     try {
-      const res = await fetch('/v1/whatsapp/connection/test', {
+      const res = await fetch(`${API_BASE}/v1/whatsapp/connection/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ to: testPhone, message: testMsg }),

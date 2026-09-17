@@ -1,5 +1,7 @@
 import type { ZernioConversation, ZernioMessage, SendMessagePayload, ConversationFilter } from '../components/types'
 
+export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+
 export function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('whatsy_jwt')
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -23,7 +25,7 @@ export async function getConversations(
     limit: String(limit),
     ...(search ? { search } : {}),
   })
-  const res = await fetch(`/v1/inbox/conversations?${params}`, {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations?${params}`, {
     headers: getAuthHeader(),
   })
   await throwIfError(res)
@@ -38,7 +40,7 @@ export async function getMessages(
 ): Promise<ZernioMessage[]> {
   const params = new URLSearchParams({ limit: String(limit) })
   if (before) params.set('before', before)
-  const res = await fetch(`/v1/inbox/conversations/${conversationId}/messages?${params}`, {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/messages?${params}`, {
     headers: getAuthHeader(),
   })
   await throwIfError(res)
@@ -50,7 +52,7 @@ export async function sendMessage(
   conversationId: string,
   payload: Partial<SendMessagePayload>,
 ): Promise<ZernioMessage> {
-  const res = await fetch(`/v1/inbox/conversations/${conversationId}/messages`, {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify(payload),
@@ -60,7 +62,7 @@ export async function sendMessage(
 }
 
 export async function markRead(conversationId: string): Promise<void> {
-  const res = await fetch(`/v1/inbox/conversations/${conversationId}/read`, {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/read`, {
     method: 'POST',
     headers: getAuthHeader(),
   })

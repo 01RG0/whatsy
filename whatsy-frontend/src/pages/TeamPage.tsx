@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAuthHeader } from '../api/inbox'
+import { getAuthHeader, API_BASE } from '../api/inbox'
 
 interface Agent {
   id: string
@@ -91,7 +91,7 @@ export default function TeamPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/v1/agents', { headers: getAuthHeader() })
+      const res = await fetch(`${API_BASE}/v1/agents`, { headers: getAuthHeader() })
       if (!res.ok) throw new Error(`[${res.status}]`)
       const data = await res.json() as Array<Record<string, unknown>>
       const mapped: Agent[] = (Array.isArray(data) ? data : []).map((a) => ({
@@ -142,7 +142,7 @@ export default function TeamPage() {
     setInviteLoading(true)
     setInviteError('')
     try {
-      const res = await fetch('/v1/agents/invite', {
+      const res = await fetch(`${API_BASE}/v1/agents/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(inviteForm),
@@ -163,7 +163,7 @@ export default function TeamPage() {
     setPanelRoleChanging(true)
     setSaveSuccess(false)
     try {
-      const res = await fetch(`/v1/agents/${agentId}`, {
+      const res = await fetch(`${API_BASE}/v1/agents/${agentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ role }),
@@ -185,7 +185,7 @@ export default function TeamPage() {
     if (selectedAgent?.id === agentId) setSelectedAgent(null)
     setConfirmRemove(null)
     try {
-      await fetch(`/v1/agents/${agentId}`, { method: 'DELETE', headers: getAuthHeader() })
+      await fetch(`${API_BASE}/v1/agents/${agentId}`, { method: 'DELETE', headers: getAuthHeader() })
     } catch {
       fetchAgents()
     }
