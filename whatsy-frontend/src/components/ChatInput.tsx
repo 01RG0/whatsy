@@ -30,7 +30,7 @@ async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
-  onSendVoiceNote,
+  onSendVoiceNote: _onSendVoiceNote,
   disabled = false,
   replyingTo,
   onCancelReply,

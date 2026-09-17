@@ -18,7 +18,8 @@ export type MessageType =
   | 'contacts'
   | 'interactive'
   | 'template'
-  | 'system';
+  | 'system'
+  | 'sticker';
 
 export interface Attachment {
   id?: string;
