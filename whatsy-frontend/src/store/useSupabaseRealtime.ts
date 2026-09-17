@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useInboxStore } from './useInboxStore'
-import { getMessages } from '../api/inbox'
+import { getMessagesDirect } from '../api/inbox'
 import type { ZernioMessage, MessageDirection, MessageType, DeliveryStatus } from '../components/types'
 
 // Raw columns that actually exist in the messages table (no JOINs in realtime)
@@ -62,7 +62,7 @@ export function useSupabaseRealtime() {
     // Fetch fresh messages for a conversation and merge into the store.
     // Used by both broadcast ping and WAL fallback so both paths stay in sync.
     function refreshConversation(conversationId: string) {
-      getMessages(conversationId)
+      getMessagesDirect(conversationId)
         .then((msgs) => mergeRef.current(conversationId, [...msgs].reverse()))
         .catch(() => undefined)
     }
