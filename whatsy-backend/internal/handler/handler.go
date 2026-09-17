@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -252,8 +253,12 @@ func (h *Handler) ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	client := ws.NewClient(h.hub, conn, claims.AgentID, claims.Name, claims.Avatar)
 	h.hub.Register(client)
-	go client.ReadPump(r.Context())
-	go client.WritePump(r.Context())
+	// The HTTP request context is canceled when this handler returns, which is
+	// immediately after the websocket handshake. Use a connection-lifetime
+	// context so the pumps remain active until the websocket closes.
+	connectionContext := context.Background()
+	go client.ReadPump(connectionContext)
+	go client.WritePump(connectionContext)
 }
 
 func queryLimit(r *http.Request, defaultLimit int) int {
