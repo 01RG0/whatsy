@@ -62,7 +62,14 @@ export function useWebSocket() {
   const backoffRef = useRef(1000);
   const activeIdRef = useRef<string | null>(null);
 
-  const store = useInboxStore();
+  const setWsConnected = useInboxStore((state) => state.setWsConnected);
+  const receiveMessage = useInboxStore((state) => state.receiveMessage);
+  const updateMessageStatus = useInboxStore((state) => state.updateMessageStatus);
+  const setViewers = useInboxStore((state) => state.setViewers);
+  const setTypingLock = useInboxStore((state) => state.setTypingLock);
+  const bumpConversation = useInboxStore((state) => state.bumpConversation);
+  const activeConversationId = useInboxStore((state) => state.activeConversationId);
+  const wsConnected = useInboxStore((state) => state.wsConnected);
 
   const sendAction = useCallback((action: WSAction) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -78,7 +85,7 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       backoffRef.current = 1000;
-      store.setWsConnected(true);
+      setWsConnected(true);
       // re-subscribe if we had an active conversation
       if (activeIdRef.current) {
         sendAction({ action: 'SUBSCRIBE_STUDENT', studentId: activeIdRef.current });
@@ -96,9 +103,10 @@ export function useWebSocket() {
       switch (data.event) {
         case 'NEW_MESSAGE': {
           const msg = data.message;
-          store.receiveMessage(msg.conversationId, msg);
+          const conversationId = msg.conversationId || data.studentId;
+          receiveMessage(conversationId, { ...msg, conversationId });
           // Move the conversation to the top and update last message preview.
-          store.bumpConversation(msg.conversationId, {
+          bumpConversation(conversationId, {
             lastMessage: {
               id: msg.id,
               content: msg.content || '',
@@ -112,38 +120,38 @@ export function useWebSocket() {
           break;
         }
         case 'MESSAGE_STATUS':
-          store.updateMessageStatus(data.messageId, data.status);
+          updateMessageStatus(data.messageId, data.status);
           break;
         case 'STUDENT_VIEWERS_CHANGED':
-          store.setViewers(data.studentId, data.viewers);
+          setViewers(data.studentId, data.viewers);
           break;
         case 'AGENT_TYPING_LOCK': {
           const lock: TypingLock = { lockedBy: data.lockedBy, expiresInMs: data.expiresInMs };
-          store.setTypingLock(data.studentId, lock);
+          setTypingLock(data.studentId, lock);
           break;
         }
         case 'TYPING_LOCK_RELEASED':
-          store.setTypingLock(data.studentId, null);
+          setTypingLock(data.studentId, null);
           break;
         case 'CONVERSATION_UPDATED': {
           const patch = { ...data.conversation } as Partial<ZernioConversation> & { id: string };
           // For the active conversation, only apply unreadCount if it's going to 0
           // (someone else marked it read). Suppress increments to avoid badge flash.
           if (
-            patch.id === store.activeConversationId &&
+            patch.id === useInboxStore.getState().activeConversationId &&
             typeof patch.unreadCount === 'number' &&
             patch.unreadCount > 0
           ) {
             delete (patch as Record<string, unknown>).unreadCount;
           }
-          store.bumpConversation(patch.id, patch);
+          bumpConversation(patch.id, patch);
           break;
         }
       }
     };
 
     ws.onclose = () => {
-      store.setWsConnected(false);
+      setWsConnected(false);
       wsRef.current = null;
       const delay = Math.min(backoffRef.current, MAX_BACKOFF_MS);
       backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
@@ -153,7 +161,7 @@ export function useWebSocket() {
     ws.onerror = () => {
       ws.close();
     };
-  }, [store, sendAction]);
+  }, [bumpConversation, receiveMessage, sendAction, setTypingLock, setViewers, setWsConnected, updateMessageStatus]);
 
   // Initial connection
   useEffect(() => {
@@ -165,7 +173,6 @@ export function useWebSocket() {
   }, [connect]);
 
   // Subscribe/unsubscribe when active conversation changes
-  const activeConversationId = store.activeConversationId;
   useEffect(() => {
     const prev = activeIdRef.current;
     if (prev && prev !== activeConversationId) {
@@ -190,7 +197,7 @@ export function useWebSocket() {
   }, [sendAction]);
 
   return {
-    connected: store.wsConnected,
+    connected: wsConnected,
     sendAction,
     onInputFocus,
     onInputBlur,
