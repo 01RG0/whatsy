@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/whatsy/backend/internal/domain"
+	"github.com/whatsy/backend/internal/eventlog"
 	"github.com/whatsy/backend/internal/repository"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
@@ -122,6 +124,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return fmt.Errorf("create inbound message: %w", err)
 	}
+	eventlog.TraceStep2MessageSaved("inbound", message.ID, message.ConversationID)
 	if err := s.convRepo.IncrementUnread(ctx, message.ConversationID); err != nil {
 		return fmt.Errorf("increment conversation unread count: %w", err)
 	}
@@ -223,6 +226,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return nil, fmt.Errorf("create outbound message: %w", err)
 	}
+	eventlog.MessageSaved("outbound", message.ID, message.ConversationID)
 	if agentID != "" && message.SenderName == "" {
 		var name, avatar string
 		_ = s.db.QueryRowContext(ctx, "SELECT name, avatar FROM agents WHERE id = $1", agentID).Scan(&name, &avatar)
@@ -250,11 +254,12 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		Conversation: *conversation,
 	})
 
-	// Deliver to Zernio in the background — update status when done.
 	go func() {
+		start := time.Now()
 		sent, err := s.zernioClient.SendMessage(context.Background(), zernioConvID, payload)
+		dur := time.Since(start).Milliseconds()
+		eventlog.ZernioSend(message.ID, conversationID, dur, err)
 		if err != nil {
-			log.Printf("[SendOutboundMessage] zernio delivery failed for message %s: %v", message.ID, err)
 			_ = s.msgRepo.UpdateZernioIDAndStatus(context.Background(), message.ID, "", domain.StatusFailed)
 			return
 		}

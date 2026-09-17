@@ -24,17 +24,26 @@ export const WhatsAppInboxApp: React.FC = () => {
   const receiveMessage = useInboxStore((s) => s.receiveMessage);
   const bumpConversation = useInboxStore((s) => s.bumpConversation);
 
+  const appendConversations = useInboxStore((s) => s.appendConversations);
+
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const [showConnected, setShowConnected] = useState(false);
 
   // Re-fetch conversations on every filter or search change — instant results.
   useEffect(() => {
+    setHasMoreConversations(true);
     import('../api/inbox').then(({ getConversations }) => {
       getConversations(filter, searchQuery)
-        .then(setConversations)
+        .then((convs) => {
+          setConversations(convs);
+          if (convs.length < 50) setHasMoreConversations(false);
+        })
         .catch((err) => console.error('[WhatsAppInboxApp] fetch conversations:', err));
     });
   }, [filter, searchQuery, setConversations]);
@@ -95,6 +104,17 @@ export const WhatsAppInboxApp: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
 
+  // Flash "Connected" banner for 3s when WS connects.
+  useEffect(() => {
+    if (wsConnected) {
+      setShowConnected(true);
+      const t = setTimeout(() => setShowConnected(false), 3000);
+      return () => clearTimeout(t);
+    } else {
+      setShowConnected(false);
+    }
+  }, [wsConnected]);
+
   // When WebSocket reconnects, refresh both conversation list and active messages.
   const prevWsConnected = useRef(wsConnected);
   useEffect(() => {
@@ -113,6 +133,21 @@ export const WhatsAppInboxApp: React.FC = () => {
     }
     prevWsConnected.current = wsConnected;
   }, [wsConnected, activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
+
+  const handleLoadMoreConversations = useCallback(() => {
+    if (isLoadingMoreConversations || !hasMoreConversations || conversations.length === 0) return;
+    setIsLoadingMoreConversations(true);
+    const lastId = conversations[conversations.length - 1].id;
+    import('../api/inbox').then(({ getConversations }) => {
+      getConversations(filter, searchQuery, 50, lastId)
+        .then((convs) => {
+          appendConversations(convs);
+          if (convs.length < 50) setHasMoreConversations(false);
+        })
+        .catch((err) => console.error('[WhatsAppInboxApp] load more conversations:', err))
+        .finally(() => setIsLoadingMoreConversations(false));
+    });
+  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, appendConversations]);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -195,6 +230,12 @@ export const WhatsAppInboxApp: React.FC = () => {
           Reconnecting…
         </div>
       )}
+      {wsConnected && showConnected && (
+        <div className="flex items-center justify-center gap-1.5 bg-emerald-500/90 text-white text-xs py-0.5 px-3 shrink-0 transition-opacity duration-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-white" />
+          Connected
+        </div>
+      )}
       <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* On mobile: show sidebar OR chat, not both. On desktop: always show both. */}
       <div className={showChatOnMobile ? 'hidden md:contents' : 'contents'}>
@@ -208,6 +249,9 @@ export const WhatsAppInboxApp: React.FC = () => {
           onSearchChange={setSearchQuery}
           viewers={viewers}
           typingLocks={typingLock}
+          onLoadMore={handleLoadMoreConversations}
+          hasMore={hasMoreConversations}
+          isLoadingMore={isLoadingMoreConversations}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>

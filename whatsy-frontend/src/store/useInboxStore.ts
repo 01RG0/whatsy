@@ -25,6 +25,7 @@ interface InboxState {
   wsConnected: boolean;
 
   setConversations: (convs: ZernioConversation[]) => void;
+  appendConversations: (convs: ZernioConversation[]) => void;
   setActiveConversation: (id: string) => void;
   setMessages: (conversationId: string, msgs: ZernioMessage[]) => void;
   mergeMessages: (conversationId: string, msgs: ZernioMessage[]) => void;
@@ -46,6 +47,14 @@ export const useInboxStore = create<InboxState>((set) => ({
   wsConnected: false,
 
   setConversations: (convs) => set({ conversations: convs }),
+
+  appendConversations: (convs) =>
+    set((state) => {
+      const existingIds = new Set(state.conversations.map((c) => c.id));
+      const toAdd = convs.filter((c) => !existingIds.has(c.id));
+      if (toAdd.length === 0) return state;
+      return { conversations: [...state.conversations, ...toAdd] };
+    }),
 
   setActiveConversation: (id) => set({ activeConversationId: id }),
 

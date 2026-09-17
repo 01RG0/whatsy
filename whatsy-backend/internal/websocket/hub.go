@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/whatsy/backend/internal/domain"
+	"github.com/whatsy/backend/internal/eventlog"
 )
 
 type roomMessage struct {
@@ -150,6 +151,10 @@ func (h *Hub) BroadcastToAll(event interface{}) {
 		return
 	}
 
+	if ev, ok := event.(NewMessageEvent); ok {
+		eventlog.TraceStep3BroadcastQueued("NEW_MESSAGE", ev.Message.ID, ev.StudentID)
+	}
+
 	h.broadcastAll <- data
 	if h.redis != nil {
 		go h.redis.Publish(context.Background(), event)
@@ -255,7 +260,9 @@ func (h *Hub) Run() {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = true
+			count := len(h.clients)
 			h.mu.Unlock()
+			eventlog.WSClientCount(count)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -263,7 +270,10 @@ func (h *Hub) Run() {
 				delete(h.clients, client)
 				close(client.send)
 			}
+			count := len(h.clients)
 			h.mu.Unlock()
+			eventlog.WSDisconnect(client.agentID)
+			eventlog.WSClientCount(count)
 
 			h.removeClientFromRooms(client)
 
@@ -284,14 +294,19 @@ func (h *Hub) Run() {
 
 		case data := <-h.broadcastAll:
 			h.mu.RLock()
+			delivered := 0
+			dropped := 0
 			for client := range h.clients {
 				select {
 				case client.send <- data:
+					delivered++
 				default:
+					dropped++
 					log.Printf("websocket hub: broadcast send buffer full for agent %s, dropping message", client.agentID)
 				}
 			}
 			h.mu.RUnlock()
+			eventlog.TraceStep4HubDelivered(delivered, dropped)
 		}
 	}
 }

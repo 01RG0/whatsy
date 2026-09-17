@@ -48,16 +48,21 @@ const conversationJoins = `
 
 // List returns conversations for the requested view. The current schema has no
 // account column; accountID is therefore used by the assigned_to_me filter.
-func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search string, limit int) ([]domain.Conversation, error) {
+func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search string, limit int, beforeID string) ([]domain.Conversation, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 
-	where := make([]string, 0, 3)
-	args := make([]any, 0, 3)
+	where := make([]string, 0, 4)
+	args := make([]any, 0, 4)
 	addArg := func(value any) string {
 		args = append(args, value)
 		return fmt.Sprintf("$%d", len(args))
+	}
+
+	if beforeID != "" {
+		p := addArg(beforeID)
+		where = append(where, "(c.last_message_at, c.id) < (SELECT last_message_at, id FROM conversations WHERE id = "+p+")")
 	}
 
 	switch filter {
@@ -65,12 +70,10 @@ func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search s
 	case "unread":
 		where = append(where, "c.unread_count > 0")
 	case "groups":
-		// Group conversations are not represented in the current database schema.
 		where = append(where, "FALSE")
 	case "assigned_to_me":
 		where = append(where, "c.assigned_agent_id = "+addArg(accountID)+"::uuid")
 	case "unanswered":
-		// Conversations where the last message came from the customer (no agent reply yet).
 		where = append(where, "(last_msg.direction = 'inbound' OR last_msg.direction IS NULL)")
 	default:
 		return nil, fmt.Errorf("unsupported conversation filter %q", filter)

@@ -17,12 +17,14 @@ export async function getConversations(
   filter: ConversationFilter = 'all',
   search = '',
   limit = 50,
+  before?: string,
 ): Promise<ZernioConversation[]> {
   const params = new URLSearchParams({
     platform: 'whatsapp',
     filter,
     limit: String(limit),
     ...(search ? { search } : {}),
+    ...(before ? { before } : {}),
   })
   const res = await fetch(`${API_BASE}/v1/inbox/conversations?${params}`, {
     headers: getAuthHeader(),

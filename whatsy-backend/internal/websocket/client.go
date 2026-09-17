@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/whatsy/backend/internal/domain"
+	"github.com/whatsy/backend/internal/eventlog"
 	"nhooyr.io/websocket"
 )
 
@@ -139,7 +140,7 @@ func (c *Client) WritePump(ctx context.Context) {
 			err := c.conn.Write(writeCtx, websocket.MessageText, message)
 			writeCancel()
 			if err != nil {
-				log.Printf("websocket client %s write error: %v", c.agentID, err)
+				eventlog.TraceStep5ClientWrite(c.agentID, len(message), err)
 				return
 			}
 

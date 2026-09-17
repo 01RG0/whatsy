@@ -50,7 +50,9 @@ func (r *Relay) Publish(ctx context.Context, event interface{}) {
 	if err != nil {
 		return
 	}
-	r.rdb.Publish(ctx, channel, data)
+	if err := r.rdb.Publish(ctx, channel, data).Err(); err != nil {
+		log.Printf("[redis] publish error: %v", err)
+	}
 }
 
 // Subscribe listens for events from other instances and injects them into

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/whatsy/backend/internal/config"
+	"github.com/whatsy/backend/internal/eventlog"
 	"github.com/whatsy/backend/internal/presence"
 	"github.com/whatsy/backend/internal/repository"
 	"github.com/whatsy/backend/internal/service"
@@ -45,8 +47,9 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	// an agent id; it must not overwrite the assigned_to_me filter key.
 	_ = r.URL.Query().Get("platform")
 
-	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), queryLimit(r, 50))
+	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), queryLimit(r, 50), r.URL.Query().Get("before"))
 	if err != nil {
+		log.Printf("[error] list conversations: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list conversations"})
 		return
 	}
@@ -83,6 +86,7 @@ func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 		LIMIT $2`
 	rows, err := h.db.QueryContext(r.Context(), searchQuery, query, queryLimit(r, 20))
 	if err != nil {
+		log.Printf("[error] search messages: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search messages"})
 		return
 	}
@@ -208,35 +212,44 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	case zernio.EventInboxMessageCreated, zernio.LegacyEventInboxMessageCreated:
 		var payload zernio.InboundMessagePayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			log.Printf("webhook: decode inbound message: %v", err)
+			eventlog.WebhookError(event.Type, err)
 		} else if payload.ConversationID == "" {
-			log.Printf("webhook: inbound message missing conversationId")
-		} else if err := h.chatService.HandleInboundMessage(r.Context(), payload); err != nil {
-			log.Printf("webhook: handle inbound message: %v", err)
+			eventlog.WebhookError(event.Type, fmt.Errorf("missing conversationId"))
+		} else {
+			eventlog.Webhook(event.Type, payload.ConversationID)
+			eventlog.TraceStep1WebhookHit(payload.MessageID, payload.ConversationID)
+			if err := h.chatService.HandleInboundMessage(r.Context(), payload); err != nil {
+				eventlog.WebhookError(event.Type, err)
+			}
 		}
 	case zernio.EventInboxMessageSent:
-		// Outgoing echo: the send endpoint already persisted the message.
+		eventlog.Webhook(event.Type, "")
 	case zernio.EventConversationStarted, zernio.LegacyEventConversationUpdated:
 		var payload zernio.ConversationUpdatedPayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			log.Printf("webhook: decode conversation update: %v", err)
+			eventlog.WebhookError(event.Type, err)
 		} else {
+			eventlog.Webhook(event.Type, "")
 			h.hub.BroadcastToAll(payload)
 		}
 	default:
 		if zernio.IsStatusEvent(event.Type) {
 			var payload zernio.MessageStatusPayload
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				log.Printf("webhook: decode message status: %v", err)
-			} else if err := h.chatService.HandleMessageStatus(r.Context(), payload); err != nil {
-				log.Printf("webhook: update message status: %v", err)
+				eventlog.WebhookError(event.Type, err)
 			} else {
+				eventlog.Webhook(event.Type, firstNonEmpty(payload.PlatformMessageID, payload.MessageID))
+				if err := h.chatService.HandleMessageStatus(r.Context(), payload); err != nil {
+					eventlog.WebhookError(event.Type, err)
+				}
 				h.hub.BroadcastToAll(ws.MessageStatusEvent{
 					Event:     ws.EventMessageStatus,
 					MessageID: firstNonEmpty(payload.PlatformMessageID, payload.MessageID),
 					Status:    payload.Status,
 				})
 			}
+		} else {
+			eventlog.Webhook(event.Type, "unhandled")
 		}
 	}
 
@@ -259,6 +272,7 @@ func (h *Handler) ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	client := ws.NewClient(h.hub, conn, claims.AgentID, claims.Name, claims.Avatar)
 	h.hub.Register(client)
+	eventlog.WSConnect(claims.AgentID)
 	// The HTTP request context is canceled when this handler returns, which is
 	// immediately after the websocket handshake. Use a connection-lifetime
 	// context so the pumps remain active until the websocket closes.
@@ -271,6 +285,9 @@ func queryLimit(r *http.Request, defaultLimit int) int {
 	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil || limit <= 0 {
 		return defaultLimit
+	}
+	if limit > 200 {
+		return 200
 	}
 	return limit
 }
