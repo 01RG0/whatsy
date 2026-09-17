@@ -25,6 +25,7 @@ import (
 	"github.com/whatsy/backend/internal/presence"
 	"github.com/whatsy/backend/internal/repository"
 	"github.com/whatsy/backend/internal/service"
+	supabasebroadcast "github.com/whatsy/backend/internal/supabase"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
@@ -109,6 +110,7 @@ func main() {
 	msgRepo := repository.NewMessageRepo(db)
 	chatService := service.NewChatService(db, convRepo, msgRepo, zernio.NewClient(cfg.ZernioAPIKey), hub)
 	chatService.SetAutoReplier(service.NewAutoReplyService(db))
+	chatService.SetSupabaseBroadcaster(supabasebroadcast.NewBroadcaster(cfg.SupabaseURL, cfg.SupabaseServiceKey))
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
 	agentHandler := handler.NewAgentHandler(db)

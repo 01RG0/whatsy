@@ -9,6 +9,7 @@ import (
 
 	"github.com/whatsy/backend/internal/domain"
 	"github.com/whatsy/backend/internal/repository"
+	"github.com/whatsy/backend/internal/supabase"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
@@ -32,12 +33,13 @@ type WSBroadcaster interface {
 
 // ChatService coordinates persistence, Zernio calls, and live chat updates.
 type ChatService struct {
-	db            *sql.DB
-	convRepo      *repository.ConversationRepo
-	msgRepo       *repository.MessageRepo
-	zernioClient  ZernioSender
-	hub           WSBroadcaster
-	autoReplier   AutoReplier
+	db                  *sql.DB
+	convRepo            *repository.ConversationRepo
+	msgRepo             *repository.MessageRepo
+	zernioClient        ZernioSender
+	hub                 WSBroadcaster
+	autoReplier         AutoReplier
+	supabaseBroadcaster *supabase.Broadcaster
 }
 
 func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, zernioClient ZernioSender, hub WSBroadcaster) *ChatService {
@@ -48,6 +50,12 @@ func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *
 		zernioClient: zernioClient,
 		hub:          hub,
 	}
+}
+
+// SetSupabaseBroadcaster wires the Supabase Realtime broadcaster for instant
+// push to connected browser clients (<200ms vs 3-5s WAL replication).
+func (s *ChatService) SetSupabaseBroadcaster(b *supabase.Broadcaster) {
+	s.supabaseBroadcaster = b
 }
 
 // SetAutoReplier wires the database-driven auto-reply evaluator.
@@ -148,6 +156,8 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
 	})
+	// Instant push via Supabase Realtime broadcast (<200ms vs 3-5s WAL).
+	go s.supabaseBroadcastMessage(ctx, message)
 
 	// Fire the database-driven auto-reply rules (best-effort).
 	if s.autoReplier != nil && message.Direction == "inbound" {
@@ -262,6 +272,8 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
 	})
+	// Instant push via Supabase Realtime broadcast (<200ms vs 3-5s WAL).
+	go s.supabaseBroadcastMessage(ctx, message)
 	return &message, nil
 }
 
@@ -327,4 +339,29 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// supabaseBroadcastMessage fires a Supabase Realtime broadcast for a new
+// message. Runs in a goroutine so it never blocks the request path.
+func (s *ChatService) supabaseBroadcastMessage(ctx context.Context, msg domain.Message) {
+	if s.supabaseBroadcaster == nil {
+		return
+	}
+	payload := map[string]interface{}{
+		"id":             msg.ID,
+		"conversationId": msg.ConversationID,
+		"direction":      msg.Direction,
+		"type":           string(msg.Type),
+		"content":        msg.Content,
+		"status":         string(msg.Status),
+		"createdAt":      msg.CreatedAt,
+	}
+	if len(msg.Attachments) > 0 {
+		atts := make([]map[string]string, len(msg.Attachments))
+		for i, a := range msg.Attachments {
+			atts[i] = map[string]string{"url": a.URL, "type": a.Type, "name": a.Name}
+		}
+		payload["attachments"] = atts
+	}
+	s.supabaseBroadcaster.Send(ctx, "inbox", "new-message", payload)
 }

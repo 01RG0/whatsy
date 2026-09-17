@@ -12,6 +12,8 @@ type Config struct {
 	JWTSecret           string
 	ZernioAPIKey        string
 	ZernioWebhookSecret string
+	SupabaseURL         string
+	SupabaseServiceKey  string
 }
 
 // Load reads configuration from environment variables.
@@ -28,6 +30,8 @@ func Load() (Config, error) {
 		JWTSecret:           os.Getenv("JWT_SECRET"),
 		ZernioAPIKey:        os.Getenv("ZERNIO_API_KEY"),
 		ZernioWebhookSecret: os.Getenv("ZERNIO_WEBHOOK_SECRET"),
+		SupabaseURL:         os.Getenv("SUPABASE_URL"),
+		SupabaseServiceKey:  os.Getenv("SUPABASE_SERVICE_KEY"),
 	}
 	if config.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

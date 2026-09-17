@@ -12,12 +12,6 @@ interface Student {
   createdAt: string
 }
 
-const PAYMENT_BADGE: Record<string, string> = {
-  Paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  Unpaid: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  Pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-}
-
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('whatsy_jwt')
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -181,7 +175,6 @@ export default function StudentsPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-[#8696a0]">Student</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-[#8696a0]">Grade</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-[#8696a0]">Course</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-[#8696a0]">Payment</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-[#8696a0]">Tags</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -202,13 +195,6 @@ export default function StudentsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-[#8696a0]">{student.grade || '—'}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-[#8696a0] max-w-[160px] truncate">{student.enrolledCourse || '—'}</td>
-                    <td className="px-4 py-3">
-                      {student.paymentStatus ? (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_BADGE[student.paymentStatus] ?? 'bg-gray-100 text-gray-600 dark:bg-[#202c33] dark:text-[#8696a0]'}`}>
-                          {student.paymentStatus}
-                        </span>
-                      ) : '—'}
-                    </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {(student.tags ?? []).slice(0, 3).map(tag => (
