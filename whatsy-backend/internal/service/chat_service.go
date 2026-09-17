@@ -343,25 +343,17 @@ func firstNonEmpty(values ...string) string {
 
 // supabaseBroadcastMessage fires a Supabase Realtime broadcast for a new
 // message. Runs in a goroutine so it never blocks the request path.
-func (s *ChatService) supabaseBroadcastMessage(ctx context.Context, msg domain.Message) {
+// Security: only the message ID and conversation ID are broadcast — no
+// message content — so intercepting the public channel reveals nothing
+// sensitive. Clients fetch the actual content via the authenticated REST API.
+func (s *ChatService) supabaseBroadcastMessage(_ context.Context, msg domain.Message) {
 	if s.supabaseBroadcaster == nil {
 		return
 	}
-	payload := map[string]interface{}{
+	ping := map[string]interface{}{
 		"id":             msg.ID,
 		"conversationId": msg.ConversationID,
-		"direction":      msg.Direction,
-		"type":           string(msg.Type),
-		"content":        msg.Content,
-		"status":         string(msg.Status),
-		"createdAt":      msg.CreatedAt,
 	}
-	if len(msg.Attachments) > 0 {
-		atts := make([]map[string]string, len(msg.Attachments))
-		for i, a := range msg.Attachments {
-			atts[i] = map[string]string{"url": a.URL, "type": a.Type, "name": a.Name}
-		}
-		payload["attachments"] = atts
-	}
-	s.supabaseBroadcaster.Send(ctx, "inbox", "new-message", payload)
+	// Use Background so the HTTP call isn't cancelled when the request context ends.
+	s.supabaseBroadcaster.Send(context.Background(), "inbox", "new-message", ping)
 }
