@@ -4,7 +4,7 @@ import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
 import { useSupabaseRealtime } from '../store/useSupabaseRealtime';
-import { getMessagesDirect, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
+import { getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ConversationFilter, SendMessagePayload } from './types';
 
@@ -46,7 +46,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     if (!activeConversationId) return;
     setIsLoadingMessages(true);
-    getMessagesDirect(activeConversationId)
+    getMessages(activeConversationId)
       .then((msgs) => setMessages(activeConversationId, [...msgs].reverse()))
       .catch((err) => console.error('[WhatsAppInboxApp] getMessages:', err))
       .finally(() => setIsLoadingMessages(false));
@@ -60,7 +60,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       if (conv.id === activeConversationId) return; // active conv already loading
       if (messages[conv.id]?.length) return; // already cached
       setTimeout(() => {
-        getMessagesDirect(conv.id)
+        getMessages(conv.id)
           .then((msgs) => setMessages(conv.id, [...msgs].reverse()))
           .catch(() => undefined);
       }, (i + 1) * 300); // stagger by 300ms to avoid hammering
@@ -82,7 +82,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     const id = activeConversationId;
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        getMessagesDirect(id)
+        getMessages(id)
           .then((msgs) => mergeMessages(id, [...msgs].reverse()))
           .catch(() => undefined);
       }
@@ -97,7 +97,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     if (!activeConversationId) return;
     if (wsConnected && !prevWsConnected.current) {
       const id = activeConversationId;
-      getMessagesDirect(id)
+      getMessages(id)
         .then((msgs) => mergeMessages(id, [...msgs].reverse()))
         .catch(() => undefined);
     }
