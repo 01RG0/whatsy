@@ -1,15 +1,16 @@
-# Node
+# Frontend deps and build output
 whatsy-frontend/node_modules/
 whatsy-frontend/dist/
 
-# Go binaries
+# Go build artifacts (never needed in Docker context)
 whatsy-backend/*.exe
-whatsy-backend/*.exe~
-whatsy-backend/server*
-whatsy-backend/whatsy-backend
+whatsy-backend/server.exe~
+whatsy-backend/server_new.exe~
+whatsy-backend/server_new.exe
+whatsy-backend/whatsy-backend.exe
 whatsy-backend/vendor/
 
-# Large docs (not needed for build)
+# Large reference files
 docs/
 llms-full.txt
 llms.txt
@@ -17,18 +18,20 @@ FILE_MAP.md
 CLAUDE_ZERNIO_API_MASTER.md
 openapi.yaml
 
-# Dev scripts
+# Dev/CI files not needed in image
 scripts/
 build_file_map.py
 generate_api_master.py
 organize_docs.py
-
-# CI / secrets
-.env
-*.env.local
+resources/
+references/
 supabase/
 
-# OS / editor
+# Secrets
+.env
+*.env.local
+
+# OS / editor / git
 .DS_Store
 Thumbs.db
 .vscode/
@@ -36,8 +39,6 @@ Thumbs.db
 .git/
 .claude/
 
-# Tests
+# Test artifacts
 ui-test-screenshots/
 ui-test-report.md
-references/
-resources/
