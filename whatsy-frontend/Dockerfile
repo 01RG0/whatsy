@@ -7,9 +7,5 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-# nginx processes templates/*.template with envsubst at startup.
-# NGINX_ENVSUBST_TEMPLATE_VARS limits substitution to BACKEND_URL only,
-# so nginx's own $uri/$host/$remote_addr etc. are left untouched.
-ENV NGINX_ENVSUBST_TEMPLATE_VARS=BACKEND_URL
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
