@@ -276,7 +276,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 rows={1}
                 placeholder="Type a message"
                 disabled={disabled || isUploading}
-                className="w-full bg-transparent text-gray-900 dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto max-h-24 leading-relaxed"
+                className="w-full bg-transparent text-gray-900 dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto max-h-24 leading-relaxed select-text"
               />
             </div>
 
