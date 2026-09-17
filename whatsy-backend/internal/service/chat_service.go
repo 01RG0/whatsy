@@ -69,6 +69,15 @@ func (s *ChatService) zernioAccountID(ctx context.Context) string {
 // HandleInboundMessage persists a Zernio message and notifies active clients.
 // Repeated webhook deliveries are ignored using Zernio's message identifier.
 func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.InboundMessagePayload) error {
+	// Resolve the Zernio conversation ID to our local PostgreSQL UUID.
+	localConvID, err := s.convRepo.GetLocalIDByZernioID(ctx, payload.ConversationID)
+	if err != nil {
+		return fmt.Errorf("resolve conversation id for zernio id %q: %w", payload.ConversationID, err)
+	}
+	if localConvID == "" {
+		return fmt.Errorf("inbound message: no local conversation found for zernio id %q", payload.ConversationID)
+	}
+
 	// Prefer the platform message id (WhatsApp wamid): it is the same id
 	// delivered on message.delivered/.read/.failed status updates.
 	dedupeID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
@@ -83,7 +92,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	}
 
 	message := domain.Message{
-		ConversationID:  payload.ConversationID,
+		ConversationID:  localConvID,
 		Direction:       payload.Direction,
 		Type:            domain.ContentType(payload.Type),
 		Content:         payload.Content,
@@ -165,7 +174,16 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		return nil, fmt.Errorf("send message: no connected WhatsApp account; connect a number first")
 	}
 
-	sent, err := s.zernioClient.SendMessage(ctx, conversationID, payload)
+	// Zernio's API needs its own conversation ID, not our local UUID.
+	zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve zernio conversation id: %w", err)
+	}
+	if zernioConvID == "" {
+		return nil, fmt.Errorf("send message: conversation %q has no zernio_conversation_id", conversationID)
+	}
+
+	sent, err := s.zernioClient.SendMessage(ctx, zernioConvID, payload)
 	if err != nil {
 		return nil, fmt.Errorf("send Zernio message: %w", err)
 	}
@@ -225,8 +243,11 @@ func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID s
 		return fmt.Errorf("reset conversation unread count: %w", err)
 	}
 	if accountID := s.zernioAccountID(ctx); accountID != "" {
-		if err := s.zernioClient.MarkRead(ctx, conversationID, accountID); err != nil {
-			return fmt.Errorf("mark Zernio conversation read: %w", err)
+		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, conversationID)
+		if err == nil && zernioConvID != "" {
+			if err := s.zernioClient.MarkRead(ctx, zernioConvID, accountID); err != nil {
+				log.Printf("mark Zernio conversation read: %v", err)
+			}
 		}
 	}
 

@@ -116,6 +116,31 @@ func (r *ConversationRepo) GetByID(ctx context.Context, id string) (*domain.Conv
 	return &conversation, nil
 }
 
+// GetLocalIDByZernioID returns the local UUID for a given Zernio conversation ID.
+// Returns ("", nil) when no matching row exists.
+func (r *ConversationRepo) GetLocalIDByZernioID(ctx context.Context, zernioID string) (string, error) {
+	var id string
+	err := r.db.QueryRowContext(ctx, "SELECT id FROM conversations WHERE zernio_conversation_id = $1", zernioID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return id, err
+}
+
+// GetZernioIDByLocalID returns the Zernio conversation ID for a local UUID.
+// Returns ("", nil) when no matching row exists or zernio_conversation_id is NULL.
+func (r *ConversationRepo) GetZernioIDByLocalID(ctx context.Context, localID string) (string, error) {
+	var zernioID sql.NullString
+	err := r.db.QueryRowContext(ctx, "SELECT zernio_conversation_id FROM conversations WHERE id = $1", localID).Scan(&zernioID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return zernioID.String, nil
+}
+
 func (r *ConversationRepo) IncrementUnread(ctx context.Context, conversationID string) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET unread_count = unread_count + 1, updated_at = NOW() WHERE id = $1", conversationID)
 	if err != nil {
