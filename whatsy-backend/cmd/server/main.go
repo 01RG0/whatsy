@@ -60,8 +60,20 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	allowedOrigins := map[string]bool{
+		"http://localhost:5173":                          true,
+		"http://localhost:3000":                          true,
+		"https://whatsy-frontend-production-4584.up.railway.app": true,
+	}
+	for _, env := range []string{"FRONTEND_URL", "FRONTEND_URL_2"} {
+		if v := os.Getenv(env); v != "" {
+			allowedOrigins[v] = true
+		}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			return allowedOrigins[origin]
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Cache-Control"},
 		ExposedHeaders:   []string{"Link"},
