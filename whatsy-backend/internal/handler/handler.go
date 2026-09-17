@@ -186,13 +186,17 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Only validate HMAC when a secret is configured. If no secret is set,
 	// webhooks are accepted without verification (development / initial setup).
 	if h.cfg != nil && h.cfg.ZernioWebhookSecret != "" {
-		if !zernio.ValidateSignature([]byte(h.cfg.ZernioWebhookSecret), body, r.Header.Get("x-hub-signature-256")) {
+		signature := r.Header.Get("X-Zernio-Signature")
+		if signature == "" {
+			signature = r.Header.Get("X-Hub-Signature-256")
+		}
+		if !zernio.ValidateSignature([]byte(h.cfg.ZernioWebhookSecret), body, signature) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
 			return
 		}
 	}
 
-	event, err := zernio.ParseWebhookEvent(body)
+	event, err := zernio.ParseWebhookEventWithType(body, r.Header.Get("X-Zernio-Event"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid webhook event"})
 		return

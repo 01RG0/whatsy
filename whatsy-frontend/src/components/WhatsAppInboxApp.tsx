@@ -20,6 +20,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   const setMessages = useInboxStore((s) => s.setMessages);
   const updateConversation = useInboxStore((s) => s.updateConversation);
   const receiveMessage = useInboxStore((s) => s.receiveMessage);
+  const bumpConversation = useInboxStore((s) => s.bumpConversation);
 
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,11 +105,22 @@ export const WhatsAppInboxApp: React.FC = () => {
       try {
         const sentMessage = await sendMessage(activeConversationId, payload);
         receiveMessage(activeConversationId, sentMessage);
+        bumpConversation(activeConversationId, {
+          lastMessage: {
+            id: sentMessage.id,
+            content: sentMessage.content || '',
+            type: sentMessage.type,
+            direction: sentMessage.direction,
+            createdAt: sentMessage.createdAt,
+            status: sentMessage.status,
+          },
+          updatedAt: sentMessage.createdAt,
+        });
       } catch (err) {
         console.error('[WhatsAppInboxApp] sendMessage failed:', err);
       }
     },
-    [activeConversationId, receiveMessage]
+    [activeConversationId, bumpConversation, receiveMessage]
   );
 
   const handleAssign = useCallback(

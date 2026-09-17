@@ -86,6 +86,13 @@ const signaturePrefix = "sha256="
 
 // ParseWebhookEvent unmarshals a webhook JSON body into a WebhookEvent.
 func ParseWebhookEvent(body []byte) (*WebhookEvent, error) {
+	return ParseWebhookEventWithType(body, "")
+}
+
+// ParseWebhookEventWithType also accepts the event name supplied by Zernio's
+// X-Zernio-Event header. Current webhook deliveries put the event name in
+// that header while older deliveries included it in the JSON body.
+func ParseWebhookEventWithType(body []byte, eventType string) (*WebhookEvent, error) {
 	if len(body) == 0 {
 		return nil, fmt.Errorf("zernio: empty webhook body")
 	}
@@ -93,6 +100,9 @@ func ParseWebhookEvent(body []byte) (*WebhookEvent, error) {
 	var event WebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		return nil, fmt.Errorf("zernio: parse webhook event: %w", err)
+	}
+	if event.Type == "" {
+		event.Type = eventType
 	}
 	if event.Type == "" {
 		return nil, fmt.Errorf("zernio: webhook event missing type")
