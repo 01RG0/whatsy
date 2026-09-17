@@ -45,6 +45,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 }) => {
   type ReplyPreview = { id: string; senderName: string; content: string };
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -181,6 +182,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <MessageBubble
                 key={msg.id}
                 message={msg}
+                onImageClick={(url) => setLightboxUrl(url)}
                 onReply={(m) => setReplyingTo({
                   id: m.id,
                   senderName: m.direction === 'outbound' ? 'You' : conversation.participant.displayName,
@@ -221,6 +223,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <span className="text-sm text-gray-500 dark:text-[#8696a0]">
             <span className="text-gray-900 dark:text-[#e9edef] font-medium">{typingLock.lockedBy.name}</span> is replying right now…
           </span>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img src={lightboxUrl} className="max-h-screen max-w-screen object-contain" alt="" />
         </div>
       )}
 

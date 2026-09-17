@@ -98,21 +98,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </div>
                 );
               }
+              if (att.type === 'video') {
+                return (
+                  <div key={idx} className="relative overflow-hidden max-h-80 bg-black/10 rounded">
+                    <video controls src={att.url} className="w-full h-auto object-cover rounded" />
+                  </div>
+                );
+              }
               if (att.type === 'audio' || message.type === 'voice_note') {
                 return (
-                  <div key={idx} className="flex items-center gap-3 p-3 bg-black/5 dark:bg-black/10">
-                    <button type="button" className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0 shadow hover:opacity-90 transition" title="Play">
-                      <svg className="w-4 h-4 ml-0.5 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" /></svg>
-                    </button>
-                    <div className="flex-1">
-                      <div className="h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full w-full overflow-hidden">
-                        <div className="h-full bg-[#00a884] w-1/3" />
-                      </div>
-                      <div className="flex justify-between text-[11px] opacity-75 mt-1">
-                        <span>{att.durationSeconds ? `${Math.floor(att.durationSeconds / 60)}:${(att.durationSeconds % 60).toString().padStart(2, '0')}` : '0:24'}</span>
-                        <span>{message.type === 'voice_note' ? 'Voice Message' : 'Audio'}</span>
-                      </div>
-                    </div>
+                  <div key={idx} className="p-3 bg-black/5 dark:bg-black/10">
+                    <audio controls src={att.url} className="max-w-[240px]" />
                   </div>
                 );
               }

@@ -106,7 +106,16 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	if message.Type == "" {
 		message.Type = domain.ContentTypeText
 	}
-	if payload.MediaURL != "" {
+	if len(payload.Attachments) > 0 {
+		message.Attachments = make([]domain.Attachment, len(payload.Attachments))
+		for i, a := range payload.Attachments {
+			t := a.Type
+			if t == "" {
+				t = string(message.Type)
+			}
+			message.Attachments[i] = domain.Attachment{URL: a.URL, Type: attachmentKind(domain.ContentType(t))}
+		}
+	} else if payload.MediaURL != "" {
 		message.Attachments = []domain.Attachment{{URL: payload.MediaURL, Type: attachmentKind(message.Type)}}
 	}
 

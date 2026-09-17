@@ -61,9 +61,13 @@ type InboundMessagePayload struct {
 	Type              string
 	Content           string
 	MediaURL          string
-	AccountID         string // accountId of the connected WhatsApp account
-	Timestamp         time.Time
-	From              string
+	Attachments       []struct {
+		Type string
+		URL  string
+	}
+	AccountID string // accountId of the connected WhatsApp account
+	Timestamp time.Time
+	From      string
 }
 
 type rawInboundMessage struct {
@@ -140,6 +144,23 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 	// backend re-serves that path with auth, so keep the URL as-is client-side.
 	if p.Type == "" {
 		p.Type = "text"
+	}
+	if len(m.Attachments) > 0 {
+		p.Attachments = make([]struct {
+			Type string
+			URL  string
+		}, len(m.Attachments))
+		for i, a := range m.Attachments {
+			p.Attachments[i] = struct {
+				Type string
+				URL  string
+			}{Type: a.Type, URL: a.URL}
+		}
+	} else if p.MediaURL != "" {
+		p.Attachments = []struct {
+			Type string
+			URL  string
+		}{{Type: p.Type, URL: p.MediaURL}}
 	}
 	return nil
 }

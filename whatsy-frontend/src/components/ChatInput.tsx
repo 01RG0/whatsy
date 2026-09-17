@@ -11,6 +11,22 @@ interface ChatInputProps {
   onBlur?: () => void;
 }
 
+const UPLOAD_URL = '/v1/whatsapp/upload';
+
+async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
+  const token = localStorage.getItem('whatsy_jwt');
+  const form = new FormData();
+  form.append('attachment', blob, filename);
+  const res = await fetch(UPLOAD_URL, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  const data = await res.json();
+  return data.url as string;
+}
+
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   onSendVoiceNote,
@@ -24,8 +40,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const handleSend = () => {
     if (!text.trim() || disabled) return;
@@ -41,7 +61,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const startRecording = () => {
+  const startRecording = async () => {
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error('Microphone access denied:', err);
+      return;
+    }
+    streamRef.current = stream;
+    audioChunksRef.current = [];
+    const recorder = new MediaRecorder(stream);
+    mediaRecorderRef.current = recorder;
+    recorder.ondataavailable = (ev) => {
+      if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+    };
+    recorder.start();
     setIsRecording(true);
     setRecordingDuration(0);
     recordingTimerRef.current = setInterval(() => setRecordingDuration((p) => p + 1), 1000);
@@ -50,30 +85,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const stopRecording = (cancel = false) => {
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setIsRecording(false);
-    if (!cancel && onSendVoiceNote) {
-      onSendVoiceNote(new Blob(['mock-audio'], { type: 'audio/ogg; codecs=opus' }));
-    }
     setRecordingDuration(0);
+
+    const recorder = mediaRecorderRef.current;
+    const stream = streamRef.current;
+
+    if (!recorder) return;
+
+    recorder.onstop = async () => {
+      stream?.getTracks().forEach((t) => t.stop());
+      if (cancel) return;
+      const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/ogg' });
+      setIsUploading(true);
+      try {
+        const url = await uploadToBackend(blob, `voice-${Date.now()}.ogg`);
+        onSendMessage({ voiceNote: true, attachmentType: 'audio', attachmentUrl: url, replyTo: replyingTo?.id });
+        if (onCancelReply) onCancelReply();
+      } catch (err) {
+        console.error('Voice upload failed:', err);
+      } finally {
+        setIsUploading(false);
+      }
+    };
+
+    recorder.stop();
+    mediaRecorderRef.current = null;
+    streamRef.current = null;
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     let attachmentType: 'image' | 'audio' | 'video' | 'document' = 'document';
     if (file.type.startsWith('image/')) attachmentType = 'image';
     else if (file.type.startsWith('audio/')) attachmentType = 'audio';
     else if (file.type.startsWith('video/')) attachmentType = 'video';
-    onSendMessage({
-      message: text.trim() || (attachmentType === 'image' ? '' : file.name),
-      attachmentUrl: URL.createObjectURL(file),
-      attachmentType,
-      attachmentName: file.name,
-      replyTo: replyingTo?.id,
-    });
-    setText('');
     setShowAttachMenu(false);
-    if (onCancelReply) onCancelReply();
     if (fileInputRef.current) fileInputRef.current.value = '';
+    setIsUploading(true);
+    try {
+      const url = await uploadToBackend(file, file.name);
+      onSendMessage({
+        message: text.trim() || (attachmentType === 'image' ? '' : file.name),
+        attachmentUrl: url,
+        attachmentType,
+        attachmentName: file.name,
+        replyTo: replyingTo?.id,
+      });
+      setText('');
+      if (onCancelReply) onCancelReply();
+    } catch (err) {
+      console.error('File upload failed:', err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -136,8 +201,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </div>
             <div className="flex items-center gap-3">
               <button type="button" onClick={() => stopRecording(true)} className="text-red-400 hover:text-red-500 text-xs font-semibold px-2 py-1">Cancel</button>
-              <button type="button" onClick={() => stopRecording(false)} className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+              <button type="button" onClick={() => stopRecording(false)} disabled={isUploading} className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 disabled:opacity-50">
+                {isUploading ? (
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+                )}
               </button>
             </div>
           </div>
@@ -157,12 +229,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <button
               type="button"
               onClick={() => setShowAttachMenu((p) => !p)}
-              className={`p-2 rounded-full transition shrink-0 ${showAttachMenu ? 'text-[#00a884] bg-gray-100 dark:bg-[#2a3942]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'}`}
+              disabled={isUploading}
+              className={`p-2 rounded-full transition shrink-0 ${showAttachMenu ? 'text-[#00a884] bg-gray-100 dark:bg-[#2a3942]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'} disabled:opacity-50`}
               title="Attach File"
             >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-              </svg>
+              {isUploading ? (
+                <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
+              )}
             </button>
 
             {/* Textarea */}
@@ -175,7 +255,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onBlur={onBlur}
                 rows={1}
                 placeholder="Type a message"
-                disabled={disabled}
+                disabled={disabled || isUploading}
                 className="w-full bg-transparent text-gray-900 dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto max-h-24 leading-relaxed"
               />
             </div>
@@ -185,8 +265,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={disabled}
-                className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow"
+                disabled={disabled || isUploading}
+                className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50"
                 title="Send Message"
               >
                 <svg className="w-5 h-5 translate-x-0.5" viewBox="0 0 24 24" fill="currentColor">
@@ -197,8 +277,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <button
                 type="button"
                 onClick={startRecording}
-                disabled={disabled}
-                className="p-2 text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] rounded-full transition shrink-0"
+                disabled={disabled || isUploading}
+                className="p-2 text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] rounded-full transition shrink-0 disabled:opacity-50"
                 title="Record Voice Note"
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
