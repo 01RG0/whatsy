@@ -133,9 +133,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <span className="text-[12px] text-gray-500 dark:text-[#8696a0] leading-tight mt-0.5">
               {conversation.participant.isOnline
                 ? 'online'
-                : conversation.participant.lastSeen
-                ? `last seen ${conversation.participant.lastSeen}`
-                : conversation.participant.phoneNumber || 'offline'}
+                : (() => {
+                    const ls = conversation.participant.lastSeen;
+                    if (!ls || ls.startsWith('0001-')) return conversation.participant.phoneNumber || 'offline';
+                    const d = new Date(ls);
+                    return `last seen ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                  })()}
             </span>
           </div>
         </div>
