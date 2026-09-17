@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
 )
 
 // Config contains the runtime configuration for the API server.
@@ -33,6 +34,13 @@ func Load() (Config, error) {
 	}
 	if config.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
+	}
+	if !strings.Contains(config.DatabaseURL, "prepare=") {
+		if strings.Contains(config.DatabaseURL, "?") {
+			config.DatabaseURL += "&prepare=false"
+		} else {
+			config.DatabaseURL += "?prepare=false"
+		}
 	}
 	if config.JWTSecret == "" {
 		return Config{}, errors.New("JWT_SECRET is required")
