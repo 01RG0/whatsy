@@ -1,3 +1,5 @@
-[build]
-dockerfilePath = "whatsy-backend/Dockerfile"
-buildContext = "."
+# Root railway.toml is unused when each service uses its own subdirectory.
+# Set Railway service root directories as follows:
+#   Backend service  → root dir: whatsy-backend
+#   Frontend service → root dir: whatsy-frontend
+# Each service then picks up its own railway.toml automatically.

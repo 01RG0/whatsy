@@ -21,6 +21,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      - BACKEND_URL=http://backend:8080
     ports:
       - "80:80"
     restart: on-failure
