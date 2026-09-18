@@ -29,9 +29,16 @@ func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
 	mediaID := chi.URLParam(r, "mediaId")
 
 	accountID := r.URL.Query().Get("accountId")
+	// Try connected first.
 	if accountID == "" && h.db != nil {
 		_ = h.db.QueryRowContext(r.Context(),
 			`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND COALESCE(account_id, '') <> '' ORDER BY id DESC LIMIT 1`,
+		).Scan(&accountID)
+	}
+	// Fallback: any row with an account_id regardless of status.
+	if accountID == "" && h.db != nil {
+		_ = h.db.QueryRowContext(r.Context(),
+			`SELECT account_id FROM whatsapp_connections WHERE COALESCE(account_id, '') <> '' ORDER BY id DESC LIMIT 1`,
 		).Scan(&accountID)
 	}
 
@@ -69,7 +76,7 @@ func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		log.Printf("[media] Zernio media %s error status %d: %s", mediaID, response.StatusCode, string(body))
+		log.Printf("[media] Zernio returned non-2xx for media %s (accountID=%q, status=%d): %s", mediaID, accountID, response.StatusCode, string(body))
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "fetch media"})
 		return
 	}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 're
 import { ZernioConversation, ZernioMessage, SendMessagePayload } from './types';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
+import { ImageLightbox } from './ImageLightbox';
 import type { AgentSummary } from '../api/inbox';
 import { canWrite, isViewer } from '../lib/auth';
 
@@ -376,12 +377,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
 
       {lightboxUrl && (
-        <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <img src={lightboxUrl} className="max-h-screen max-w-screen object-contain" alt="" />
-        </div>
+        <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
 
       {/* Chat Input */}

@@ -71,6 +71,10 @@ export interface ZernioMessage {
   createdAt: string; // ISO 8601 timestamp
   status: DeliveryStatus;
   attachments?: Attachment[];
+  /** Direct media URL on the message root (used by some voice_note / audio deliveries) */
+  url?: string;
+  /** Alternative direct media URL key used by some WhatsApp API adapters */
+  mediaUrl?: string;
   interactive?: InteractiveTemplate;
   replyTo?: {
     id: string;

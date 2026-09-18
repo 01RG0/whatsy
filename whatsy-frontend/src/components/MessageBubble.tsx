@@ -194,14 +194,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   );
                 }
                 return (
-                  <div key={idx} className="relative cursor-pointer overflow-hidden max-h-80 bg-black/10" onClick={() => onImageClick?.(mediaUrl)}>
+                  <div key={idx} className="relative cursor-zoom-in overflow-hidden max-h-72 bg-black/10 group/img" onClick={() => onImageClick?.(mediaUrl)}>
                     <img
                       src={mediaUrl}
                       alt={att.name || 'Attachment'}
-                      className="w-full h-auto object-cover hover:opacity-95 transition"
+                      className="w-full h-auto object-cover transition group-hover/img:brightness-90"
                       loading="lazy"
                       onError={() => setFailedImages((prev) => ({ ...prev, [idx]: true }))}
                     />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition">
+                      <div className="bg-black/40 rounded-full p-2">
+                        <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="11" cy="11" r="8" />
+                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          <line x1="11" y1="8" x2="11" y2="14" />
+                          <line x1="8" y1="11" x2="14" y2="11" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
                 );
               }
@@ -212,10 +222,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </div>
                 );
               }
-              if (att.type === 'audio' || message.type === 'voice_note') {
+              if (att.type === 'audio' || (att.type as string) === 'voice_note' || message.type === 'voice_note') {
                 return (
-                  <div key={idx} className="p-3 bg-black/5 dark:bg-black/10 flex items-center gap-2">
-                    <audio controls src={mediaUrl} preload="metadata" className="max-w-[260px] w-full" />
+                  <div key={idx} className="flex items-center gap-3 px-3 py-2">
+                    <div className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                      </svg>
+                    </div>
+                    <audio controls src={mediaUrl} preload="metadata" className="flex-1 min-w-0 max-w-[220px]" />
                   </div>
                 );
               }
@@ -252,6 +268,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
+        {/* Voice Note Fallback: when type is voice_note/audio but no attachments array (URL in message.url or mediaUrl) */}
+        {(message.type === 'voice_note' || message.type === 'audio') &&
+          (!message.attachments || message.attachments.length === 0) && (
+            <div className="flex items-center gap-3 px-3 py-2">
+              <div className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              </div>
+              {(message.mediaUrl || message.url) && (
+                <audio
+                  controls
+                  src={getMediaUrl(message.mediaUrl || message.url!)}
+                  preload="metadata"
+                  className="flex-1 min-w-0 max-w-[220px]"
+                />
+              )}
+              {!(message.mediaUrl || message.url) && (
+                <span className="text-sm text-gray-500 dark:text-[#8696a0] italic">🎤 Voice message</span>
+              )}
+            </div>
+          )
+        }
+
         {/* Text Content */}
         {message.content && message.content !== '[Unsupported message]' && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
@@ -267,7 +308,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             )}
           </div>
         )}
-        {message.content === '[Unsupported message]' && (!message.attachments || message.attachments.length === 0) && (
+        {message.content === '[Unsupported message]' && (!message.attachments || message.attachments.length === 0) &&
+          !(( message.type === 'voice_note' || message.type === 'audio') && (message.mediaUrl || message.url)) && (
           <div className="flex items-center gap-2 px-3 pt-2 pb-1.5 text-gray-400 dark:text-[#8696a0] italic text-sm">
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
