@@ -44,7 +44,13 @@ function Router() {
     if (!jwt) return
     fetch(`${API_BASE}/v1/agents/me`, { headers: getAuthHeader() })
       .then(async (res) => {
-        if (!res.ok) return
+        if (!res.ok) {
+          if (res.status === 401) {
+            const body = await res.text().catch(() => '')
+            try { if (JSON.parse(body).error === 'session_invalidated') window.dispatchEvent(new CustomEvent('whatsy:session_invalidated')) } catch { /* ignore */ }
+          }
+          return
+        }
         const data = await res.json()
         if (data && data.id) {
           if (data.token) {
