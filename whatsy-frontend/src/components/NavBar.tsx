@@ -81,6 +81,17 @@ function NavItem({ href, icon, label, path }: { href: string; icon: React.ReactN
         ${active
           ? 'bg-[#00a884]/15 text-[#00a884]'
           : 'text-gray-500 dark:text-[#8696a0] hover:text-gray-900 dark:hover:text-[#e9edef] hover:bg-gray-100 dark:hover:bg-[#2a3942]'
+        }`}
+    >
+      {icon}
+      <span className="hidden md:block">{label}</span>
+    </button>
+  )
+}
+
+function DarkModeButton() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('whatsy_dark')
     return saved ? saved === 'true' : true
   })
 
