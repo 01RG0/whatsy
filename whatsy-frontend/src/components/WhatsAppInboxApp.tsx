@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
-import { getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
+import { getMessages, getConversations, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 
@@ -148,6 +148,22 @@ export const WhatsAppInboxApp: React.FC = () => {
         .finally(() => setIsLoadingMoreConversations(false));
     });
   }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, appendConversations]);
+
+  const handleRefreshConversations = useCallback(() => {
+    getConversations(filter, searchQuery)
+      .then((convs) => {
+        setConversations(convs);
+        setHasMoreConversations(convs.length >= 50);
+      })
+      .catch((err) => console.error('[WhatsAppInboxApp] refresh conversations:', err));
+  }, [filter, searchQuery, setConversations]);
+
+  const handleMarkAllRead = useCallback(() => {
+    const unread = conversations.filter((conversation) => conversation.unreadCount > 0);
+    Promise.all(unread.map((conversation) => markRead(conversation.id)))
+      .then(() => unread.forEach((conversation) => updateConversation({ id: conversation.id, unreadCount: 0 })))
+      .catch((err) => console.error('[WhatsAppInboxApp] mark all read:', err));
+  }, [conversations, updateConversation]);
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -309,6 +325,8 @@ export const WhatsAppInboxApp: React.FC = () => {
           onLoadMore={handleLoadMoreConversations}
           hasMore={hasMoreConversations}
           isLoadingMore={isLoadingMoreConversations}
+          onRefresh={handleRefreshConversations}
+          onMarkAllRead={handleMarkAllRead}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>
