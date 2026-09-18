@@ -282,7 +282,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         const q = searchQuery.toLowerCase();
         return (
           c.participant?.displayName?.toLowerCase().includes(q) ||
-          c.participant?.phone?.toLowerCase().includes(q) ||
+          c.participant?.phoneNumber?.toLowerCase().includes(q) ||
           c.lastMessage?.content?.toLowerCase().includes(q)
         );
       })
