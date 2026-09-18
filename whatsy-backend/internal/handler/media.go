@@ -21,8 +21,8 @@ func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Hostname() != "zernio.com" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url must be a zernio.com URL"})
+	if err != nil || parsed.Scheme != "https" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url must be a valid https URL"})
 		return
 	}
 

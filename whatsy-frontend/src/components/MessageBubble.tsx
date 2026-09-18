@@ -55,9 +55,9 @@ function getMediaUrl(rawUrl: string): string {
   const token = localStorage.getItem('whatsy_jwt');
   let url = rawUrl;
 
-  // Any Zernio URL (any path format) → route through our generic proxy which adds the API key.
-  // This covers upload-direct responses, webhook attachment URLs, and any other Zernio format.
-  if (url.includes('zernio.com')) {
+  // Any external https URL → route through our backend proxy (adds Zernio API key).
+  // Covers Zernio media, CDN URLs, S3 URLs — any format the upload or webhook returns.
+  if (url.startsWith('https://') || url.startsWith('http://')) {
     const proxyUrl = `${API_BASE}/v1/whatsapp/media-proxy?url=${encodeURIComponent(url)}`;
     return token ? `${proxyUrl}&token=${encodeURIComponent(token)}` : proxyUrl;
   }
@@ -257,13 +257,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               }
               if (att.type === 'audio' || (att.type as string) === 'voice_note' || message.type === 'voice_note') {
                 return (
-                  <div key={idx} className="flex items-center gap-3 px-3 py-2">
-                    <div className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0">
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                      </svg>
-                    </div>
+                  <div key={idx} className="px-3 py-2">
                     <VoiceNotePlayer src={mediaUrl} isOutbound={isOutbound} messageId={message.id} />
                   </div>
                 );
@@ -304,21 +298,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Voice Note Fallback: when type is voice_note/audio but no attachments array (URL in message.url or mediaUrl) */}
         {(message.type === 'voice_note' || message.type === 'audio') &&
           (!message.attachments || message.attachments.length === 0) && (
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white shrink-0">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                </svg>
-              </div>
-              {(message.mediaUrl || message.url) && (
+            <div className="px-3 py-2">
+              {(message.mediaUrl || message.url) ? (
                 <VoiceNotePlayer
                   src={getMediaUrl(message.mediaUrl || message.url!)}
                   isOutbound={isOutbound}
                   messageId={message.id}
                 />
-              )}
-              {!(message.mediaUrl || message.url) && (
+              ) : (
                 <span className="text-sm text-gray-500 dark:text-[#8696a0] italic">🎤 Voice message</span>
               )}
             </div>
