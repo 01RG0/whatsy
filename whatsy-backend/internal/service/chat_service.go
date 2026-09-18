@@ -315,9 +315,11 @@ func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID s
 	if accountID := s.zernioAccountID(ctx); accountID != "" {
 		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, conversationID)
 		if err == nil && zernioConvID != "" {
-			if err := s.zernioClient.MarkRead(ctx, zernioConvID, accountID); err != nil {
-				log.Printf("mark Zernio conversation read: %v", err)
-			}
+			go func() {
+				if err := s.zernioClient.MarkRead(context.Background(), zernioConvID, accountID); err != nil {
+					log.Printf("mark Zernio conversation read: %v", err)
+				}
+			}()
 		}
 	}
 
