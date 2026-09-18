@@ -59,7 +59,7 @@ func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {
 			  AND timestamp >= NOW() - INTERVAL '24 hours'
 			  AND sent_by_agent_id IS NOT NULL
 			GROUP BY sent_by_agent_id
-		) m ON m.sent_by_agent_id = a.id::text
+		) m ON m.sent_by_agent_id = a.id
 		ORDER BY a.name`
 
 	rows, err := h.db.QueryContext(r.Context(), q)
