@@ -134,9 +134,17 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return fmt.Errorf("create inbound message: %w", err)
 	}
-	eventlog.TraceStep2MessageSaved("inbound", message.ID, message.ConversationID)
-	if err := s.convRepo.IncrementUnread(ctx, message.ConversationID); err != nil {
-		return fmt.Errorf("increment conversation unread count: %w", err)
+	eventlog.TraceStep2MessageSaved(message.Direction, message.ID, message.ConversationID)
+	if message.Direction == "outbound" {
+		// Message sent from WA Business app (outbound echo) — agent already saw and
+		// replied, so clear unread rather than increment it.
+		if err := s.convRepo.ResetUnread(ctx, message.ConversationID); err != nil {
+			log.Printf("reset unread on outbound echo: %v", err)
+		}
+	} else {
+		if err := s.convRepo.IncrementUnread(ctx, message.ConversationID); err != nil {
+			return fmt.Errorf("increment conversation unread count: %w", err)
+		}
 	}
 	if err := s.convRepo.UpdateLastMessage(ctx, message.ConversationID, message.Content, string(message.Type)); err != nil {
 		return fmt.Errorf("update conversation last message: %w", err)
