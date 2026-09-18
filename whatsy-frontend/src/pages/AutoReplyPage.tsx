@@ -1,5 +1,40 @@
 import { useEffect, useMemo, useState } from 'react'
 import { API_BASE, getAuthHeader } from '../api/inbox'
+import { useLanguageStore } from '../store/useLanguageStore'
+import { useT } from '../i18n/translations'
+
+function AppearanceCard() {
+  const t = useT()
+  const { lang, setLang } = useLanguageStore()
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const toggleDark = () => {
+    const next = !dark
+    setDark(next)
+    document.documentElement.classList.toggle('dark', next)
+    localStorage.setItem('whatsy_dark', String(next))
+  }
+  return (
+    <div className="md:hidden bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-5 py-3 flex items-center gap-6">
+      <button
+        onClick={toggleDark}
+        className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-[#e9edef] px-3 py-1.5 rounded-full border border-gray-200 dark:border-[#2a3942] hover:bg-gray-100 dark:hover:bg-[#202c33] transition-colors"
+      >
+        {dark ? (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        ) : (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        )}
+        {dark ? t.nav_light_mode : t.nav_dark_mode}
+      </button>
+      <button
+        onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+        className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-[#e9edef] px-3 py-1.5 rounded-full border border-gray-200 dark:border-[#2a3942] hover:bg-gray-100 dark:hover:bg-[#202c33] transition-colors"
+      >
+        🌐 {lang === 'en' ? 'عربي' : 'EN'}
+      </button>
+    </div>
+  )
+}
 
 type Flow = {
   id: string
@@ -325,6 +360,7 @@ export default function AutoReplyPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden text-gray-800 dark:text-[#e9edef]">
+      <AppearanceCard />
       {/* Top Navigation / App Header */}
       <header className="flex-none bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-4 sm:px-6 py-3.5 z-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">

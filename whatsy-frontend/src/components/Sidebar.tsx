@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { ZernioConversation, ConversationFilter } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
+import { useT } from '../i18n/translations';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMarkUnread,
   onMarkRead,
 }) => {
+  const t = useT();
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -70,24 +72,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [onLoadMore, hasMore, isLoadingMore]);
 
   const filters: { id: ConversationFilter; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'unread', label: 'Unread' },
-    { id: 'unanswered', label: 'Unanswered' },
-    { id: 'assigned_to_me', label: 'Mine' },
+    { id: 'all', label: t.filter_all },
+    { id: 'unread', label: t.filter_unread },
+    { id: 'unanswered', label: t.filter_unanswered },
+    { id: 'assigned_to_me', label: t.filter_mine },
   ];
 
   return (
     <aside data-testid="sidebar" className="w-full md:w-[380px] lg:w-[420px] h-full flex flex-col bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none">
       {/* Header */}
       <header className="relative h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between shrink-0 border-b border-[#e9edef] dark:border-[#222e35]">
-        <span className="font-semibold text-base text-[#111b21] dark:text-[#e9edef] tracking-tight">Chats</span>
+        <span className="font-semibold text-base text-[#111b21] dark:text-[#e9edef] tracking-tight">{t.sidebar_chats}</span>
 
         <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
           {conversations.some(c => c.unreadCount > 0 || c.isMarkedUnread) && (
             <button
               type="button"
               onClick={() => onMarkAllRead?.()}
-              title="Mark all as read"
+              title={t.sidebar_mark_all_read_title}
               className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -96,14 +98,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </button>
           )}
-          <button type="button" onClick={openNewChat} className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition" title="New Chat">
+          <button type="button" onClick={openNewChat} className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition" title={t.sidebar_new_chat_title}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
               <line x1="12" y1="8" x2="12" y2="14" />
               <line x1="9" y1="11" x2="15" y2="11" />
             </svg>
           </button>
-          <button type="button" onClick={() => setShowMenu(v => !v)} className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition" title="Menu">
+          <button type="button" onClick={() => setShowMenu(v => !v)} className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition" title={t.sidebar_menu_title}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="6" r="1.5" />
               <circle cx="12" cy="12" r="1.5" />
@@ -113,12 +115,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {showMenu && (
-          <div className="absolute right-3 top-12 z-40 w-56 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl">
-            <button type="button" onClick={() => { onRefresh?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">Refresh conversations</button>
-            <button type="button" onClick={() => { onMarkAllRead?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">Mark all as read</button>
-            <button type="button" onClick={() => { window.location.assign('/settings') }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">Open inbox settings</button>
+          <div className="absolute end-3 top-12 z-40 w-56 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl">
+            <button type="button" onClick={() => { onRefresh?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_refresh}</button>
+            <button type="button" onClick={() => { onMarkAllRead?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_mark_all_read}</button>
+            <button type="button" onClick={() => { window.location.assign('/settings') }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_open_settings}</button>
             <div className="my-1 border-t border-[#e9edef] dark:border-[#374151]" />
-            <p className="px-3 py-2 text-xs text-gray-400 dark:text-[#8696a0]">Export and archived chats are not available yet.</p>
+            <p className="px-3 py-2 text-xs text-gray-400 dark:text-[#8696a0]">{t.sidebar_export_unavailable}</p>
           </div>
         )}
       </header>
@@ -126,13 +128,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {showNewChat && (
         <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/20 p-4 pt-20" onClick={() => setShowNewChat(false)}>
           <div className="w-full max-w-sm rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-4 shadow-2xl" onClick={event => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold text-gray-900 dark:text-[#e9edef]">New chat</h2><button type="button" onClick={() => setShowNewChat(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">×</button></div>
-            <input autoFocus value={newChatSearch} onChange={event => setNewChatSearch(event.target.value)} placeholder="Search a student or phone" className="mb-3 w-full rounded-lg border border-gray-300 dark:border-[#374151] bg-[#f0f2f5] dark:bg-[#111b21] px-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] outline-none focus:ring-2 focus:ring-[#00a884]" />
+            <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold text-gray-900 dark:text-[#e9edef]">{t.sidebar_new_chat_heading}</h2><button type="button" onClick={() => setShowNewChat(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">×</button></div>
+            <input autoFocus value={newChatSearch} onChange={event => setNewChatSearch(event.target.value)} placeholder={t.sidebar_search_student_placeholder} className="mb-3 w-full rounded-lg border border-gray-300 dark:border-[#374151] bg-[#f0f2f5] dark:bg-[#111b21] px-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] outline-none focus:ring-2 focus:ring-[#00a884]" />
             <div className="max-h-72 overflow-y-auto">
-              {contactMatches.length === 0 ? <p className="py-6 text-center text-sm text-gray-500 dark:text-[#8696a0]">No contacts found in your conversations.</p> : contactMatches.map(conversation => (
-                <button key={conversation.id} type="button" onClick={() => { onSelectConversation(conversation); setShowNewChat(false) }} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">
+              {contactMatches.length === 0 ? <p className="py-6 text-center text-sm text-gray-500 dark:text-[#8696a0]">{t.sidebar_no_contacts}</p> : contactMatches.map(conversation => (
+                <button key={conversation.id} type="button" onClick={() => { onSelectConversation(conversation); setShowNewChat(false) }} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">
                   <img src={conversation.participant.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(conversation.participant.displayName)}&background=e5e7eb&color=374151`} alt="" className="h-9 w-9 rounded-full" />
-                  <span><span className="block text-sm font-medium text-gray-900 dark:text-[#e9edef]">{conversation.participant.displayName}</span><span className="block text-xs text-gray-500 dark:text-[#8696a0]">{conversation.participant.phoneNumber || 'WhatsApp contact'}</span></span>
+                  <span><span className="block text-sm font-medium text-gray-900 dark:text-[#e9edef]">{conversation.participant.displayName}</span><span className="block text-xs text-gray-500 dark:text-[#8696a0]">{conversation.participant.phoneNumber || t.sidebar_wa_contact}</span></span>
                 </button>
               ))}
             </div>
@@ -144,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-2 bg-white dark:bg-[#111b21] border-b border-[#e9edef] dark:border-[#222e35]">
         <div className={`relative flex items-center bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 transition-all ${isSearchFocused ? 'ring-1 ring-[#00a884]' : ''}`}>
           <svg
-            className={`w-4 h-4 mr-3 transition-colors ${isSearchFocused ? 'text-[#00a884]' : 'text-[#54656f] dark:text-[#8696a0]'}`}
+            className={`w-4 h-4 me-3 transition-colors ${isSearchFocused ? 'text-[#00a884]' : 'text-[#54656f] dark:text-[#8696a0]'}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           >
             <circle cx="11" cy="11" r="8" />
@@ -157,11 +159,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onChange={(e) => onSearchChange(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            placeholder="Search or start a new chat"
+            placeholder={t.sidebar_search_placeholder}
             className="w-full bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-[#54656f] dark:placeholder-[#8696a0] outline-none"
           />
           {searchQuery && (
-            <button type="button" onClick={() => onSearchChange('')} className="text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] ml-1">
+            <button type="button" onClick={() => onSearchChange('')} className="text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] ms-1">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -196,7 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <svg className="w-10 h-10 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            No conversations found
+            {t.sidebar_no_conversations}
           </div>
         ) : (
           conversations.map((conv) => (

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ZernioMessage, DeliveryStatus } from './types';
 import { API_BASE } from '../api/inbox';
 import VoiceNotePlayer from './VoiceNotePlayer';
+import { useT } from '../i18n/translations';
 
 const LONG_MESSAGE_CHAR_LIMIT = 450;
 
@@ -90,6 +91,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReply,
   onRetry,
 }) => {
+  const t = useT();
   const isOutbound = message.direction === 'outbound';
   const [isExpanded, setIsExpanded] = useState(false);
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
@@ -154,7 +156,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRetry?.(message); }}
-            title="Tap to retry"
+            title={t.tap_to_retry}
             className="flex items-center gap-0.5 text-red-500 hover:text-red-400 transition-colors"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -172,14 +174,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div
         className={`relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
           isOutbound
-            ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-tr-none'
-            : 'bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db] rounded-tl-none'
+            ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ltr:rounded-tr-none rtl:rounded-tl-none'
+            : 'bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db] ltr:rounded-tl-none rtl:rounded-tr-none'
         }`}
       >
         {/* Reply Quote Banner */}
         {message.replyTo && (
           <div
-            className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-l-4 cursor-pointer select-none ${
+            className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-s-4 cursor-pointer select-none ${
               isOutbound
                 ? 'bg-[#c5ecc0] dark:bg-[#025144] border-[#00a884]'
                 : 'bg-[#f0f2f5] dark:bg-[#182229] border-[#00a884]'
@@ -203,8 +205,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         🖼️
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{att.name || 'Photo'}</p>
-                        <p className="text-[11px] opacity-70">Unable to load image</p>
+                        <p className="font-medium truncate">{att.name || t.photo}</p>
+                        <p className="text-[11px] opacity-70">{t.unable_to_load_image}</p>
                       </div>
                       <a
                         href={mediaUrl}
@@ -212,7 +214,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         rel="noreferrer"
                         download={att.name || 'image'}
                         className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-[#00a884] dark:text-[#53bdeb] transition"
-                        title="Open or download image"
+                        title={t.open_download_image}
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -232,12 +234,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       loading="lazy"
                       onError={() => setFailedImages((prev) => ({ ...prev, [idx]: true }))}
                     />
-                    {/* Download button — bottom-right, WhatsApp style */}
+                    {/* Download button — bottom-end, WhatsApp style */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); downloadMedia(mediaUrl, att.name || 'image.jpg'); }}
-                      className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition hover:bg-black/70"
-                      title="Download image"
+                      className="absolute bottom-2 end-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition hover:bg-black/70"
+                      title={t.download_image}
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -277,10 +279,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       {ext.length <= 4 ? ext : 'DOC'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate group-hover/doc:underline">{att.name || 'Document'}</p>
-                      <p className="text-[11px] opacity-70">{att.sizeBytes ? `${(att.sizeBytes / 1024).toFixed(1)} KB` : 'Document'}</p>
+                      <p className="font-medium text-sm truncate group-hover/doc:underline">{att.name || t.document}</p>
+                      <p className="text-[11px] opacity-70">{att.sizeBytes ? `${(att.sizeBytes / 1024).toFixed(1)} KB` : t.document}</p>
                     </div>
-                    <div className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-500 dark:text-gray-300 transition shrink-0" title="Download">
+                    <div className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-500 dark:text-gray-300 transition shrink-0" title={t.download}>
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="7 10 12 15 17 10" />
@@ -306,7 +308,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   messageId={message.id}
                 />
               ) : (
-                <span className="text-sm text-gray-500 dark:text-[#8696a0] italic">🎤 Voice message</span>
+                <span className="text-sm text-gray-500 dark:text-[#8696a0] italic">{t.voice_message}</span>
               )}
             </div>
           )
@@ -320,9 +322,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <button
                 type="button"
                 onClick={() => setIsExpanded(true)}
-                className="text-[#00a884] dark:text-[#53bdeb] font-medium hover:underline ml-1 cursor-pointer select-none"
+                className="text-[#00a884] dark:text-[#53bdeb] font-medium hover:underline ms-1 cursor-pointer select-none"
               >
-                ... Read more
+                {t.read_more}
               </button>
             )}
           </div>
@@ -336,15 +338,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             <span>
-              {message.type === 'image' ? '📷 Photo'
-               : message.type === 'video' ? '🎥 Video'
-               : message.type === 'audio' ? '🎵 Audio'
-               : message.type === 'voice_note' ? '🎤 Voice message'
-               : message.type === 'document' ? '📄 Document'
-               : message.type === 'location' ? '📍 Location'
-               : message.type === 'contacts' ? '👤 Contact'
-               : message.type === 'sticker' ? '🎨 Sticker'
-               : 'Unsupported message'}
+              {message.type === 'image' ? t.photo
+               : message.type === 'video' ? t.video
+               : message.type === 'audio' ? t.audio
+               : message.type === 'voice_note' ? t.voice_message
+               : message.type === 'document' ? t.document
+               : message.type === 'location' ? t.location
+               : message.type === 'contacts' ? t.contact
+               : message.type === 'sticker' ? t.sticker
+               : t.unsupported_message}
             </span>
           </div>
         )}
@@ -376,9 +378,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Timestamp + Status */}
-        <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right opacity-60 ml-2 mt-[-4px]">
+        <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right opacity-60 ms-2 mt-[-4px]">
           {isOutbound && message.senderName && (
-            <span className="opacity-80 mr-1">{message.senderName}</span>
+            <span className="opacity-80 me-1">{message.senderName}</span>
           )}
           <span>{formattedTime}</span>
           {isOutbound && renderStatusTicks(message.status)}
@@ -386,7 +388,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Reaction Badges */}
         {message.reactions && message.reactions.length > 0 && (
-          <div className="absolute -bottom-2 right-2 bg-white dark:bg-[#2a3942] rounded-full px-1.5 py-0.5 shadow border border-gray-200 dark:border-[#111b21] flex items-center gap-0.5 text-xs">
+          <div className="absolute -bottom-2 end-2 bg-white dark:bg-[#2a3942] rounded-full px-1.5 py-0.5 shadow border border-gray-200 dark:border-[#111b21] flex items-center gap-0.5 text-xs">
             {message.reactions.map((r, i) => (
               <span key={i} title={r.senderName || ''}>{r.emoji}</span>
             ))}
@@ -394,11 +396,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Hover Quick Actions */}
-        <div className="absolute top-1 right-1 hidden group-hover:flex items-center gap-1 bg-white/90 dark:bg-[#111b21]/80 rounded px-1 py-0.5 backdrop-blur-sm shadow">
+        <div className="absolute top-1 end-1 hidden group-hover:flex items-center gap-1 bg-white/90 dark:bg-[#111b21]/80 rounded px-1 py-0.5 backdrop-blur-sm shadow">
           <button
             type="button"
             onClick={() => onReply?.(message)}
-            title="Reply"
+            title={t.reply}
             className="text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white p-0.5"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ZernioConversation } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
+import { useT } from '../i18n/translations';
 
 interface ConversationRowProps {
   conversation: ZernioConversation;
@@ -21,6 +22,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
   onMarkUnread,
   onMarkRead,
 }) => {
+  const t = useT();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showHoverMenu, setShowHoverMenu] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -56,7 +58,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
   // Guard against +unknown-<zernioConvID> placeholders created before sync
   // has had a chance to backfill the real phone number.
   const displayName = /^\+unknown-/i.test(conv.participant.displayName)
-    ? 'Unknown Contact'
+    ? t.unknown_contact
     : conv.participant.displayName;
 
   const isUnread = conv.isMarkedUnread || conv.unreadCount > 0;
@@ -104,11 +106,11 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
           className="w-12 h-12 rounded-full object-cover"
         />
         {conv.participant.isOnline && viewers.length === 0 && (
-          <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#111b21]" />
+          <span className="absolute bottom-0 end-0 w-3 h-3 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#111b21]" />
         )}
         {/* Stacked agent avatars — team members viewing this chat */}
         {viewers.length > 0 && (
-          <div className="absolute -bottom-1 -right-1 flex">
+          <div className="absolute -bottom-1 -end-1 flex">
             {viewers.slice(0, 3).map((v, i) => (
               <span
                 key={v.agentId}
@@ -138,7 +140,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
             {displayName}
           </h3>
           <span
-            className={`text-[11px] shrink-0 ml-2 ${
+            className={`text-[11px] shrink-0 ms-2 ${
               isManuallyUnread
                 ? 'text-[#027eb5] dark:text-[#53bdeb] font-semibold'
                 : isUnread
@@ -151,10 +153,10 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs truncate pr-2 flex items-center gap-1">
+          <p className="text-xs truncate pe-2 flex items-center gap-1">
             {typingLock ? (
               <span className="flex items-center gap-1 text-[#00a884]">
-                <span>{typingLock.lockedBy.name} is typing</span>
+                <span>{typingLock.lockedBy.name} {t.is_typing}</span>
                 <span className="flex items-center gap-[3px]">
                   <span className="typing-dot" />
                   <span className="typing-dot" />
@@ -164,20 +166,20 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
             ) : (
               <span className="text-gray-500 dark:text-[#8696a0] truncate">
                 {conv.lastMessage?.direction === 'outbound' && (
-                  <span className="mr-1 text-gray-400">{conv.lastMessage.senderName || 'You'} :</span>
+                  <span className="me-1 text-gray-400">{conv.lastMessage.senderName || t.reply_you} :</span>
                 )}
                 {conv.lastMessage ? (
-                  conv.lastMessage.type === 'image' ? '📷 Photo'
-                  : conv.lastMessage.type === 'video' ? '🎥 Video'
-                  : conv.lastMessage.type === 'audio' ? '🎵 Audio'
-                  : conv.lastMessage.type === 'voice_note' ? '🎤 Voice message'
-                  : conv.lastMessage.type === 'document' ? '📄 Document'
-                  : conv.lastMessage.type === 'location' ? '📍 Location'
-                  : conv.lastMessage.type === 'contacts' ? '👤 Contact'
-                  : conv.lastMessage.content === '[Unsupported message]' ? '⚠️ Unsupported message'
+                  conv.lastMessage.type === 'image' ? t.photo
+                  : conv.lastMessage.type === 'video' ? t.video
+                  : conv.lastMessage.type === 'audio' ? t.audio
+                  : conv.lastMessage.type === 'voice_note' ? t.voice_message
+                  : conv.lastMessage.type === 'document' ? t.document
+                  : conv.lastMessage.type === 'location' ? t.location
+                  : conv.lastMessage.type === 'contacts' ? t.contact
+                  : conv.lastMessage.content === '[Unsupported message]' ? t.unsupported_message_preview
                   : conv.lastMessage.content
                 ) : (
-                  'No messages yet'
+                  t.no_messages_yet
                 )}
               </span>
             )}
@@ -213,7 +215,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
                   setMenuOpen((v) => !v);
                 }}
                 className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-[#e9edef] rounded-full transition"
-                title="Chat options"
+                title={t.chat_options}
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="6 9 12 15 18 9" />
@@ -237,8 +239,8 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
           className={`${
             contextMenu
               ? 'fixed z-50 w-48'
-              : 'absolute right-3 top-10 z-30 w-48'
-          } rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl text-left`}
+              : 'absolute end-3 top-10 z-30 w-48'
+          } rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl text-start`}
         >
           {isUnread ? (
             <button
@@ -248,12 +250,12 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
                 setContextMenu(null);
                 onMarkRead?.(conv.id);
               }}
-              className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+              className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
             >
               <svg className="w-4 h-4 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              <span>Mark as read</span>
+              <span>{t.mark_as_read}</span>
             </button>
           ) : (
             <button
@@ -263,10 +265,10 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
                 setContextMenu(null);
                 onMarkUnread?.(conv.id);
               }}
-              className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+              className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
             >
               <span className="w-3 h-3 rounded-full bg-[#027eb5] dark:bg-[#53bdeb]" />
-              <span>Mark as unread</span>
+              <span>{t.mark_as_unread}</span>
             </button>
           )}
         </div>

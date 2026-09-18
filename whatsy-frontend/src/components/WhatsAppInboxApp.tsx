@@ -6,8 +6,10 @@ import { useWebSocket } from '../store/useWebSocket'
 import { getMessages, getConversations, sendMessage, markRead, markUnread, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
+import { useT } from '../i18n/translations';
 
 export const WhatsAppInboxApp: React.FC = () => {
+  const t = useT();
   const { onInputFocus, onInputBlur } = useWebSocket();
 
   const conversations = useInboxStore((s) => s.conversations);
@@ -234,6 +236,9 @@ export const WhatsAppInboxApp: React.FC = () => {
 
   const handleMarkAllRead = useCallback(() => {
     const unread = conversations.filter((conversation) => conversation.unreadCount > 0 || conversation.isMarkedUnread);
+    if (unread.length === 0) return;
+    const count = unread.length;
+    if (!window.confirm(t.mark_all_read_confirm(count))) return;
     Promise.all(unread.map((conversation) => markRead(conversation.id)))
       .then(() => unread.forEach((conversation) => updateConversation({ id: conversation.id, unreadCount: 0, isMarkedUnread: false })))
       .catch((err) => console.error('[WhatsAppInboxApp] mark all read:', err));
@@ -416,13 +421,13 @@ export const WhatsAppInboxApp: React.FC = () => {
       {!wsConnected && (
         <div className="flex items-center justify-center gap-2 bg-yellow-500/90 text-white text-xs py-1 px-3 shrink-0">
           <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-          Reconnecting…
+          {t.reconnecting}
         </div>
       )}
       {wsConnected && showConnected && (
         <div className="flex items-center justify-center gap-1.5 bg-emerald-500/90 text-white text-xs py-0.5 px-3 shrink-0 transition-opacity duration-500">
           <span className="w-1.5 h-1.5 rounded-full bg-white" />
-          Connected
+          {t.connected}
         </div>
       )}
       <div className="flex-1 min-h-0 flex overflow-hidden">

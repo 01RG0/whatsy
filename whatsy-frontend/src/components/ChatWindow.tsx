@@ -5,6 +5,7 @@ import { ChatInput } from './ChatInput';
 import { ImageLightbox } from './ImageLightbox';
 import type { AgentSummary } from '../api/inbox';
 import { canWrite, isViewer } from '../lib/auth';
+import { useT } from '../i18n/translations';
 
 export interface ViewerInfo {
   agentId: string;
@@ -62,6 +63,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   hasMoreMessages = false,
   isLoadingMoreMessages = false,
 }) => {
+  const t = useT();
   type ReplyPreview = { id: string; senderName: string; content: string };
   const isViewerMode = isViewer() || !canWrite();
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
@@ -130,9 +132,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       let label = msgDate.toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
       if (msgDate.getDate() === today.getDate() && msgDate.getMonth() === today.getMonth() && msgDate.getFullYear() === today.getFullYear()) {
-        label = 'TODAY';
+        label = t.date_today;
       } else if (msgDate.getDate() === yesterday.getDate() && msgDate.getMonth() === yesterday.getMonth() && msgDate.getFullYear() === yesterday.getFullYear()) {
-        label = 'YESTERDAY';
+        label = t.date_yesterday;
       }
 
       const existingGroup = groups.find((g) => g.dateLabel === label);
@@ -140,7 +142,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       else groups.push({ dateLabel: label, items: [msg] });
     });
     return groups;
-  }, [messages]);
+  }, [messages, t]);
 
   if (!conversation) {
     return (
@@ -151,15 +153,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/>
             </svg>
           </div>
-          <h2 className="text-2xl font-light text-gray-900 dark:text-[#e9edef] mb-3">WhatsApp for Web &amp; Zernio Inbox</h2>
+          <h2 className="text-2xl font-light text-gray-900 dark:text-[#e9edef] mb-3">{t.chatwindow_empty_heading}</h2>
           <p className="text-sm leading-relaxed text-gray-500 dark:text-[#8696a0]">
-            Send and receive real-time messages across WhatsApp, multi-agent teams, and cloud channels without keeping your phone connected.
+            {t.chatwindow_empty_body}
           </p>
           <div className="mt-8 flex items-center gap-2 text-xs text-gray-400 dark:text-[#667781]">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
             </svg>
-            End-to-end encrypted via Zernio Gateway
+            {t.chatwindow_encrypted}
           </div>
         </div>
       </div>
@@ -175,12 +177,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onBack(); }}
-              className="md:hidden text-gray-500 dark:text-[#aebac1] hover:text-gray-900 dark:hover:text-[#e9edef] -ml-1 mr-1"
+              className="md:hidden text-gray-500 dark:text-[#aebac1] hover:text-gray-900 dark:hover:text-[#e9edef] -ms-1 me-1"
             >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="19" y1="12" x2="5" y2="12" />
-                <polyline points="12 19 5 12 12 5" />
-              </svg>
+              <span className="inline-block rtl:rotate-180">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
+                </svg>
+              </span>
             </button>
           )}
 
@@ -191,7 +195,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               className="w-10 h-10 rounded-full object-cover"
             />
             {conversation.participant.isOnline && (
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#202c33]" />
+              <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#202c33]" />
             )}
           </div>
 
@@ -201,7 +205,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </h2>
             {typingLock ? (
               <span className="flex items-center gap-1 text-[12px] text-[#00a884] leading-tight mt-0.5">
-                <span>{typingLock.lockedBy.name} is typing</span>
+                <span>{typingLock.lockedBy.name} {t.is_typing}</span>
                 <span className="flex items-center gap-[3px] text-[#00a884]">
                   <span className="typing-dot" />
                   <span className="typing-dot" />
@@ -211,12 +215,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             ) : (
               <span className="text-[12px] text-gray-500 dark:text-[#8696a0] leading-tight mt-0.5">
                 {conversation.participant.isOnline
-                  ? 'online'
+                  ? t.online
                   : (() => {
                       const ls = conversation.participant.lastSeen;
-                      if (!ls || ls.startsWith('0001-')) return conversation.participant.phoneNumber || 'offline';
+                      if (!ls || ls.startsWith('0001-')) return conversation.participant.phoneNumber || t.offline;
                       const d = new Date(ls);
-                      return `last seen ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                      return `${t.last_seen} ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
                     })()}
               </span>
             )}
@@ -234,7 +238,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-[#374248] transition ${
                   isViewerMode ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-[#2a3942]'
                 }`}
-                title={isViewerMode ? 'View-only mode: cannot reassign conversations' : 'Assign conversation'}
+                title={isViewerMode ? t.view_only_mode : t.assign}
               >
                 {conversation.assignedAgent ? (
                   <>
@@ -249,7 +253,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                       <circle cx="12" cy="7" r="4"/>
                     </svg>
-                    <span>{isViewerMode ? 'Unassigned' : 'Assign'}</span>
+                    <span>{isViewerMode ? t.unassigned : t.assign}</span>
                   </>
                 )}
                 {!isViewerMode && (
@@ -259,14 +263,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
               </button>
               {assignOpen && !isViewerMode && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-200 dark:border-[#374248] z-50 py-1 overflow-hidden">
+                <div className="absolute end-0 top-full mt-1 w-52 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-200 dark:border-[#374248] z-50 py-1 overflow-hidden">
                   {conversation.assignedAgent && (
                     <button
                       type="button"
                       onClick={() => { onAssign(''); setAssignOpen(false); }}
-                      className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-gray-50 dark:hover:bg-[#2a3942]"
+                      className="w-full text-start px-3 py-2 text-xs text-red-500 hover:bg-gray-50 dark:hover:bg-[#2a3942]"
                     >
-                      Unassign
+                      {t.unassign}
                     </button>
                   )}
                   {agents.map((a) => (
@@ -274,7 +278,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       key={a.id}
                       type="button"
                       onClick={() => { onAssign(a.id); setAssignOpen(false); }}
-                      className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-[#2a3942] transition ${conversation.assignedAgent?.id === a.id ? 'text-[#00a884]' : 'text-gray-800 dark:text-[#e9edef]'}`}
+                      className={`w-full text-start px-3 py-2 flex items-center gap-2 text-sm hover:bg-gray-50 dark:hover:bg-[#2a3942] transition ${conversation.assignedAgent?.id === a.id ? 'text-[#00a884]' : 'text-gray-800 dark:text-[#e9edef]'}`}
                     >
                       <span className="w-6 h-6 rounded-full bg-[#00a884] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                         {a.name.charAt(0).toUpperCase()}
@@ -284,7 +288,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <div className="text-[11px] text-gray-400 dark:text-[#8696a0] truncate">{a.role}</div>
                       </div>
                       {conversation.assignedAgent?.id === a.id && (
-                        <svg className="w-3.5 h-3.5 ml-auto shrink-0 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <svg className="w-3.5 h-3.5 ms-auto shrink-0 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <polyline points="20 6 9 17 4 12"/>
                         </svg>
                       )}
@@ -294,7 +298,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               )}
             </div>
           )}
-          <button type="button" onClick={onSearchInChat} className="p-2 hover:bg-gray-100 dark:hover:bg-[#374248] rounded-full transition" title="Search in chat">
+          <button type="button" onClick={onSearchInChat} className="p-2 hover:bg-gray-100 dark:hover:bg-[#374248] rounded-full transition" title={t.search_in_chat}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -305,7 +309,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               type="button"
               onClick={() => setOptionsOpen((v) => !v)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-[#374248] rounded-full transition"
-              title="More Options"
+              title={t.more_options}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="6" r="1.5" />
@@ -314,7 +318,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </svg>
             </button>
             {optionsOpen && (
-              <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl z-50 text-left">
+              <div className="absolute end-0 top-full mt-1 w-48 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl z-50 text-start">
                 {conversation.isMarkedUnread || conversation.unreadCount > 0 ? (
                   <button
                     type="button"
@@ -322,12 +326,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       setOptionsOpen(false);
                       onMarkRead?.(conversation.id);
                     }}
-                    className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+                    className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
                   >
                     <svg className="w-4 h-4 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    <span>Mark as read</span>
+                    <span>{t.mark_as_read}</span>
                   </button>
                 ) : (
                   <button
@@ -336,10 +340,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       setOptionsOpen(false);
                       onMarkUnread?.(conversation.id);
                     }}
-                    className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+                    className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
                   >
                     <span className="w-3 h-3 rounded-full bg-[#027eb5] dark:bg-[#53bdeb]" />
-                    <span>Mark as unread</span>
+                    <span>{t.mark_as_unread}</span>
                   </button>
                 )}
               </div>
@@ -377,7 +381,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 onImageClick={(url) => setLightboxUrl(url)}
                 onReply={(m) => setReplyingTo({
                   id: m.id,
-                  senderName: m.direction === 'outbound' ? 'You' : conversation.participant.displayName,
+                  senderName: m.direction === 'outbound' ? t.reply_you : conversation.participant.displayName,
                   content: m.content || 'Attachment',
                 })}
                 onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
@@ -393,7 +397,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Viewer Pills */}
       {viewers.length > 0 && (
         <div className="px-4 py-1.5 flex items-center gap-2 bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-[#313d45]">
-          <span className="text-xs text-gray-400 dark:text-[#8696a0]">Viewing:</span>
+          <span className="text-xs text-gray-400 dark:text-[#8696a0]">{t.viewing}</span>
           {viewers.map((v) => (
             <span key={v.agentId} className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-[#2a3942] rounded-full px-2 py-0.5 text-gray-700 dark:text-[#e9edef]">
               {v.avatar ? (
@@ -419,8 +423,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
         disabled={typingLock !== null || isViewerMode}
-        placeholder={isViewerMode ? 'View-only mode: only agents and admins can send messages.' : 'Type a message'}
-        disabledTooltip={isViewerMode ? 'View-only mode: only agents and admins can send messages.' : undefined}
+        placeholder={isViewerMode ? t.view_only_placeholder : t.type_a_message}
+        disabledTooltip={isViewerMode ? t.view_only_placeholder : undefined}
         onSendMessage={(payload) => onSendMessage({
           ...payload,
           conversationId: conversation.id,

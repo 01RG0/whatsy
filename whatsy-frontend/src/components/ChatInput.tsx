@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SendMessagePayload } from './types';
 import { API_BASE } from '../api/inbox';
+import { useT } from '../i18n/translations';
 
 interface ChatInputProps {
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
@@ -41,13 +42,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   onSendVoiceNote: _onSendVoiceNote,
   disabled = false,
-  placeholder = 'Type a message',
+  placeholder,
   disabledTooltip,
   replyingTo,
   onCancelReply,
   onFocus,
   onBlur,
 }) => {
+  const t = useT();
   const [text, setText] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -58,6 +60,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Resolve placeholder: prop takes precedence, fall back to translation default
+  const resolvedPlaceholder = placeholder ?? t.type_a_message;
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -202,8 +207,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     >
       {/* Reply Preview */}
       {replyingTo && (
-        <div className="flex items-center justify-between bg-white dark:bg-[#182229] border-l-4 border-[#00a884] p-2.5 mb-2 rounded text-xs shadow-sm">
-          <div className="flex flex-col min-w-0 pr-2">
+        <div className="flex items-center justify-between bg-white dark:bg-[#182229] border-s-4 border-[#00a884] p-2.5 mb-2 rounded text-xs shadow-sm">
+          <div className="flex flex-col min-w-0 pe-2">
             <span className="text-[#00a884] font-semibold">{replyingTo.senderName}</span>
             <span className="text-gray-500 dark:text-[#8696a0] truncate">{replyingTo.content}</span>
           </div>
@@ -221,14 +226,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Attachment Popover */}
       {showAttachMenu && (
-        <div ref={attachMenuRef} className="absolute bottom-full left-4 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div ref={attachMenuRef} className="absolute bottom-full start-4 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
           <button type="button" onClick={() => { setShowAttachMenu(false); mediaFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
             <span className="w-8 h-8 rounded-full bg-[#bf59cf] flex items-center justify-center text-white">🖼️</span>
-            <span>Photos &amp; Videos</span>
+            <span>{t.photos_and_videos}</span>
           </button>
           <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
             <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
-            <span>Document</span>
+            <span>{t.document}</span>
           </button>
           <button
             type="button"
@@ -239,7 +244,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
           >
             <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>
-            <span>Interactive Template</span>
+            <span>{t.interactive_template}</span>
           </button>
         </div>
       )}
@@ -259,7 +264,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <button type="button" onClick={() => stopRecording(true)} className="text-red-400 hover:text-red-500 text-xs font-semibold px-2 py-1">Cancel</button>
+              <button type="button" onClick={() => stopRecording(true)} className="text-red-400 hover:text-red-500 text-xs font-semibold px-2 py-1">{t.cancel}</button>
               <button type="button" onClick={() => stopRecording(false)} disabled={isUploading} className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 disabled:opacity-50">
                 {isUploading ? (
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -267,7 +272,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     <path d="M12 2a10 10 0 0 1 10 10" />
                   </svg>
                 ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+                  <svg className="w-4 h-4 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
                 )}
               </button>
             </div>
@@ -279,7 +284,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               type="button"
               disabled={disabled || isUploading}
               className={`text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] p-2 rounded-full transition shrink-0 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
-              title={disabled && disabledTooltip ? disabledTooltip : 'Emoji'}
+              title={disabled && disabledTooltip ? disabledTooltip : t.emoji}
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
@@ -295,7 +300,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onClick={() => setShowAttachMenu((p) => !p)}
               disabled={disabled || isUploading}
               className={`p-2 rounded-full transition shrink-0 ${showAttachMenu ? 'text-[#00a884] bg-gray-100 dark:bg-[#2a3942]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'disabled:opacity-50'}`}
-              title={disabled && disabledTooltip ? disabledTooltip : 'Attach File'}
+              title={disabled && disabledTooltip ? disabledTooltip : t.attach_file}
             >
               {isUploading ? (
                 <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -320,7 +325,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onBlur={onBlur}
                 rows={1}
                 disabled={disabled}
-                placeholder={disabled ? (disabledTooltip || 'View-only mode') : placeholder}
+                placeholder={disabled ? (disabledTooltip || t.view_only_mode) : resolvedPlaceholder}
                 className="w-full bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto leading-relaxed select-text disabled:cursor-not-allowed scroll-smooth"
               />
             </div>
@@ -332,9 +337,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onClick={handleSend}
                 disabled={disabled || isUploading}
                 className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                title={disabled && disabledTooltip ? disabledTooltip : 'Send Message'}
+                title={disabled && disabledTooltip ? disabledTooltip : t.send_message}
               >
-                <svg className="w-5 h-5 translate-x-0.5" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="w-5 h-5 ltr:translate-x-0.5 rtl:-translate-x-0.5 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                 </svg>
               </button>
@@ -344,7 +349,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onClick={startRecording}
                 disabled={disabled || isUploading}
                 className="p-2 text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] rounded-full transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={disabled && disabledTooltip ? disabledTooltip : 'Record Voice Note'}
+                title={disabled && disabledTooltip ? disabledTooltip : t.record_voice_note}
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>

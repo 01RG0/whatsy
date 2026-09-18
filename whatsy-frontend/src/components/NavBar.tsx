@@ -3,18 +3,14 @@ import { navigate } from '../App'
 import { getCurrentAgent } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import { useInboxStore } from '../store/useInboxStore'
+import { useLanguageStore } from '../store/useLanguageStore'
+import { useT } from '../i18n/translations'
 
-interface NavItemConfig {
-  href: string
-  label: string
-  icon: React.ReactNode
-  adminOnly?: boolean
-}
 
-const navItems: NavItemConfig[] = [
+const navItems = [
   {
     href: '/',
-    label: 'Inbox',
+    labelKey: 'nav_inbox' as const,
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -23,7 +19,7 @@ const navItems: NavItemConfig[] = [
   },
   {
     href: '/students',
-    label: 'Students',
+    labelKey: 'nav_students' as const,
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -35,7 +31,7 @@ const navItems: NavItemConfig[] = [
   },
   {
     href: '/broadcasts',
-    label: 'Broadcasts',
+    labelKey: 'nav_broadcasts' as const,
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -46,7 +42,7 @@ const navItems: NavItemConfig[] = [
   },
   {
     href: '/team',
-    label: 'Team',
+    labelKey: 'nav_team' as const,
     adminOnly: true,
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -59,7 +55,7 @@ const navItems: NavItemConfig[] = [
   },
   {
     href: '/connection',
-    label: 'Connection',
+    labelKey: 'nav_connection' as const,
     adminOnly: true,
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -73,7 +69,7 @@ const navItems: NavItemConfig[] = [
   },
   {
     href: '/settings',
-    label: 'Settings',
+    labelKey: 'nav_settings' as const,
     adminOnly: true,
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -83,6 +79,19 @@ const navItems: NavItemConfig[] = [
     ),
   },
 ].filter((item) => item.href !== '/broadcasts')
+
+function LanguageToggleButton() {
+  const { lang, setLang } = useLanguageStore()
+  return (
+    <button
+      onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+      title={lang === 'en' ? 'العربية' : 'English'}
+      className="px-2 py-1 rounded-lg text-xs font-semibold text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-[#e9edef]/60 dark:hover:bg-[#2a3942] transition-colors tracking-wide"
+    >
+      {lang === 'en' ? 'عربي' : 'EN'}
+    </button>
+  )
+}
 
 function NavItem({ href, icon, label, path, badge }: { href: string; icon: React.ReactNode; label: string; path: string; badge?: number }) {
   const active = path === href || (href !== '/' && path.startsWith(href))
@@ -99,7 +108,7 @@ function NavItem({ href, icon, label, path, badge }: { href: string; icon: React
       <span className="relative shrink-0">
         {icon}
         {badge != null && badge > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+          <span className="absolute -top-1.5 end-[-6px] min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
             {badge > 99 ? '99+' : badge}
           </span>
         )}
@@ -110,6 +119,7 @@ function NavItem({ href, icon, label, path, badge }: { href: string; icon: React
 }
 
 function DarkModeButton() {
+  const t = useT()
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('whatsy_dark')
     return saved ? saved === 'true' : true
@@ -123,7 +133,7 @@ function DarkModeButton() {
   return (
     <button
       onClick={() => setDark(d => !d)}
-      title={dark ? 'Light mode' : 'Dark mode'}
+      title={dark ? t.nav_light_mode : t.nav_dark_mode}
       className="p-2 rounded-lg text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-[#e9edef]/60 dark:hover:bg-[#2a3942] transition-colors"
     >
       {dark ? (
@@ -141,7 +151,8 @@ function DarkModeButton() {
 }
 
 function RoleBadge({ role }: { role: string }) {
-  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1)
+  const t = useT()
+  const roleLabel = role === 'admin' ? t.role_admin : role === 'viewer' ? t.role_viewer : t.role_agent
   const isAdm = role === 'admin'
   const isVwr = role === 'viewer'
   const colorClasses = isAdm
@@ -158,12 +169,14 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function NavBar({ path }: { path: string }) {
+  const t = useT()
   const [agent, setAgent] = useState(() => getCurrentAgent())
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
   const totalUnread = useInboxStore(s => s.totalUnread)
+  const activeConversationId = useInboxStore(s => s.activeConversationId)
 
   useEffect(() => {
     const syncAgent = () => setAgent(getCurrentAgent())
@@ -195,15 +208,19 @@ export default function NavBar({ path }: { path: string }) {
         {/* Nav items */}
         <div className="flex flex-col gap-0.5 flex-1">
           {visibleNavItems.map(item => (
-            <NavItem key={item.href} {...item} path={path} badge={item.href === '/' ? totalUnread : undefined} />
+            <NavItem key={item.href} href={item.href} icon={item.icon} label={t[item.labelKey]} path={path} badge={item.href === '/' ? totalUnread : undefined} />
           ))}
         </div>
 
-        {/* Bottom: dark mode + agent */}
+        {/* Bottom: dark mode + language + agent */}
         <div className="border-t border-gray-200 dark:border-[#222e35] pt-3 mt-3 space-y-2">
           <div className="flex items-center justify-between px-1">
-            <span className="text-gray-500 dark:text-[#8696a0] text-xs">Theme</span>
+            <span className="text-gray-500 dark:text-[#8696a0] text-xs">{t.nav_theme}</span>
             <DarkModeButton />
+          </div>
+          <div className="flex items-center justify-between px-1">
+            <span className="text-gray-500 dark:text-[#8696a0] text-xs">{t.nav_language}</span>
+            <LanguageToggleButton />
           </div>
           {agent && (
             <div className="flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#2a3942] transition-colors group">
@@ -219,7 +236,7 @@ export default function NavBar({ path }: { path: string }) {
               <button
                 type="button"
                 onClick={() => setShowPasswordModal(true)}
-                title="Change password"
+                title={t.nav_change_password}
                 className="p-1.5 text-gray-400 hover:text-[#00a884] dark:hover:text-[#00a884] rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -229,7 +246,7 @@ export default function NavBar({ path }: { path: string }) {
               <button
                 type="button"
                 onClick={handleLogout}
-                title="Sign out"
+                title={t.nav_sign_out}
                 className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -246,8 +263,8 @@ export default function NavBar({ path }: { path: string }) {
         onClose={() => setShowPasswordModal(false)}
       />
 
-      {/* Mobile: bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#111b21] border-t border-gray-200 dark:border-[#222e35] flex justify-around items-center h-14 px-2">
+      {/* Mobile: bottom tab bar — hidden while a chat is open */}
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#111b21] border-t border-gray-200 dark:border-[#222e35] flex justify-around items-center h-14 px-2 transition-transform duration-200 ${path === '/' && activeConversationId ? 'translate-y-full pointer-events-none' : 'translate-y-0'}`}>
         {visibleNavItems.map(item => {
           const active = path === item.href || (item.href !== '/' && path.startsWith(item.href))
           const badge = item.href === '/' ? totalUnread : 0
@@ -261,12 +278,12 @@ export default function NavBar({ path }: { path: string }) {
               <span className="relative">
                 {item.icon}
                 {badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                  <span className="absolute -top-1.5 end-[-6px] min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
                     {badge > 99 ? '99+' : badge}
                   </span>
                 )}
               </span>
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[10px] font-medium">{t[item.labelKey]}</span>
             </button>
           )
         })}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getAuthHeader, API_BASE } from '../api/inbox';
+import { useT } from '../i18n/translations';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export default function ChangePasswordModal({
   onClose,
   targetAgent,
 }: ChangePasswordModalProps) {
+  const t = useT();
   const isTargetingOther = Boolean(targetAgent);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -31,17 +33,17 @@ export default function ChangePasswordModal({
     setError('');
 
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters');
+      setError(t.error_min_8);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(t.error_passwords_no_match);
       return;
     }
 
     if (!isTargetingOther && !oldPassword) {
-      setError('Current password is required');
+      setError(t.error_current_required);
       return;
     }
 
@@ -102,7 +104,7 @@ export default function ChangePasswordModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-[#222e35]">
           <h2 className="text-lg font-bold text-gray-900 dark:text-[#e9edef]">
-            {isTargetingOther ? `Set Password for ${targetAgent?.name}` : 'Change Password'}
+            {isTargetingOther ? t.set_password_for(targetAgent?.name ?? '') : t.change_password}
           </h2>
           <button
             type="button"
@@ -124,7 +126,7 @@ export default function ChangePasswordModal({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <p className="text-gray-900 dark:text-[#e9edef] font-semibold">Password updated successfully!</p>
+            <p className="text-gray-900 dark:text-[#e9edef] font-semibold">{t.password_updated}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -137,14 +139,14 @@ export default function ChangePasswordModal({
             {!isTargetingOther && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-1.5">
-                  Current Password
+                  {t.current_password}
                 </label>
                 <input
                   type="password"
                   required
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="Enter current password"
+                  placeholder={t.enter_current_password}
                   className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
                 />
               </div>
@@ -152,7 +154,7 @@ export default function ChangePasswordModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-1.5">
-                New Password
+                {t.new_password}
               </label>
               <input
                 type="password"
@@ -160,14 +162,14 @@ export default function ChangePasswordModal({
                 minLength={8}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 8 characters"
+                placeholder={t.min_8_characters}
                 className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-[#8696a0] mb-1.5">
-                Confirm New Password
+                {t.confirm_new_password}
               </label>
               <input
                 type="password"
@@ -175,7 +177,7 @@ export default function ChangePasswordModal({
                 minLength={8}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
+                placeholder={t.re_enter_password}
                 className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
               />
             </div>
@@ -186,7 +188,7 @@ export default function ChangePasswordModal({
                 onClick={handleClose}
                 className="flex-1 py-2.5 border border-gray-200 dark:border-[#374151] text-gray-700 dark:text-[#8696a0] rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-[#202c33] transition"
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 type="submit"
@@ -199,7 +201,7 @@ export default function ChangePasswordModal({
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                 )}
-                {loading ? 'Updating…' : 'Update Password'}
+                {loading ? t.updating : t.update_password}
               </button>
             </div>
           </form>
