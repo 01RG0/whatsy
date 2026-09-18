@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { WhatsAppInboxApp } from './components/WhatsAppInboxApp'
 import NavBar from './components/NavBar'
 import LoginPage from './pages/LoginPage'
@@ -27,6 +27,18 @@ function usePath() {
 function Router() {
   const path = usePath()
   const jwt = localStorage.getItem('whatsy_jwt')
+  const [sessionBanner, setSessionBanner] = useState(false)
+
+  useEffect(() => {
+    const handler = () => {
+      localStorage.removeItem('whatsy_jwt')
+      localStorage.removeItem('whatsy_agent')
+      setSessionBanner(true)
+      setTimeout(() => { window.location.replace('/login') }, 2500)
+    }
+    window.addEventListener('whatsy:session_invalidated', handler)
+    return () => window.removeEventListener('whatsy:session_invalidated', handler)
+  }, [])
 
   useEffect(() => {
     if (!jwt) return
@@ -66,12 +78,27 @@ function Router() {
   }
 
   return (
-    <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
-      <NavBar path={path} />
-      <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
-        <AppContent path={path} />
-      </main>
-    </div>
+    <>
+      {sessionBanner && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#202c33] rounded-2xl shadow-2xl px-8 py-7 max-w-sm w-full mx-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <h3 className="text-[#111b21] dark:text-[#e9edef] font-semibold text-lg mb-2">Signed in elsewhere</h3>
+            <p className="text-[#54656f] dark:text-[#8696a0] text-sm">Your account was signed in from another device. Redirecting to login…</p>
+          </div>
+        </div>
+      )}
+      <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
+        <NavBar path={path} />
+        <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
+          <AppContent path={path} />
+        </main>
+      </div>
+    </>
   )
 }
 

@@ -82,7 +82,7 @@ func (h *AgentHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, _ := utils.GenerateToken(h.jwtSecret, a.ID, a.Name, a.Role)
+	token, _ := utils.GenerateToken(h.jwtSecret, a.ID, a.Name, a.Role, claims.SessionVersion)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":        a.ID,
 		"name":      a.Name,

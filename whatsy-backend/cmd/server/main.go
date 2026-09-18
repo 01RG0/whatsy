@@ -179,7 +179,7 @@ func main() {
 	r.With(authLimiter.Middleware).Post("/v1/auth/login", authHandler.Login)
 
 	r.Group(func(r chi.Router) {
-		r.Use(handler.JWTMiddleware(cfg.JWTSecret))
+		r.Use(handler.JWTMiddleware(cfg.JWTSecret, db))
 		r.Get("/v1/whatsapp/media/{mediaId}", mediaHandler.Get)
 		r.Get("/v1/whatsapp/media-proxy", mediaHandler.GetProxy)
 		r.With(handler.RequireNotViewer).Post("/v1/whatsapp/upload", uploadHandler.Upload)

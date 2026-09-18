@@ -9,6 +9,13 @@ export function getAuthHeader(): Record<string, string> {
 async function throwIfError(res: Response): Promise<void> {
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
+    if (res.status === 401) {
+      try {
+        if (JSON.parse(text).error === 'session_invalidated') {
+          window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'))
+        }
+      } catch { /* ignore parse errors */ }
+    }
     throw new Error(`[${res.status}] ${text}`)
   }
 }

@@ -82,7 +82,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := utils.GenerateToken(h.jwtSecret, id, name, role)
+	// Start the first session for this new agent.
+	var sessionVersion int64
+	if err := h.db.QueryRow(
+		`UPDATE agents SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version`, id,
+	).Scan(&sessionVersion); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create session"})
+		return
+	}
+
+	token, err := utils.GenerateToken(h.jwtSecret, id, name, role, sessionVersion)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate token"})
 		return
@@ -132,7 +141,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := utils.GenerateToken(h.jwtSecret, id, name, role)
+	// Rotate the session version — this invalidates any previously issued token for this agent.
+	var sessionVersion int64
+	if err := h.db.QueryRow(
+		`UPDATE agents SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version`, id,
+	).Scan(&sessionVersion); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create session"})
+		return
+	}
+
+	token, err := utils.GenerateToken(h.jwtSecret, id, name, role, sessionVersion)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate token"})
 		return

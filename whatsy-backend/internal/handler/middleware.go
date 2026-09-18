@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"strings"
 
@@ -12,9 +13,10 @@ type contextKey int
 
 const claimsContextKey contextKey = iota
 
-// JWTMiddleware validates Bearer tokens (Authorization header or ?token= query param).
-// The query param fallback is required for WebSocket upgrades where browsers cannot set headers.
-func JWTMiddleware(secret string) func(http.Handler) http.Handler {
+// JWTMiddleware validates Bearer tokens (Authorization header or ?token= query param)
+// and enforces single-session: each new login increments agents.session_version, and
+// any token whose sv claim doesn't match the DB value is rejected with session_invalidated.
+func JWTMiddleware(secret string, db *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var token string
@@ -33,6 +35,21 @@ func JWTMiddleware(secret string) func(http.Handler) http.Handler {
 			claims, err := utils.ValidateToken(secret, token)
 			if err != nil {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				return
+			}
+
+			// Verify the session version to enforce single-session per agent.
+			// Tokens issued before this column existed have sv=0; rows default to 0,
+			// so existing sessions pass until the next login rotates the version.
+			var dbVersion int64
+			if err := db.QueryRowContext(r.Context(),
+				`SELECT session_version FROM agents WHERE id = $1`, claims.AgentID,
+			).Scan(&dbVersion); err != nil {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				return
+			}
+			if claims.SessionVersion != dbVersion {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "session_invalidated"})
 				return
 			}
 
