@@ -18,6 +18,7 @@ export interface TypingLock {
 
 interface InboxState {
   conversations: ZernioConversation[];
+  totalUnread: number;
   activeConversationId: string | null;
   messages: Record<string, ZernioMessage[]>;
   viewers: Record<string, ViewerInfo[]>;
@@ -41,8 +42,12 @@ interface InboxState {
   replaceMessage: (conversationId: string, tempId: string, real: ZernioMessage) => void;
 }
 
+const isUnread = (c: ZernioConversation | Partial<ZernioConversation>) =>
+  (c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread;
+
 export const useInboxStore = create<InboxState>((set) => ({
   conversations: [],
+  totalUnread: 0,
   activeConversationId: null,
   messages: {},
   viewers: {},
@@ -51,9 +56,6 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   setConversations: (convs) =>
     set((state) => {
-      // Preserve locally-cleared read state: if the user already opened a conversation
-      // and cleared its unread count, don't restore a stale server value before markRead
-      // confirms. WebSocket events will correctly re-increment when new messages arrive.
       const locallyRead = new Set(
         state.conversations
           .filter((c) => c.unreadCount === 0 && !c.isMarkedUnread)
@@ -63,15 +65,17 @@ export const useInboxStore = create<InboxState>((set) => ({
         locallyRead.has(c.id) ? { ...c, unreadCount: 0, isMarkedUnread: false } : c
       );
 
-      // Keep the active conversation in the list even if the server page didn't include it.
       if (state.activeConversationId) {
         const stillPresent = merged.some((c) => c.id === state.activeConversationId);
         if (!stillPresent) {
           const kept = state.conversations.find((c) => c.id === state.activeConversationId);
-          if (kept) return { conversations: [kept, ...merged] };
+          if (kept) {
+            const list = [kept, ...merged];
+            return { conversations: list, totalUnread: list.filter(isUnread).length };
+          }
         }
       }
-      return { conversations: merged };
+      return { conversations: merged, totalUnread: merged.filter(isUnread).length };
     }),
 
   appendConversations: (convs) =>
@@ -79,7 +83,11 @@ export const useInboxStore = create<InboxState>((set) => ({
       const existingIds = new Set(state.conversations.map((c) => c.id));
       const toAdd = convs.filter((c) => !existingIds.has(c.id));
       if (toAdd.length === 0) return state;
-      return { conversations: [...state.conversations, ...toAdd] };
+      const addedUnread = toAdd.filter(isUnread).length;
+      return {
+        conversations: [...state.conversations, ...toAdd],
+        totalUnread: state.totalUnread + addedUnread,
+      };
     }),
 
   setActiveConversation: (id) => set({ activeConversationId: id }),
@@ -132,26 +140,43 @@ export const useInboxStore = create<InboxState>((set) => ({
     }),
 
   updateConversation: (conv) =>
-    set((state) => ({
-      conversations: state.conversations.map((c) =>
-        c.id === conv.id ? { ...c, ...conv } : c
-      ),
-    })),
+    set((state) => {
+      let delta = 0;
+      const conversations = state.conversations.map((c) => {
+        if (c.id !== conv.id) return c;
+        const wasUnread = isUnread(c);
+        const patched = { ...c, ...conv };
+        const nowUnread = isUnread(patched);
+        if (wasUnread && !nowUnread) delta = -1;
+        else if (!wasUnread && nowUnread) delta = 1;
+        return patched;
+      });
+      return { conversations, totalUnread: Math.max(0, state.totalUnread + delta) };
+    }),
 
   bumpConversation: (id, patch) =>
     set((state) => {
       const idx = state.conversations.findIndex((c) => c.id === id);
       if (idx === -1) {
-        // Brand-new conversation (first message from a new contact) — prepend if we
-        // received a full enough patch to render it.
         if (patch && patch.participant && patch.id) {
-          return { conversations: [patch as ZernioConversation, ...state.conversations] };
+          const added = isUnread(patch) ? 1 : 0;
+          return {
+            conversations: [patch as ZernioConversation, ...state.conversations],
+            totalUnread: state.totalUnread + added,
+          };
         }
         return state;
       }
-      const updated = patch ? { ...state.conversations[idx], ...patch } : state.conversations[idx];
+      const old = state.conversations[idx];
+      const updated = patch ? { ...old, ...patch } : old;
       const rest = state.conversations.filter((c) => c.id !== id);
-      return { conversations: [updated, ...rest] };
+      let delta = 0;
+      if (isUnread(old) && !isUnread(updated)) delta = -1;
+      else if (!isUnread(old) && isUnread(updated)) delta = 1;
+      return {
+        conversations: [updated, ...rest],
+        totalUnread: Math.max(0, state.totalUnread + delta),
+      };
     }),
 
   setViewers: (studentId, viewers) =>

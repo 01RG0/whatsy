@@ -37,7 +37,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
 
-  const totalUnread = conversations.filter(c => c.unreadCount > 0 || c.isMarkedUnread).length;
+  const totalUnread = useInboxStore((s) => s.totalUnread);
 
   useEffect(() => {
     document.title = totalUnread > 0 ? `(${totalUnread}) Whatsy` : 'Whatsy';

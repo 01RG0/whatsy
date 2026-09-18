@@ -163,7 +163,7 @@ export default function NavBar({ path }: { path: string }) {
   const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
-  const totalUnread = useInboxStore(s => s.conversations.filter(c => c.unreadCount > 0 || c.isMarkedUnread).length)
+  const totalUnread = useInboxStore(s => s.totalUnread)
 
   useEffect(() => {
     const syncAgent = () => setAgent(getCurrentAgent())
