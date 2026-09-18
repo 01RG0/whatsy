@@ -125,6 +125,29 @@ func (r *MessageRepo) UpdateStatusByZernioID(ctx context.Context, zernioMsgID st
 	return nil
 }
 
+// ListStuckPending returns outbound messages stuck in "pending" status
+// (no zernio_message_id) older than the given age. These are messages where
+// the background Zernio send goroutine was killed during a deploy.
+func (r *MessageRepo) ListStuckPending(ctx context.Context, olderThanSeconds int) ([]domain.Message, error) {
+	query := "SELECT " + messageColumns + messageFrom +
+		"WHERE m.status = 'pending' AND m.direction = 'outbound' AND COALESCE(m.zernio_message_id, '') = '' " +
+		"AND m.timestamp < NOW() - make_interval(secs => $1) ORDER BY m.timestamp ASC LIMIT 50"
+	rows, err := r.db.QueryContext(ctx, query, olderThanSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("list stuck pending messages: %w", err)
+	}
+	defer rows.Close()
+	var msgs []domain.Message
+	for rows.Next() {
+		msg, err := scanMessage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan stuck pending message: %w", err)
+		}
+		msgs = append(msgs, msg)
+	}
+	return msgs, rows.Err()
+}
+
 func (r *MessageRepo) DeleteByZernioID(ctx context.Context, zernioMsgID string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM messages WHERE zernio_message_id = $1", zernioMsgID)
 	if err != nil {

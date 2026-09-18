@@ -312,6 +312,58 @@ func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID s
 	return nil
 }
 
+// RetryStuckMessages finds outbound messages stuck in "pending" (from a
+// killed goroutine during deploy) and retries their Zernio delivery.
+func (s *ChatService) RetryStuckMessages(ctx context.Context) {
+	msgs, err := s.msgRepo.ListStuckPending(ctx, 30)
+	if err != nil {
+		log.Printf("[startup] retry stuck messages: %v", err)
+		return
+	}
+	if len(msgs) == 0 {
+		return
+	}
+	log.Printf("[startup] retrying %d stuck pending messages", len(msgs))
+
+	accountID := s.zernioAccountID(ctx)
+	for _, msg := range msgs {
+		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, msg.ConversationID)
+		if err != nil || zernioConvID == "" {
+			log.Printf("[startup] retry: skip msg %s — no zernio conv id", msg.ID)
+			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
+			continue
+		}
+
+		payload := zernio.SendMessagePayload{
+			AccountID: accountID,
+			Message:   msg.Content,
+		}
+		if len(msg.Attachments) > 0 {
+			payload.AttachmentURL = msg.Attachments[0].URL
+			payload.AttachmentType = msg.Attachments[0].MimeType
+		}
+
+		sent, err := s.zernioClient.SendMessage(ctx, zernioConvID, payload)
+		if err != nil {
+			log.Printf("[startup] retry: msg %s failed: %v", msg.ID, err)
+			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
+			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+				Event:     websocket.EventMessageStatus,
+				MessageID: msg.ID,
+				Status:    string(domain.StatusFailed),
+			})
+			continue
+		}
+		_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, sent.ID, domain.StatusSent)
+		s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+			Event:     websocket.EventMessageStatus,
+			MessageID: msg.ID,
+			Status:    string(domain.StatusSent),
+		})
+		log.Printf("[startup] retry: msg %s sent ok", msg.ID)
+	}
+}
+
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
 	if payload.VoiceNote {
 		return domain.ContentTypeVoiceNote
