@@ -127,6 +127,63 @@ func (c *Client) SendTypingIndicator(ctx context.Context, conversationID, accoun
 	return c.doJSON(ctx, http.MethodPost, path, map[string]string{"accountId": accountID}, nil)
 }
 
+// ListWhatsAppFlows returns the flows for a connected WhatsApp account.
+func (c *Client) ListWhatsAppFlows(ctx context.Context, accountID string) (map[string]any, error) {
+	var response map[string]any
+	path := "/whatsapp/flows?accountId=" + url.QueryEscape(accountID)
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// CreateWhatsAppFlow creates a draft flow.
+func (c *Client) CreateWhatsAppFlow(ctx context.Context, accountID, name string, categories []string) (map[string]any, error) {
+	var response map[string]any
+	err := c.doJSON(ctx, http.MethodPost, "/whatsapp/flows", map[string]any{
+		"accountId":  accountID,
+		"name":       name,
+		"categories": categories,
+	}, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// UploadWhatsAppFlowJSON uploads a draft flow definition for Meta validation.
+func (c *Client) UploadWhatsAppFlowJSON(ctx context.Context, accountID, flowID string, flowJSON any) (map[string]any, error) {
+	var response map[string]any
+	err := c.doJSON(ctx, http.MethodPut, "/whatsapp/flows/"+url.PathEscape(flowID)+"/json", map[string]any{
+		"accountId": accountID,
+		"flow_json": flowJSON,
+	}, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// PreviewWhatsAppFlow returns a public preview URL for a draft or published flow.
+func (c *Client) PreviewWhatsAppFlow(ctx context.Context, accountID, flowID string) (map[string]any, error) {
+	var response map[string]any
+	path := "/whatsapp/flows/" + url.PathEscape(flowID) + "/preview?accountId=" + url.QueryEscape(accountID)
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// PublishWhatsAppFlow publishes a validated draft. Published flows are immutable.
+func (c *Client) PublishWhatsAppFlow(ctx context.Context, accountID, flowID string) (map[string]any, error) {
+	var response map[string]any
+	err := c.doJSON(ctx, http.MethodPost, "/whatsapp/flows/"+url.PathEscape(flowID)+"/publish", map[string]string{"accountId": accountID}, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 type sendMessageResponse struct {
 	Success   bool      `json:"success"`
 	ID        string    `json:"id"`

@@ -69,8 +69,8 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	allowedOrigins := map[string]bool{
-		"http://localhost:5173":                          true,
-		"http://localhost:3000":                          true,
+		"http://localhost:5173":                                  true,
+		"http://localhost:3000":                                  true,
 		"https://whatsy-frontend-production-4584.up.railway.app": true,
 	}
 	for _, env := range []string{"FRONTEND_URL", "FRONTEND_URL_2"} {
@@ -142,6 +142,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
 	studentHandler := handler.NewStudentHandler(db)
 	autoReplyHandler := handler.NewAutoReplyHandler(db)
+	flowHandler := handler.NewFlowHandler(db, zernioClient)
 	templateHandler := handler.NewTemplateHandler(cfg.ZernioAPIKey, db)
 	broadcastHandler := handler.NewBroadcastHandler(cfg.ZernioAPIKey, db)
 	waConnHandler := handler.NewWhatsAppConnectionHandler(db, cfg.ZernioAPIKey)
@@ -184,6 +185,11 @@ func main() {
 		r.Post("/v1/auto-reply-rules", autoReplyHandler.Create)
 		r.Patch("/v1/auto-reply-rules/{id}", autoReplyHandler.Update)
 		r.Delete("/v1/auto-reply-rules/{id}", autoReplyHandler.Delete)
+		r.Get("/v1/whatsapp/flows", flowHandler.List)
+		r.Post("/v1/whatsapp/flows", flowHandler.Create)
+		r.Put("/v1/whatsapp/flows/{id}/json", flowHandler.UploadJSON)
+		r.Get("/v1/whatsapp/flows/{id}/preview", flowHandler.Preview)
+		r.Post("/v1/whatsapp/flows/{id}/publish", flowHandler.Publish)
 		r.Get("/ws", h.ServeWebSocket)
 		r.Get("/v1/whatsapp/templates", templateHandler.ListTemplates)
 		r.Post("/v1/whatsapp/templates", templateHandler.CreateTemplate)
