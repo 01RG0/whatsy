@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
+	ws "github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,20 +20,23 @@ import (
 type AgentHandler struct {
 	db        *sql.DB
 	jwtSecret string
+	hub       *ws.Hub
 }
 
-// NewAgentHandler creates an AgentHandler backed by db and jwtSecret.
-func NewAgentHandler(db *sql.DB, jwtSecret string) *AgentHandler {
-	return &AgentHandler{db: db, jwtSecret: jwtSecret}
+// NewAgentHandler creates an AgentHandler backed by db, jwtSecret, and the WS hub.
+func NewAgentHandler(db *sql.DB, jwtSecret string, hub *ws.Hub) *AgentHandler {
+	return &AgentHandler{db: db, jwtSecret: jwtSecret, hub: hub}
 }
 
 type agent struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	Avatar    string    `json:"avatar"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Email         string    `json:"email"`
+	Role          string    `json:"role"`
+	Avatar        string    `json:"avatar"`
+	CreatedAt     time.Time `json:"createdAt"`
+	IsOnline      bool      `json:"is_online"`
+	MessagesToday int       `json:"messages_today"`
 }
 
 type updateCurrentAgentRequest struct {
@@ -42,22 +46,39 @@ type updateCurrentAgentRequest struct {
 
 const agentColumns = "id::text, name, email, role, avatar, created_at"
 
-// List returns all agents ordered by name.
+// List returns all agents ordered by name, with real-time online status and today's message count.
 func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.QueryContext(r.Context(), "SELECT "+agentColumns+" FROM agents ORDER BY name")
+	const q = `
+		SELECT a.id::text, a.name, a.email, a.role, a.avatar, a.created_at,
+		       COALESCE(m.cnt, 0) AS messages_today
+		FROM agents a
+		LEFT JOIN (
+			SELECT sent_by_agent_id, COUNT(*) AS cnt
+			FROM messages
+			WHERE direction = 'outbound'
+			  AND timestamp >= NOW() - INTERVAL '24 hours'
+			  AND sent_by_agent_id IS NOT NULL
+			GROUP BY sent_by_agent_id
+		) m ON m.sent_by_agent_id = a.id::text
+		ORDER BY a.name`
+
+	rows, err := h.db.QueryContext(r.Context(), q)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list agents"})
 		return
 	}
 	defer rows.Close()
 
+	online := h.hub.OnlineAgentIDs()
+
 	agents := make([]agent, 0)
 	for rows.Next() {
 		var a agent
-		if err := rows.Scan(&a.ID, &a.Name, &a.Email, &a.Role, &a.Avatar, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Email, &a.Role, &a.Avatar, &a.CreatedAt, &a.MessagesToday); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list agents"})
 			return
 		}
+		a.IsOnline = online[a.ID]
 		agents = append(agents, a)
 	}
 	if err := rows.Err(); err != nil {

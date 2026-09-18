@@ -253,6 +253,19 @@ func (h *Hub) removeClientFromRooms(client *Client) {
 	}
 }
 
+// OnlineAgentIDs returns the set of agent IDs with active WebSocket connections.
+func (h *Hub) OnlineAgentIDs() map[string]bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	online := make(map[string]bool, len(h.clients))
+	for c := range h.clients {
+		if c.agentID != "" {
+			online[c.agentID] = true
+		}
+	}
+	return online
+}
+
 // Run processes register, unregister, and broadcast channels.
 func (h *Hub) Run() {
 	for {

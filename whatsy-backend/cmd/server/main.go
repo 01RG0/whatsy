@@ -136,7 +136,7 @@ func main() {
 	go chatService.RetryStuckMessages(context.Background())
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
-	agentHandler := handler.NewAgentHandler(db, cfg.JWTSecret)
+	agentHandler := handler.NewAgentHandler(db, cfg.JWTSecret, hub)
 	mediaHandler := handler.NewMediaHandler(cfg.ZernioAPIKey, db)
 	uploadHandler := handler.NewUploadHandler(cfg.ZernioAPIKey)
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
