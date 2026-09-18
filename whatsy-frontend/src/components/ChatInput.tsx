@@ -25,9 +25,16 @@ async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Upload failed: ${res.status} ${errText}`);
+  }
   const data = await res.json();
-  return data.url as string;
+  // Handle various response shapes from Zernio's upload-direct endpoint
+  const url = data.url || data.mediaUrl || data.attachmentUrl ||
+    data?.data?.url || data?.data?.mediaUrl || data?.data?.attachmentUrl;
+  if (!url) throw new Error(`Upload succeeded but response has no URL: ${JSON.stringify(data)}`);
+  return url as string;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({

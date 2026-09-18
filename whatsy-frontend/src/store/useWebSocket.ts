@@ -157,6 +157,18 @@ export function useWebSocket() {
             updateConversation({ id: conversationId, unreadCount: 0 });
             markRead(conversationId).catch(() => undefined);
           }
+
+          // If this conversation isn't in the list yet (new contact), trigger a refresh
+          {
+            const exists = useInboxStore.getState().conversations.some((c) => c.id === conversationId);
+            if (!exists) {
+              import('../api/inbox').then(({ getConversations }) => {
+                getConversations('all', '').then((convs) => {
+                  useInboxStore.getState().setConversations(convs);
+                }).catch(() => undefined);
+              });
+            }
+          }
           break;
         }
         case 'MESSAGE_STATUS':
@@ -193,10 +205,12 @@ export function useWebSocket() {
             typeof document !== 'undefined' &&
             document.visibilityState === 'visible';
 
-          // For the active conversation, keep unreadCount 0 when actively viewing,
-          // and suppress positive increments to avoid badge flash.
           if (isViewingActive) {
+            // User is viewing — keep unread at 0 and sync read state back to server
             patch.unreadCount = 0;
+            if (typeof data.conversation.unreadCount === 'number' && data.conversation.unreadCount > 0) {
+              markRead(patch.id).catch(() => undefined);
+            }
           } else if (
             patch.id === activeId &&
             typeof patch.unreadCount === 'number' &&

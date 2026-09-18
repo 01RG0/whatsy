@@ -34,6 +34,8 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [showConnected, setShowConnected] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
 
   // Re-fetch conversations on every filter or search change — instant results.
   useEffect(() => {
@@ -55,8 +57,11 @@ export const WhatsAppInboxApp: React.FC = () => {
     if (!activeConversationId) return;
     const id = activeConversationId;
     setIsLoadingMessages(true);
-    getMessages(id)
-      .then((msgs) => mergeMessages(id, [...msgs].reverse()))
+    getMessages(id, 100)
+      .then((msgs) => {
+        mergeMessages(id, [...msgs].reverse());
+        setHasMoreMessages((prev) => ({ ...prev, [id]: msgs.length >= 100 }));
+      })
       .catch((err) => console.error('[WhatsAppInboxApp] getMessages:', err))
       .finally(() => setIsLoadingMessages(false));
   }, [activeConversationId, mergeMessages]);
@@ -140,6 +145,55 @@ export const WhatsAppInboxApp: React.FC = () => {
     }
     prevWsConnected.current = wsConnected;
   }, [wsConnected, activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
+
+  // 30-second background sync — silently merges any conversations missed while WS was lagging.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      import('../api/inbox').then(({ getConversations }) => {
+        getConversations(filter, searchQuery)
+          .then((convs) => {
+            const store = useInboxStore.getState();
+            const existingIds = new Set(store.conversations.map((c) => c.id));
+            convs.forEach((conv) => {
+              if (existingIds.has(conv.id) && conv.id !== store.activeConversationId) {
+                store.updateConversation(conv);
+              }
+            });
+            const newConvs = convs.filter((c) => !existingIds.has(c.id));
+            if (newConvs.length > 0) {
+              store.setConversations([...newConvs, ...store.conversations]);
+            }
+          })
+          .catch(() => undefined);
+      });
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [filter, searchQuery]);
+
+  // Load older messages when the user scrolls to the top.
+  const handleLoadMoreMessages = useCallback(async () => {
+    if (!activeConversationId || isLoadingMoreMessages) return;
+    const msgs = messages[activeConversationId] ?? [];
+    if (msgs.length === 0) return;
+    const oldestId = msgs[0].id;
+    setIsLoadingMoreMessages(true);
+    try {
+      const olderMsgs = await getMessages(activeConversationId, 50, oldestId);
+      if (olderMsgs.length > 0) {
+        mergeMessages(activeConversationId, [...olderMsgs].reverse());
+        if (olderMsgs.length < 50) {
+          setHasMoreMessages((prev) => ({ ...prev, [activeConversationId]: false }));
+        }
+      } else {
+        setHasMoreMessages((prev) => ({ ...prev, [activeConversationId]: false }));
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setIsLoadingMoreMessages(false);
+    }
+  }, [activeConversationId, isLoadingMoreMessages, messages, mergeMessages]);
 
   const handleLoadMoreConversations = useCallback(() => {
     if (isLoadingMoreConversations || !hasMoreConversations || conversations.length === 0) return;
@@ -386,6 +440,9 @@ export const WhatsAppInboxApp: React.FC = () => {
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
           onBack={() => setShowChatOnMobile(false)}
+          onLoadMoreMessages={handleLoadMoreMessages}
+          hasMoreMessages={activeConversationId ? (hasMoreMessages[activeConversationId] ?? false) : false}
+          isLoadingMoreMessages={isLoadingMoreMessages}
         />
       </div>
       </div>

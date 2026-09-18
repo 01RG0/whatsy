@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { ZernioConversation, ZernioMessage, SendMessagePayload } from './types';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
@@ -35,6 +35,9 @@ interface ChatWindowProps {
   onAssign?: (agentId: string) => void;
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
+  onLoadMoreMessages?: () => void;
+  hasMoreMessages?: boolean;
+  isLoadingMoreMessages?: boolean;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -55,6 +58,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onAssign,
   onMarkUnread,
   onMarkRead,
+  onLoadMoreMessages,
+  hasMoreMessages = false,
+  isLoadingMoreMessages = false,
 }) => {
   type ReplyPreview = { id: string; senderName: string; content: string };
   const isViewerMode = isViewer() || !canWrite();
@@ -82,14 +88,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, [assignOpen, optionsOpen]);
 
-  // Scroll to the latest message whenever messages change OR a new conversation is opened.
-  // Scroll to bottom whenever messages change or conversation switches.
-  // Direct scrollTop manipulation avoids scrollIntoView ancestor-traversal bugs
-  // that can silently scroll an overflow:hidden parent instead of this container.
+  const prevMessageCountRef = useRef(0);
+  const prevConvIdRef = useRef<string | null>(null);
+
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const convChanged = conversation?.id !== prevConvIdRef.current;
+    const isNewMessage = messages.length > prevMessageCountRef.current && !convChanged;
+    const wasNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+
+    if (convChanged || (isNewMessage && wasNearBottom)) {
+      el.scrollTop = el.scrollHeight;
+    }
+    prevMessageCountRef.current = messages.length;
+    prevConvIdRef.current = conversation?.id ?? null;
   }, [messages, conversation?.id]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el || !hasMoreMessages || isLoadingMoreMessages) return;
+    if (el.scrollTop < 80) {
+      onLoadMoreMessages?.();
+    }
+  }, [hasMoreMessages, isLoadingMoreMessages, onLoadMoreMessages]);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   const groupedMessages = useMemo(() => {
     const groups: { dateLabel: string; items: ZernioMessage[] }[] = [];
@@ -321,6 +350,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Message Stream */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-4 relative">
+        {isLoadingMoreMessages && (
+          <div className="flex justify-center py-2">
+            <div className="w-5 h-5 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
         {isLoadingMessages && (
           <div className="flex justify-center p-4">
             <div className="w-6 h-6 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
