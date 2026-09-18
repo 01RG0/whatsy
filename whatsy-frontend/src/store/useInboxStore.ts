@@ -38,6 +38,7 @@ interface InboxState {
   setWsConnected: (connected: boolean) => void;
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  replaceMessage: (conversationId: string, tempId: string, real: ZernioMessage) => void;
 }
 
 export const useInboxStore = create<InboxState>((set) => ({
@@ -80,8 +81,19 @@ export const useInboxStore = create<InboxState>((set) => ({
   receiveMessage: (conversationId, message) =>
     set((state) => {
       const existing = state.messages[conversationId] ?? [];
-      // deduplicate by id
       if (existing.some((m) => m.id === message.id)) return state;
+      // If this is an outbound message from the server and we have a temp
+      // optimistic message with matching content, replace it instead of adding.
+      if (message.direction === 'outbound' && !message.id.startsWith('temp-')) {
+        const tempIdx = existing.findIndex(
+          (m) => m.id.startsWith('temp-') && m.direction === 'outbound'
+        );
+        if (tempIdx !== -1) {
+          const replaced = [...existing];
+          replaced[tempIdx] = message;
+          return { messages: { ...state.messages, [conversationId]: replaced } };
+        }
+      }
       return {
         messages: { ...state.messages, [conversationId]: [...existing, message] },
       };
@@ -153,6 +165,18 @@ export const useInboxStore = create<InboxState>((set) => ({
         messages: {
           ...state.messages,
           [conversationId]: msgs.filter((m) => m.id !== messageId),
+        },
+      };
+    }),
+
+  replaceMessage: (conversationId, tempId, real) =>
+    set((state) => {
+      const msgs = state.messages[conversationId];
+      if (!msgs) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: msgs.map((m) => (m.id === tempId ? real : m)),
         },
       };
     }),

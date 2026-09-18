@@ -5,7 +5,7 @@ import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
 import { getMessages, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
-import type { ZernioConversation, ConversationFilter, SendMessagePayload } from './types';
+import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 
 export const WhatsAppInboxApp: React.FC = () => {
   const { onInputFocus, onInputBlur } = useWebSocket();
@@ -180,22 +180,38 @@ export const WhatsAppInboxApp: React.FC = () => {
   const handleSendMessage = useCallback(
     async (payload: Partial<SendMessagePayload>) => {
       if (!activeConversationId) return;
+      const now = new Date().toISOString();
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const optimistic: ZernioMessage = {
+        id: tempId,
+        conversationId: activeConversationId,
+        direction: 'outbound',
+        type: (payload.attachmentType as ZernioMessage['type']) || 'text',
+        content: payload.message || '',
+        status: 'sent',
+        createdAt: now,
+        attachments: payload.attachmentUrl
+          ? [{ url: payload.attachmentUrl, type: (payload.attachmentType || 'document') as 'image' | 'audio' | 'video' | 'document' }]
+          : [],
+      };
+      receiveMessage(activeConversationId, optimistic);
+      bumpConversation(activeConversationId, {
+        lastMessage: {
+          id: tempId,
+          content: optimistic.content,
+          type: optimistic.type,
+          direction: 'outbound',
+          createdAt: now,
+          status: 'sent',
+        },
+        updatedAt: now,
+      });
       try {
-        const sentMessage = await sendMessage(activeConversationId, payload);
-        receiveMessage(activeConversationId, { ...sentMessage, status: 'sent' });
-        bumpConversation(activeConversationId, {
-          lastMessage: {
-            id: sentMessage.id,
-            content: sentMessage.content || '',
-            type: sentMessage.type,
-            direction: sentMessage.direction,
-            createdAt: sentMessage.createdAt,
-            status: 'sent',
-          },
-          updatedAt: sentMessage.createdAt,
-        });
+        const real = await sendMessage(activeConversationId, payload);
+        useInboxStore.getState().replaceMessage(activeConversationId, tempId, { ...real, status: 'sent' });
       } catch (err) {
         console.error('[WhatsAppInboxApp] sendMessage failed:', err);
+        useInboxStore.getState().updateMessageStatus(tempId, 'failed');
       }
     },
     [activeConversationId, bumpConversation, receiveMessage]
