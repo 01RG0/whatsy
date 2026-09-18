@@ -19,6 +19,7 @@ const UPLOAD_URL = `${API_BASE}/v1/whatsapp/upload`;
 async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
   const token = localStorage.getItem('whatsy_jwt');
   const form = new FormData();
+  form.append('file', blob, filename);
   form.append('attachment', blob, filename);
   const res = await fetch(UPLOAD_URL, {
     method: 'POST',
@@ -46,7 +47,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaFileInputRef = useRef<HTMLInputElement>(null);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -132,8 +134,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/ogg' });
       setIsUploading(true);
       try {
-        const url = await uploadToBackend(blob, `voice-${Date.now()}.ogg`);
-        onSendMessage({ voiceNote: true, attachmentType: 'audio', attachmentUrl: url, replyTo: replyingTo?.id });
+        const url = await uploadToBackend(blob, 'voice-message.ogg');
+        onSendMessage({
+          voiceNote: true,
+          attachmentType: 'audio',
+          attachmentName: 'voice-message.ogg',
+          attachmentUrl: url,
+          replyTo: replyingTo?.id,
+        });
         if (onCancelReply) onCancelReply();
       } catch (err) {
         console.error('Voice upload failed:', err);
@@ -150,12 +158,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    let attachmentType: 'image' | 'audio' | 'video' | 'document' = 'document';
+    let attachmentType: 'image' | 'audio' | 'video' | 'file' = 'file';
     if (file.type.startsWith('image/')) attachmentType = 'image';
     else if (file.type.startsWith('audio/')) attachmentType = 'audio';
     else if (file.type.startsWith('video/')) attachmentType = 'video';
     setShowAttachMenu(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
+    if (docFileInputRef.current) docFileInputRef.current.value = '';
     setIsUploading(true);
     try {
       const url = await uploadToBackend(file, file.name);
@@ -202,11 +211,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Attachment Popover */}
       {showAttachMenu && (
         <div ref={attachMenuRef} className="absolute bottom-full left-4 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
+          <button type="button" onClick={() => { setShowAttachMenu(false); mediaFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
             <span className="w-8 h-8 rounded-full bg-[#bf59cf] flex items-center justify-center text-white">🖼️</span>
             <span>Photos &amp; Videos</span>
           </button>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
+          <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
             <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
             <span>Document</span>
           </button>
@@ -224,7 +233,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
-      <input ref={fileInputRef} type="file" onChange={handleFileUpload} className="hidden" />
+      {/* Hidden file inputs for Photos & Videos and Documents */}
+      <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" onChange={handleFileUpload} className="hidden" />
+      <input ref={docFileInputRef} type="file" accept="*/*" onChange={handleFileUpload} className="hidden" />
 
       {/* Input Row */}
       <div className="flex items-end gap-2">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAuthHeader, API_BASE } from '../api/inbox'
 import { isAdmin } from '../lib/auth'
+import ChangePasswordModal from '../components/ChangePasswordModal'
 
 interface Agent {
   id: string
@@ -89,6 +90,8 @@ export default function TeamPage() {
   const [confirmRemove, setConfirmRemove] = useState<Agent | null>(null)
   const [panelRoleChanging, setPanelRoleChanging] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordTarget, setPasswordTarget] = useState<{ id: string; name: string } | null>(null)
 
   const fetchAgents = useCallback(async () => {
     setLoading(true)
@@ -608,23 +611,50 @@ export default function TeamPage() {
               </div>
             </div>
 
-            {/* Danger zone */}
-            {admin && (
-              <div className="px-5 py-4 border-t border-gray-100 dark:border-[#222e35] space-y-2 shrink-0">
-                <button className="w-full py-2 text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition">
-                  Suspend Agent
-                </button>
+            {/* Action buttons */}
+            <div className="px-5 py-4 border-t border-gray-100 dark:border-[#222e35] space-y-2 shrink-0">
+              {admin && (
                 <button
-                  onClick={() => { setConfirmRemove(selectedAgent); setSelectedAgent(null) }}
-                  className="w-full py-2 text-sm font-medium text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition"
+                  type="button"
+                  onClick={() => {
+                    setPasswordTarget({ id: selectedAgent.id, name: selectedAgent.name });
+                    setShowPasswordModal(true);
+                  }}
+                  className="w-full py-2 text-sm font-medium text-[#00a884] bg-[#00a884]/10 hover:bg-[#00a884]/20 rounded-lg transition flex items-center justify-center gap-2"
                 >
-                  Remove Agent
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                  Set Password
                 </button>
-              </div>
-            )}
+              )}
+              {admin && (
+                <>
+                  <button className="w-full py-2 text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition">
+                    Suspend Agent
+                  </button>
+                  <button
+                    onClick={() => { setConfirmRemove(selectedAgent); setSelectedAgent(null) }}
+                    className="w-full py-2 text-sm font-medium text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition"
+                  >
+                    Remove Agent
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => {
+          setShowPasswordModal(false);
+          setPasswordTarget(null);
+        }}
+        targetAgent={passwordTarget}
+      />
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
-import { getMessages, getConversations, sendMessage, markRead, assignConversation, getAgents } from '../api/inbox';
+import { getMessages, getConversations, sendMessage, markRead, markUnread, assignConversation, getAgents } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 
@@ -85,9 +85,9 @@ export const WhatsAppInboxApp: React.FC = () => {
   }, []);
 
 
-  // Refetch conversations + messages when the tab becomes visible again.
+  // Refetch conversations + messages and mark active conversation as read when tab becomes visible or focused.
   useEffect(() => {
-    const onVisible = () => {
+    const handleActiveFocus = () => {
       if (document.visibilityState !== 'visible') return;
       import('../api/inbox').then(({ getConversations }) => {
         getConversations(filter, searchQuery)
@@ -95,14 +95,21 @@ export const WhatsAppInboxApp: React.FC = () => {
           .catch(() => undefined);
       });
       if (activeConversationId) {
+        updateConversation({ id: activeConversationId, unreadCount: 0 });
+        markRead(activeConversationId).catch(() => undefined);
         getMessages(activeConversationId)
           .then((msgs) => mergeMessages(activeConversationId, [...msgs].reverse()))
           .catch(() => undefined);
       }
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
+
+    document.addEventListener('visibilitychange', handleActiveFocus);
+    window.addEventListener('focus', handleActiveFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleActiveFocus);
+      window.removeEventListener('focus', handleActiveFocus);
+    };
+  }, [activeConversationId, mergeMessages, filter, searchQuery, setConversations, updateConversation]);
 
   // Flash "Connected" banner for 3s when WS connects.
   useEffect(() => {
@@ -159,11 +166,39 @@ export const WhatsAppInboxApp: React.FC = () => {
   }, [filter, searchQuery, setConversations]);
 
   const handleMarkAllRead = useCallback(() => {
-    const unread = conversations.filter((conversation) => conversation.unreadCount > 0);
+    const unread = conversations.filter((conversation) => conversation.unreadCount > 0 || conversation.isMarkedUnread);
     Promise.all(unread.map((conversation) => markRead(conversation.id)))
-      .then(() => unread.forEach((conversation) => updateConversation({ id: conversation.id, unreadCount: 0 })))
+      .then(() => unread.forEach((conversation) => updateConversation({ id: conversation.id, unreadCount: 0, isMarkedUnread: false })))
       .catch((err) => console.error('[WhatsAppInboxApp] mark all read:', err));
   }, [conversations, updateConversation]);
+
+  const handleMarkUnread = useCallback(
+    (conversationId: string) => {
+      updateConversation({
+        id: conversationId,
+        isMarkedUnread: true,
+        unreadCount: Math.max(conversations.find((c) => c.id === conversationId)?.unreadCount ?? 0, 1),
+      });
+      markUnread(conversationId).catch((err) => {
+        console.error('[WhatsAppInboxApp] mark unread:', err);
+      });
+    },
+    [conversations, updateConversation]
+  );
+
+  const handleMarkRead = useCallback(
+    (conversationId: string) => {
+      updateConversation({
+        id: conversationId,
+        isMarkedUnread: false,
+        unreadCount: 0,
+      });
+      markRead(conversationId).catch((err) => {
+        console.error('[WhatsAppInboxApp] mark read:', err);
+      });
+    },
+    [updateConversation]
+  );
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -186,7 +221,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   const handleSelectConversation = useCallback(
     (conv: ZernioConversation) => {
       setActiveConversation(conv.id);
-      updateConversation({ id: conv.id, unreadCount: 0 });
+      updateConversation({ id: conv.id, unreadCount: 0, isMarkedUnread: false });
       markRead(conv.id).catch(() => undefined);
       setShowChatOnMobile(true);
     },
@@ -202,12 +237,16 @@ export const WhatsAppInboxApp: React.FC = () => {
         id: tempId,
         conversationId: activeConversationId,
         direction: 'outbound',
-        type: (payload.attachmentType as ZernioMessage['type']) || 'text',
+        type: (payload.attachmentType === 'file' ? 'document' : (payload.attachmentType as ZernioMessage['type'])) || 'text',
         content: payload.message || '',
         status: 'sent',
         createdAt: now,
         attachments: payload.attachmentUrl
-          ? [{ url: payload.attachmentUrl, type: (payload.attachmentType || 'document') as 'image' | 'audio' | 'video' | 'document' }]
+          ? [{
+              url: payload.attachmentUrl,
+              type: (payload.attachmentType === 'file' ? 'file' : (payload.attachmentType || 'document')) as 'image' | 'audio' | 'video' | 'file' | 'document',
+              name: payload.attachmentName,
+            }]
           : [],
       };
       receiveMessage(activeConversationId, optimistic);
@@ -327,6 +366,8 @@ export const WhatsAppInboxApp: React.FC = () => {
           isLoadingMore={isLoadingMoreConversations}
           onRefresh={handleRefreshConversations}
           onMarkAllRead={handleMarkAllRead}
+          onMarkUnread={handleMarkUnread}
+          onMarkRead={handleMarkRead}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>
@@ -342,6 +383,8 @@ export const WhatsAppInboxApp: React.FC = () => {
           onInputBlur={onInputBlur}
           agents={agents}
           onAssign={handleAssign}
+          onMarkUnread={handleMarkUnread}
+          onMarkRead={handleMarkRead}
           onBack={() => setShowChatOnMobile(false)}
         />
       </div>

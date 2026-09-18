@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useInboxStore, type ViewerInfo, type TypingLock } from './useInboxStore';
 import type { ZernioMessage, ZernioConversation } from '../components/types';
+import { markRead } from '../api/inbox';
 
 const _apiBase = import.meta.env.VITE_API_URL ?? ''
 const WS_URL = _apiBase
@@ -130,8 +131,16 @@ export function useWebSocket() {
           const msg = data.message;
           const conversationId = msg.conversationId || data.studentId;
           receiveMessage(conversationId, { ...msg, conversationId });
+
+          const activeId = useInboxStore.getState().activeConversationId;
+          const isViewingActive =
+            conversationId === activeId &&
+            typeof document !== 'undefined' &&
+            document.visibilityState === 'visible';
+
           // Move the conversation to the top and update last message preview.
           bumpConversation(conversationId, {
+            ...(isViewingActive ? { unreadCount: 0 } : {}),
             lastMessage: {
               id: msg.id,
               content: msg.content || '',
@@ -143,6 +152,11 @@ export function useWebSocket() {
             },
             updatedAt: msg.createdAt,
           });
+
+          if (isViewingActive) {
+            updateConversation({ id: conversationId, unreadCount: 0 });
+            markRead(conversationId).catch(() => undefined);
+          }
           break;
         }
         case 'MESSAGE_STATUS':
@@ -173,10 +187,18 @@ export function useWebSocket() {
         }
         case 'CONVERSATION_UPDATED': {
           const patch = { ...data.conversation } as Partial<ZernioConversation> & { id: string };
-          // For the active conversation, only apply unreadCount if it's going to 0
-          // (someone else marked it read). Suppress increments to avoid badge flash.
-          if (
-            patch.id === useInboxStore.getState().activeConversationId &&
+          const activeId = useInboxStore.getState().activeConversationId;
+          const isViewingActive =
+            patch.id === activeId &&
+            typeof document !== 'undefined' &&
+            document.visibilityState === 'visible';
+
+          // For the active conversation, keep unreadCount 0 when actively viewing,
+          // and suppress positive increments to avoid badge flash.
+          if (isViewingActive) {
+            patch.unreadCount = 0;
+          } else if (
+            patch.id === activeId &&
             typeof patch.unreadCount === 'number' &&
             patch.unreadCount > 0
           ) {

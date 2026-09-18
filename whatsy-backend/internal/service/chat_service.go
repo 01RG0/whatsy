@@ -201,6 +201,23 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		return nil, fmt.Errorf("send message: conversation %q has no zernio_conversation_id", conversationID)
 	}
 
+	// Normalize attachment attributes according to Zernio specs: image, video, audio, file
+	if payload.VoiceNote || payload.AttachmentType == "audio" || payload.AttachmentType == "voice_note" {
+		payload.VoiceNote = true
+		payload.AttachmentType = "audio"
+	} else if payload.AttachmentType == "document" {
+		payload.AttachmentType = "file"
+	}
+
+	if payload.AttachmentURL != "" {
+		if payload.AttachmentType == "" {
+			payload.AttachmentType = "file"
+		}
+		if payload.AttachmentType == "file" && payload.AttachmentName == "" {
+			payload.AttachmentName = "Document"
+		}
+	}
+
 	// Persist immediately with StatusPending so the message appears in the UI at once.
 	message := domain.Message{
 		ConversationID: conversationID,
@@ -211,13 +228,9 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		SentByAgentID:  agentID,
 	}
 	if payload.AttachmentURL != "" {
-		attType := payload.AttachmentType
-		if attType == "" {
-			attType = "file"
-		}
 		message.Attachments = []domain.Attachment{{
 			URL:      payload.AttachmentURL,
-			Type:     attachmentKind(domain.ContentType(attType)),
+			Type:     attachmentKind(domain.ContentType(payload.AttachmentType)),
 			Name:     payload.AttachmentName,
 			MimeType: payload.AttachmentType,
 		}}
@@ -312,6 +325,28 @@ func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID s
 	return nil
 }
 
+// MarkConversationUnread flags the conversation as manually unread, sets unread_count to at least 1,
+// and notifies connected clients of the updated conversation state via WebSocket.
+func (s *ChatService) MarkConversationUnread(ctx context.Context, conversationID string) error {
+	if err := s.convRepo.MarkUnread(ctx, conversationID); err != nil {
+		return fmt.Errorf("mark conversation unread: %w", err)
+	}
+
+	conversation, err := s.convRepo.GetByID(ctx, conversationID)
+	if err != nil {
+		return fmt.Errorf("get updated conversation: %w", err)
+	}
+	if conversation == nil {
+		return fmt.Errorf("get updated conversation: conversation %q not found", conversationID)
+	}
+	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
+		Event:        websocket.EventConversationUpdated,
+		Conversation: *conversation,
+	})
+	return nil
+}
+
+
 // RetryStuckMessages finds outbound messages stuck in "pending" (from a
 // killed goroutine during deploy) and retries their Zernio delivery.
 func (s *ChatService) RetryStuckMessages(ctx context.Context) {
@@ -339,8 +374,19 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 			Message:   msg.Content,
 		}
 		if len(msg.Attachments) > 0 {
-			payload.AttachmentURL = msg.Attachments[0].URL
-			payload.AttachmentType = msg.Attachments[0].MimeType
+			att := msg.Attachments[0]
+			payload.AttachmentURL = att.URL
+			payload.AttachmentType = att.MimeType
+			payload.AttachmentName = att.Name
+			if msg.Type == domain.ContentTypeVoiceNote || payload.AttachmentType == "audio" || payload.AttachmentType == "voice_note" {
+				payload.VoiceNote = true
+				payload.AttachmentType = "audio"
+			} else if payload.AttachmentType == "document" {
+				payload.AttachmentType = "file"
+			}
+			if payload.AttachmentType == "file" && payload.AttachmentName == "" {
+				payload.AttachmentName = "Document"
+			}
 		}
 
 		sent, err := s.zernioClient.SendMessage(ctx, zernioConvID, payload)

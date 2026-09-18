@@ -74,6 +74,15 @@ export async function markRead(conversationId: string): Promise<void> {
   await throwIfError(res)
 }
 
+export async function markUnread(conversationId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/unread`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  })
+  await throwIfError(res)
+}
+
+
 export async function assignConversation(conversationId: string, agentId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/assign`, {
     method: 'POST',

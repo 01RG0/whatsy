@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -38,7 +39,10 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file is required"})
+		file, header, err = r.FormFile("attachment")
+	}
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file or attachment is required"})
 		return
 	}
 	defer file.Close()
@@ -51,11 +55,10 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	pipeReader, pipeWriter := io.Pipe()
 	formWriter := multipart.NewWriter(pipeWriter)
 	go func() {
-		// Zernio expects the multipart field name "attachment" (documented);
-		// forward the client's filename and content type.
+		// Zernio's POST /v1/media/upload-direct expects the multipart field name "file"
 		partHeader := make(textproto.MIMEHeader)
 		partHeader.Set("Content-Disposition",
-			fmt.Sprintf(`form-data; name="attachment"; filename=%q`, header.Filename))
+			fmt.Sprintf(`form-data; name="file"; filename=%q`, header.Filename))
 		if ct := header.Header.Get("Content-Type"); ct != "" {
 			partHeader.Set("Content-Type", ct)
 		}
@@ -72,6 +75,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, h.zernioBase+"/media/upload-direct", pipeReader)
 	if err != nil {
 		pipeReader.Close()
+		log.Printf("[upload] error creating request to Zernio: %v", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "upload media"})
 		return
 	}
@@ -80,6 +84,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
+		log.Printf("[upload] error sending request to Zernio: %v", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "upload media"})
 		return
 	}
@@ -87,6 +92,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	respBody, _ := io.ReadAll(io.LimitReader(response.Body, maxUploadSize))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		log.Printf("[upload] Zernio upload failed with status %d: %s", response.StatusCode, string(respBody))
 		// Surface Zernio's error message when available.
 		var errResp struct {
 			Error string `json:"error"`

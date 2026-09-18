@@ -33,11 +33,13 @@ type Conversation struct {
 	Platform      string             `json:"platform"`
 	Participant   Participant        `json:"participant"`
 	LastMessage   LastMessagePreview `json:"lastMessage"`
-	UnreadCount   int                `json:"unreadCount"`
-	IsPinned      bool               `json:"isPinned"`
-	IsMuted       bool               `json:"isMuted"`
-	IsGroup       bool               `json:"isGroup"`
-	Tags          []string           `json:"tags"`
-	AssignedAgent *AssignedAgent     `json:"assignedAgent"`
-	UpdatedAt     time.Time          `json:"updatedAt"`
+	UnreadCount    int                `json:"unreadCount"`
+	IsMarkedUnread bool               `json:"isMarkedUnread"`
+	IsPinned       bool               `json:"isPinned"`
+	IsMuted        bool               `json:"isMuted"`
+	IsGroup        bool               `json:"isGroup"`
+	Tags           []string           `json:"tags"`
+	AssignedAgent  *AssignedAgent     `json:"assignedAgent"`
+	UpdatedAt      time.Time          `json:"updatedAt"`
 }
+

@@ -24,7 +24,7 @@ const conversationColumns = `
 	c.last_message, COALESCE(c.last_message_at, c.updated_at),
 	COALESCE(last_msg.id::text, ''), COALESCE(last_msg.content_type, 'text'),
 	COALESCE(last_msg.direction, ''), COALESCE(last_msg.sender_name, ''), COALESCE(last_msg.status, 'sent'),
-	c.unread_count, COALESCE(tags.names, ARRAY[]::text[]),
+	c.unread_count, COALESCE(c.is_marked_unread, false), COALESCE(tags.names, ARRAY[]::text[]),
 	COALESCE(a.id::text, ''), COALESCE(a.name, ''), COALESCE(a.avatar, ''),
 	c.updated_at`
 
@@ -69,7 +69,7 @@ func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search s
 	switch filter {
 	case "", "all":
 	case "unread":
-		where = append(where, "c.unread_count > 0")
+		where = append(where, "(c.unread_count > 0 OR c.is_marked_unread = TRUE)")
 	case "groups":
 		where = append(where, "FALSE")
 	case "assigned_to_me":
@@ -157,9 +157,17 @@ func (r *ConversationRepo) IncrementUnread(ctx context.Context, conversationID s
 }
 
 func (r *ConversationRepo) ResetUnread(ctx context.Context, conversationID string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET unread_count = 0, updated_at = NOW() WHERE id = $1", conversationID)
+	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET unread_count = 0, is_marked_unread = FALSE, updated_at = NOW() WHERE id = $1", conversationID)
 	if err != nil {
 		return fmt.Errorf("reset unread count: %w", err)
+	}
+	return nil
+}
+
+func (r *ConversationRepo) MarkUnread(ctx context.Context, conversationID string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET is_marked_unread = TRUE, unread_count = GREATEST(unread_count, 1), updated_at = NOW() WHERE id = $1", conversationID)
+	if err != nil {
+		return fmt.Errorf("mark unread: %w", err)
 	}
 	return nil
 }
@@ -210,7 +218,7 @@ func scanConversation(row conversationScanner, accountID string) (domain.Convers
 		&conversation.Participant.ID, &conversation.Participant.DisplayName, &conversation.Participant.PhoneNumber, &conversation.Participant.AvatarURL,
 		&conversation.LastMessage.Content, &conversation.LastMessage.CreatedAt,
 		&conversation.LastMessage.ID, &conversation.LastMessage.Type, &conversation.LastMessage.Direction, &conversation.LastMessage.SenderName, &conversation.LastMessage.Status,
-		&conversation.UnreadCount, &tags,
+		&conversation.UnreadCount, &conversation.IsMarkedUnread, &tags,
 		&agentID, &agentName, &agentAvatar,
 		&conversation.UpdatedAt,
 	)

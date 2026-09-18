@@ -32,6 +32,8 @@ interface ChatWindowProps {
   onInputBlur?: () => void;
   agents?: AgentSummary[];
   onAssign?: (agentId: string) => void;
+  onMarkUnread?: (conversationId: string) => void;
+  onMarkRead?: (conversationId: string) => void;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -50,27 +52,34 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onInputBlur,
   agents = [],
   onAssign,
+  onMarkUnread,
+  onMarkRead,
 }) => {
   type ReplyPreview = { id: string; senderName: string; content: string };
   const isViewerMode = isViewer() || !canWrite();
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const assignRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
 
-  // Close assign dropdown on outside click.
+  // Close assign & options dropdowns on outside click.
   useEffect(() => {
-    if (!assignOpen) return;
+    if (!assignOpen && !optionsOpen) return;
     const handler = (e: MouseEvent) => {
       if (assignRef.current && !assignRef.current.contains(e.target as Node)) {
         setAssignOpen(false);
       }
+      if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
+        setOptionsOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [assignOpen]);
+  }, [assignOpen, optionsOpen]);
 
   // Scroll to the latest message whenever messages change OR a new conversation is opened.
   // Scroll to bottom whenever messages change or conversation switches.
@@ -261,13 +270,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </button>
-          <button type="button" className="p-2 hover:bg-gray-100 dark:hover:bg-[#374248] rounded-full transition" title="More Options">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="6" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="18" r="1.5" />
-            </svg>
-          </button>
+          <div className="relative" ref={optionsRef}>
+            <button
+              type="button"
+              onClick={() => setOptionsOpen((v) => !v)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-[#374248] rounded-full transition"
+              title="More Options"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="6" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="12" cy="18" r="1.5" />
+              </svg>
+            </button>
+            {optionsOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl z-50 text-left">
+                {conversation.isMarkedUnread || conversation.unreadCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      onMarkRead?.(conversation.id);
+                    }}
+                    className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+                  >
+                    <svg className="w-4 h-4 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>Mark as read</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      onMarkUnread?.(conversation.id);
+                    }}
+                    className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+                  >
+                    <span className="w-3 h-3 rounded-full bg-[#027eb5] dark:bg-[#53bdeb]" />
+                    <span>Mark as unread</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

@@ -146,6 +146,15 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (h *Handler) MarkUnread(w http.ResponseWriter, r *http.Request) {
+	if err := h.chatService.MarkConversationUnread(r.Context(), chi.URLParam(r, "id")); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark conversation unread"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+
 // AssignConversation assigns an agent to a conversation and notifies all clients.
 func (h *Handler) AssignConversation(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()

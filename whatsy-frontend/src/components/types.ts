@@ -24,7 +24,7 @@ export type MessageType =
 export interface Attachment {
   id?: string;
   url: string;
-  type: 'image' | 'audio' | 'video' | 'document';
+  type: 'image' | 'audio' | 'video' | 'file' | 'document';
   name?: string;
   sizeBytes?: number;
   mimeType?: string;
@@ -109,6 +109,7 @@ export interface ZernioConversation {
     status: DeliveryStatus;
   };
   unreadCount: number;
+  isMarkedUnread?: boolean;
   isPinned?: boolean;
   isMuted?: boolean;
   isGroup?: boolean;
@@ -134,7 +135,7 @@ export interface SendMessagePayload {
   message: string;
   category?: 'utility' | 'marketing' | 'authentication';
   attachmentUrl?: string;
-  attachmentType?: 'image' | 'audio' | 'video' | 'document';
+  attachmentType?: 'image' | 'audio' | 'video' | 'file' | 'document';
   attachmentName?: string;
   voiceNote?: boolean;
   replyTo?: string;

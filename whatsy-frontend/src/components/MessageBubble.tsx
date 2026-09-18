@@ -1,8 +1,49 @@
 import React, { useMemo, useState } from 'react';
 import { ZernioMessage, DeliveryStatus } from './types';
+import { API_BASE } from '../api/inbox';
 
 const LONG_MESSAGE_CHAR_LIMIT = 450;
 const LONG_MESSAGE_LINE_LIMIT = 7;
+
+export function renderFormattedText(text: string): React.ReactNode {
+  if (!text) return null;
+  // Regex to match URLs starting with http:// or https://
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      // Reset lastIndex because of /g flag on regex test
+      urlRegex.lastIndex = 0;
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#027eb5] dark:text-[#53bdeb] underline hover:opacity-80 break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
+function getMediaUrl(rawUrl: string): string {
+  const token = localStorage.getItem('whatsy_jwt');
+  let url = rawUrl;
+  if (url.startsWith('/v1/')) {
+    url = `${API_BASE}${url}`;
+  }
+  if (url.includes('/v1/whatsapp/media/') && token && !url.includes('token=')) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}token=${encodeURIComponent(token)}`;
+  }
+  return url;
+}
 
 interface MessageBubbleProps {
   message: ZernioMessage;
@@ -21,6 +62,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 }) => {
   const isOutbound = message.direction === 'outbound';
   const [isExpanded, setIsExpanded] = useState(false);
+  const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
 
   const lineCount = (message.content || '').split('\n').length;
   const isLongMessage = Boolean(
@@ -114,7 +156,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }`}
           >
             <span className="font-semibold text-[#53bdeb] mb-0.5">{message.replyTo.senderName}</span>
-            <span className="truncate opacity-80">{message.replyTo.content}</span>
+            <span className="truncate opacity-80">{renderFormattedText(message.replyTo.content)}</span>
           </div>
         )}
 
@@ -122,34 +164,85 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {message.attachments && message.attachments.length > 0 && (
           <div className="flex flex-col gap-1">
             {message.attachments.map((att, idx) => {
+              const mediaUrl = getMediaUrl(att.url);
               if (att.type === 'image') {
+                if (failedImages[idx]) {
+                  return (
+                    <div key={idx} className="flex items-center gap-3 p-3 m-1.5 rounded bg-black/5 dark:bg-black/15 text-sm">
+                      <div className="w-10 h-10 rounded bg-[#bf59cf]/20 flex items-center justify-center text-xl shrink-0">
+                        🖼️
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{att.name || 'Photo'}</p>
+                        <p className="text-[11px] opacity-70">Unable to load image</p>
+                      </div>
+                      <a
+                        href={mediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={att.name || 'image'}
+                        className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-[#00a884] dark:text-[#53bdeb] transition"
+                        title="Open or download image"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </a>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={idx} className="relative cursor-pointer overflow-hidden max-h-80 bg-black/10" onClick={() => onImageClick?.(att.url)}>
-                    <img src={att.url} alt={att.name || 'Attachment'} className="w-full h-auto object-cover hover:opacity-95 transition" loading="lazy" />
+                  <div key={idx} className="relative cursor-pointer overflow-hidden max-h-80 bg-black/10" onClick={() => onImageClick?.(mediaUrl)}>
+                    <img
+                      src={mediaUrl}
+                      alt={att.name || 'Attachment'}
+                      className="w-full h-auto object-cover hover:opacity-95 transition"
+                      loading="lazy"
+                      onError={() => setFailedImages((prev) => ({ ...prev, [idx]: true }))}
+                    />
                   </div>
                 );
               }
               if (att.type === 'video') {
                 return (
                   <div key={idx} className="relative overflow-hidden max-h-80 bg-black/10 rounded">
-                    <video controls src={att.url} className="w-full h-auto object-cover rounded" />
+                    <video controls src={mediaUrl} preload="metadata" className="w-full h-auto object-cover rounded" />
                   </div>
                 );
               }
               if (att.type === 'audio' || message.type === 'voice_note') {
                 return (
-                  <div key={idx} className="p-3 bg-black/5 dark:bg-black/10">
-                    <audio controls src={att.url} className="max-w-[240px]" />
+                  <div key={idx} className="p-3 bg-black/5 dark:bg-black/10 flex items-center gap-2">
+                    <audio controls src={mediaUrl} preload="metadata" className="max-w-[260px] w-full" />
                   </div>
                 );
               }
-              if (att.type === 'document') {
+              if (att.type === 'document' || att.type === 'file') {
+                const ext = (att.name || '').split('.').pop()?.toUpperCase() || 'FILE';
                 return (
-                  <a key={idx} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 m-1.5 rounded bg-black/5 dark:bg-black/15 hover:bg-black/10 dark:hover:bg-black/25 transition">
-                    <div className="w-10 h-10 rounded bg-red-100 dark:bg-[#ff5252]/20 flex items-center justify-center text-red-500 dark:text-[#ff5252] shrink-0 font-bold text-xs uppercase">PDF</div>
+                  <a
+                    key={idx}
+                    href={mediaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={att.name || 'Document'}
+                    className="flex items-center gap-3 p-3 m-1.5 rounded bg-black/5 dark:bg-black/15 hover:bg-black/10 dark:hover:bg-black/25 transition group/doc"
+                  >
+                    <div className="w-10 h-10 rounded bg-[#5f66cd]/20 flex items-center justify-center text-[#5f66cd] dark:text-[#8f94fb] shrink-0 font-bold text-xs uppercase">
+                      {ext.length <= 4 ? ext : 'DOC'}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{att.name || 'Document'}</p>
+                      <p className="font-medium text-sm truncate group-hover/doc:underline">{att.name || 'Document'}</p>
                       <p className="text-[11px] opacity-70">{att.sizeBytes ? `${(att.sizeBytes / 1024).toFixed(1)} KB` : 'Document'}</p>
+                    </div>
+                    <div className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-gray-500 dark:text-gray-300 transition shrink-0" title="Download">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
                     </div>
                   </a>
                 );
@@ -162,7 +255,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Text Content */}
         {message.content && message.content !== '[Unsupported message]' && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
-            <span>{displayedContent}</span>
+            <span>{renderFormattedText(displayedContent)}</span>
             {isLongMessage && !isExpanded && (
               <button
                 type="button"

@@ -201,27 +201,94 @@ func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"agent": a})
 }
 
-// UpdateAgent updates any agent's role/name/avatar (admin operation).
+// ChangePassword handles POST /v1/auth/change-password or PATCH /v1/agents/me/password.
+func (h *AgentHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := ClaimsFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	defer r.Body.Close()
+
+	var req struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "new password must be at least 8 characters"})
+		return
+	}
+
+	var currentHash string
+	err := h.db.QueryRowContext(r.Context(), "SELECT password_hash FROM agents WHERE id = $1", claims.AgentID).Scan(&currentHash)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})
+		return
+	}
+
+	if !utils.CheckPassword(req.OldPassword, currentHash) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "current password is incorrect"})
+		return
+	}
+
+	newHash, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+		return
+	}
+
+	_, err = h.db.ExecContext(r.Context(), "UPDATE agents SET password_hash = $1, updated_at = NOW() WHERE id = $2", newHash, claims.AgentID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "update password"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "password updated successfully"})
+}
+
+// UpdateAgent updates any agent's role/name/avatar/password (admin operation).
 func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	defer r.Body.Close()
 	var req struct {
-		Name   *string `json:"name"`
-		Avatar *string `json:"avatar"`
-		Role   *string `json:"role"`
+		Name     *string `json:"name"`
+		Avatar   *string `json:"avatar"`
+		Role     *string `json:"role"`
+		Password *string `json:"password"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
+
+	var passwordHash *string
+	if req.Password != nil && *req.Password != "" {
+		if len(*req.Password) < 8 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+			return
+		}
+		hash, err := utils.HashPassword(*req.Password)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+			return
+		}
+		passwordHash = &hash
+	}
+
 	res, err := h.db.ExecContext(r.Context(),
 		`UPDATE agents SET
-			name   = COALESCE($1, name),
-			avatar = COALESCE($2, avatar),
-			role   = COALESCE($3, role),
-			updated_at = NOW()
-		 WHERE id = $4`,
-		req.Name, req.Avatar, req.Role, id,
+			name          = COALESCE($1, name),
+			avatar        = COALESCE($2, avatar),
+			role          = COALESCE($3, role),
+			password_hash = COALESCE($4, password_hash),
+			updated_at    = NOW()
+		 WHERE id = $5`,
+		req.Name, req.Avatar, req.Role, passwordHash, id,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "update agent"})

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { navigate } from '../App'
 import { getCurrentAgent } from '../lib/auth'
+import ChangePasswordModal from './ChangePasswordModal'
 
 interface NavItemConfig {
   href: string
@@ -150,6 +151,7 @@ function RoleBadge({ role }: { role: string }) {
 
 export default function NavBar({ path }: { path: string }) {
   const [agent, setAgent] = useState(() => getCurrentAgent())
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
   const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
@@ -207,6 +209,16 @@ export default function NavBar({ path }: { path: string }) {
               </div>
               <button
                 type="button"
+                onClick={() => setShowPasswordModal(true)}
+                title="Change password"
+                className="p-1.5 text-gray-400 hover:text-[#00a884] dark:hover:text-[#00a884] rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </button>
+              <button
+                type="button"
                 onClick={handleLogout}
                 title="Sign out"
                 className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
@@ -219,6 +231,11 @@ export default function NavBar({ path }: { path: string }) {
           )}
         </div>
       </nav>
+
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+      />
 
       {/* Mobile: bottom tab bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#111b21] border-t border-gray-200 dark:border-[#222e35] flex justify-around items-center h-14 px-2">
