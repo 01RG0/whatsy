@@ -206,15 +206,42 @@ export const WhatsAppInboxApp: React.FC = () => {
         },
         updatedAt: now,
       });
-      try {
-        const real = await sendMessage(activeConversationId, payload);
-        useInboxStore.getState().replaceMessage(activeConversationId, tempId, { ...real, status: 'sent' });
-      } catch (err) {
-        console.error('[WhatsAppInboxApp] sendMessage failed:', err);
-        useInboxStore.getState().updateMessageStatus(tempId, 'failed');
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const real = await sendMessage(activeConversationId, payload);
+          useInboxStore.getState().replaceMessage(activeConversationId, tempId, { ...real, status: 'sent' });
+          return;
+        } catch (err) {
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, (attempt + 1) * 1000));
+            continue;
+          }
+          console.error('[WhatsAppInboxApp] sendMessage failed:', err);
+          useInboxStore.getState().updateMessageStatus(tempId, 'failed');
+        }
       }
     },
     [activeConversationId, bumpConversation, receiveMessage]
+  );
+
+  const handleRetryMessage = useCallback(
+    async (message: ZernioMessage) => {
+      if (!activeConversationId) return;
+      useInboxStore.getState().updateMessageStatus(message.id, 'pending');
+      const payload: Partial<SendMessagePayload> = { message: message.content };
+      if (message.attachments?.length) {
+        payload.attachmentUrl = message.attachments[0].url;
+        payload.attachmentType = message.attachments[0].type;
+      }
+      try {
+        const real = await sendMessage(activeConversationId, payload);
+        useInboxStore.getState().replaceMessage(activeConversationId, message.id, { ...real, status: 'sent' });
+      } catch (err) {
+        console.error('[WhatsAppInboxApp] retry failed:', err);
+        useInboxStore.getState().updateMessageStatus(message.id, 'failed');
+      }
+    },
+    [activeConversationId]
   );
 
   const handleAssign = useCallback(
@@ -276,6 +303,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           messages={currentMessages}
           isLoadingMessages={isLoadingMessages}
           onSendMessage={handleSendMessage}
+          onRetryMessage={handleRetryMessage}
           viewers={activeViewers}
           typingLock={activeLock}
           onInputFocus={onInputFocus}

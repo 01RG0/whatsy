@@ -6,6 +6,7 @@ interface MessageBubbleProps {
   onImageClick?: (url: string) => void;
   onButtonClick?: (buttonId: string, buttonText: string) => void;
   onReply?: (message: ZernioMessage) => void;
+  onRetry?: (message: ZernioMessage) => void;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -13,6 +14,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onImageClick,
   onButtonClick,
   onReply,
+  onRetry,
 }) => {
   const isOutbound = message.direction === 'outbound';
 
@@ -55,9 +57,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         );
       case 'failed':
         return (
-          <svg className="w-3.5 h-3.5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-            <path fillRule="evenodd" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 14a1 1 0 11-2 0 1 1 0 012 0zm-1-10a1 1 0 00-1 1v6a1 1 0 102 0V7a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRetry?.(message); }}
+            title="Tap to retry"
+            className="flex items-center gap-0.5 text-red-500 hover:text-red-400 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path fillRule="evenodd" d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 14a1 1 0 11-2 0 1 1 0 012 0zm-1-10a1 1 0 00-1 1v6a1 1 0 102 0V7a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </button>
         );
       default:
         return null;

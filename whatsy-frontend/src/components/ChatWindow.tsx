@@ -20,6 +20,7 @@ interface ChatWindowProps {
   messages: ZernioMessage[];
   isLoadingMessages?: boolean;
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
+  onRetryMessage?: (message: ZernioMessage) => void;
   onSendVoiceNote?: (audioBlob: Blob) => void;
   onBack?: () => void;
   onViewContactInfo?: (participantId: string) => void;
@@ -37,6 +38,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   messages,
   isLoadingMessages = false,
   onSendMessage,
+  onRetryMessage,
   onSendVoiceNote,
   onBack,
   onViewContactInfo,
@@ -290,6 +292,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   content: m.content || 'Attachment',
                 })}
                 onButtonClick={(_btnId, btnText) => onSendMessage({ message: btnText, replyTo: msg.id })}
+                onRetry={onRetryMessage}
               />
             ))}
           </React.Fragment>
