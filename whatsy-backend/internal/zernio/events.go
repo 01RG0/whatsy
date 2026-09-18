@@ -144,13 +144,14 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 	)
 	p.ParticipantName = firstNonEmpty(raw.Message.Sender.Name, raw.Conversation.ParticipantName)
 
-	switch strings.ToLower(raw.Direction) {
+	dir := firstNonEmpty(raw.Message.Direction, raw.Direction)
+	switch strings.ToLower(dir) {
 	case "incoming":
 		p.Direction = "inbound"
 	case "outgoing":
 		p.Direction = "outbound"
 	default:
-		p.Direction = raw.Direction
+		p.Direction = dir
 	}
 
 	p.Content = firstNonEmpty(m.Text, m.Content, raw.Content)

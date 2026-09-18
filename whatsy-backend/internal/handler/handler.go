@@ -233,19 +233,15 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	case zernio.EventInboxMessageSent:
 		var payload zernio.InboundMessagePayload
-		if err := json.Unmarshal(event.Payload, &payload); err == nil && payload.ConversationID != "" {
-			eventlog.Webhook(event.Type, payload.ConversationID)
-			go func() {
-				localID, err := h.convRepo.GetLocalIDByZernioID(context.Background(), payload.ConversationID)
-				if err != nil || localID == "" {
-					return
-				}
-				if err := h.chatService.MarkConversationRead(context.Background(), localID); err != nil {
-					log.Printf("[webhook] mark read on outbound send: %v", err)
-				}
-			}()
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			eventlog.WebhookError(event.Type, err)
+		} else if payload.ConversationID == "" {
+			eventlog.WebhookError(event.Type, fmt.Errorf("missing conversationId"))
 		} else {
-			eventlog.Webhook(event.Type, "")
+			eventlog.Webhook(event.Type, payload.ConversationID)
+			if err := h.chatService.HandleInboundMessage(r.Context(), payload); err != nil {
+				eventlog.WebhookError(event.Type, err)
+			}
 		}
 	case zernio.EventConversationStarted, zernio.LegacyEventConversationUpdated:
 		var payload zernio.ConversationUpdatedPayload
