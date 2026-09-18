@@ -224,7 +224,6 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
 		    SET last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
-		        unread_count    = EXCLUDED.unread_count,
 		        updated_at      = NOW()
 		 RETURNING id`,
 		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID,

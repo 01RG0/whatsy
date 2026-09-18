@@ -69,7 +69,7 @@ const navItems = [
       </svg>
     ),
   },
-]
+].filter((item) => item.href !== '/broadcasts')
 
 function NavItem({ href, icon, label, path }: { href: string; icon: React.ReactNode; label: string; path: string }) {
   const active = path === href || (href !== '/' && path.startsWith(href))
