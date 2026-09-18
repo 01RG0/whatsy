@@ -92,6 +92,7 @@ export function useWebSocket() {
   const setViewers = useInboxStore((state) => state.setViewers);
   const setTypingLock = useInboxStore((state) => state.setTypingLock);
   const bumpConversation = useInboxStore((state) => state.bumpConversation);
+  const updateConversation = useInboxStore((state) => state.updateConversation);
   const activeConversationId = useInboxStore((state) => state.activeConversationId);
   const wsConnected = useInboxStore((state) => state.wsConnected);
 
@@ -181,7 +182,7 @@ export function useWebSocket() {
           ) {
             delete (patch as Record<string, unknown>).unreadCount;
           }
-          bumpConversation(patch.id, patch);
+          updateConversation(patch);
           break;
         }
       }
