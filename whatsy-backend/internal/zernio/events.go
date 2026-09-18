@@ -90,6 +90,11 @@ type rawInboundMessage struct {
 		} `json:"attachments"`
 		SentAt    time.Time `json:"sentAt"`
 		Timestamp time.Time `json:"timestamp"`
+		Sender    struct {
+			ID          string `json:"id"`
+			PhoneNumber string `json:"phoneNumber"`
+			Name        string `json:"name"`
+		} `json:"sender"`
 	} `json:"message"`
 	// Legacy flat payload fields.
 	ConversationID  string    `json:"conversationId"`
@@ -102,11 +107,9 @@ type rawInboundMessage struct {
 	From            string    `json:"from"`
 
 	Conversation struct {
-		Participant struct {
-			Phone    string `json:"phone"`
-			Username string `json:"username"`
-			Name     string `json:"name"`
-		} `json:"participant"`
+		ParticipantID       string `json:"participantId"`
+		ParticipantName     string `json:"participantName"`
+		ParticipantUsername string `json:"participantUsername"`
 	} `json:"conversation"`
 
 	Account struct {
@@ -131,9 +134,15 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 	p.MessageID = firstNonEmpty(m.ID, raw.MessageID, raw.ZernioMessageID)
 	p.Timestamp = firstTime(m.SentAt, m.Timestamp, raw.Timestamp)
 	p.AccountID = raw.Account.AccountID
-	// Modern webhook: phone is inside conversation.participant; legacy uses top-level "from".
-	p.From = firstNonEmpty(raw.Conversation.Participant.Phone, raw.Conversation.Participant.Username, raw.From)
-	p.ParticipantName = raw.Conversation.Participant.Name
+	// message.sender.phoneNumber is E.164 (best source); conversation.participantUsername
+	// is also E.164 for WhatsApp; participantId is the phone without +; legacy "from" last.
+	p.From = firstNonEmpty(
+		raw.Message.Sender.PhoneNumber,
+		raw.Conversation.ParticipantUsername,
+		raw.Conversation.ParticipantID,
+		raw.From,
+	)
+	p.ParticipantName = firstNonEmpty(raw.Message.Sender.Name, raw.Conversation.ParticipantName)
 
 	switch strings.ToLower(raw.Direction) {
 	case "incoming":

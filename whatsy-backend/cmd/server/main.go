@@ -148,6 +148,29 @@ func main() {
 	waConnHandler := handler.NewWhatsAppConnectionHandler(db, cfg.ZernioAPIKey)
 	syncHandler := handler.NewSyncHandler(db, cfg.ZernioAPIKey)
 
+	// Background incremental sync every 10 minutes — heals +unknown- contacts and
+	// keeps conversation list current even when webhooks are missed.
+	go func() {
+		// Run once at startup to heal any existing +unknown- records immediately.
+		if n, err := syncHandler.SyncSince(context.Background(), time.Now().Add(-30*24*time.Hour)); err != nil {
+			log.Printf("[sync] startup sync error: %v", err)
+		} else {
+			log.Printf("[sync] startup sync: %d conversations upserted", n)
+		}
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		lastSync := time.Now()
+		for range ticker.C {
+			since := lastSync
+			lastSync = time.Now()
+			if n, err := syncHandler.SyncSince(context.Background(), since); err != nil {
+				log.Printf("[sync] background sync error: %v", err)
+			} else if n > 0 {
+				log.Printf("[sync] background sync: %d conversations updated", n)
+			}
+		}
+	}()
+
 	authLimiter := handler.NewRateLimiter(10) // 10 req/min per IP on auth endpoints
 
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
