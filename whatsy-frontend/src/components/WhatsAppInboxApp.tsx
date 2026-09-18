@@ -163,7 +163,14 @@ export const WhatsAppInboxApp: React.FC = () => {
             const existingIds = new Set(store.conversations.map((c) => c.id));
             convs.forEach((conv) => {
               if (existingIds.has(conv.id) && conv.id !== store.activeConversationId) {
-                store.updateConversation(conv);
+                const local = store.conversations.find((c) => c.id === conv.id);
+                // Don't restore unread count if the user already cleared it locally —
+                // the markRead API call may still be in-flight on the server.
+                if (local?.unreadCount === 0 && !local?.isMarkedUnread && conv.unreadCount > 0) {
+                  store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
+                } else {
+                  store.updateConversation(conv);
+                }
               }
             });
             const newConvs = convs.filter((c) => !existingIds.has(c.id));

@@ -51,16 +51,27 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   setConversations: (convs) =>
     set((state) => {
-      // If the user is viewing a conversation that isn't in the new list (e.g. it was
-      // below the 50-result page boundary), keep it at the top so the chat doesn't vanish.
+      // Preserve locally-cleared read state: if the user already opened a conversation
+      // and cleared its unread count, don't restore a stale server value before markRead
+      // confirms. WebSocket events will correctly re-increment when new messages arrive.
+      const locallyRead = new Set(
+        state.conversations
+          .filter((c) => c.unreadCount === 0 && !c.isMarkedUnread)
+          .map((c) => c.id)
+      );
+      const merged = convs.map((c) =>
+        locallyRead.has(c.id) ? { ...c, unreadCount: 0, isMarkedUnread: false } : c
+      );
+
+      // Keep the active conversation in the list even if the server page didn't include it.
       if (state.activeConversationId) {
-        const stillPresent = convs.some((c) => c.id === state.activeConversationId);
+        const stillPresent = merged.some((c) => c.id === state.activeConversationId);
         if (!stillPresent) {
           const kept = state.conversations.find((c) => c.id === state.activeConversationId);
-          if (kept) return { conversations: [kept, ...convs] };
+          if (kept) return { conversations: [kept, ...merged] };
         }
       }
-      return { conversations: convs };
+      return { conversations: merged };
     }),
 
   appendConversations: (convs) =>
