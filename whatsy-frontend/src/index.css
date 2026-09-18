@@ -15,6 +15,47 @@ html, body, #root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
+:root {
+  color-scheme: dark;
+  --light-app-bg: #f3f7f5;
+  --light-surface: #ffffff;
+  --light-surface-muted: #edf4f1;
+  --light-surface-subtle: #f8fbfa;
+  --light-text: #17352d;
+  --light-text-secondary: #5b7068;
+  --light-text-muted: #7b8e87;
+  --light-border: #d7e4df;
+  --light-accent-soft: #dff3eb;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+html:not(.dark) body,
+html:not(.dark) #root {
+  background-color: var(--light-app-bg);
+  color: var(--light-text);
+}
+
+/* Keep common light-mode surfaces and text consistent across pages. */
+html:not(.dark) .bg-white { background-color: var(--light-surface) !important; }
+html:not(.dark) .bg-gray-50 { background-color: var(--light-surface-subtle) !important; }
+html:not(.dark) .bg-gray-100 { background-color: var(--light-surface-muted) !important; }
+html:not(.dark) .bg-gray-200 { background-color: #e3eeea !important; }
+html:not(.dark) .bg-green-50 { background-color: var(--light-accent-soft) !important; }
+html:not(.dark) .text-gray-900 { color: var(--light-text) !important; }
+html:not(.dark) .text-gray-700 { color: #2f4c42 !important; }
+html:not(.dark) .text-gray-600 { color: #486158 !important; }
+html:not(.dark) .text-gray-500 { color: var(--light-text-secondary) !important; }
+html:not(.dark) .text-gray-400 { color: var(--light-text-muted) !important; }
+html:not(.dark) .border-gray-200,
+html:not(.dark) .border-gray-300 { border-color: var(--light-border) !important; }
+html:not(.dark) .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--light-border) !important; }
+html:not(.dark) .hover\:bg-gray-100:hover { background-color: #e8f1ed !important; }
+html:not(.dark) .hover\:bg-gray-200:hover { background-color: #dceae5 !important; }
+html:not(.dark) .placeholder-gray-400::placeholder { color: var(--light-text-muted) !important; }
+
 /* WhatsApp-style typing bounce dots */
 @keyframes typingBounce {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
