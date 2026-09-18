@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { navigate } from '../App'
-import { getCurrentAgent, isAdmin } from '../lib/auth'
+import { getCurrentAgent } from '../lib/auth'
 
 interface NavItemConfig {
   href: string
@@ -149,10 +149,22 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function NavBar({ path }: { path: string }) {
-  const agent = getCurrentAgent()
-  const userIsAdmin = isAdmin()
+  const [agent, setAgent] = useState(() => getCurrentAgent())
+  const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
+
+  useEffect(() => {
+    const syncAgent = () => setAgent(getCurrentAgent())
+    window.addEventListener('whatsy_agent_updated', syncAgent)
+    return () => window.removeEventListener('whatsy_agent_updated', syncAgent)
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem('whatsy_jwt')
+    localStorage.removeItem('whatsy_agent')
+    window.location.href = '/login'
+  }
 
   return (
     <>
@@ -183,7 +195,7 @@ export default function NavBar({ path }: { path: string }) {
             <DarkModeButton />
           </div>
           {agent && (
-            <div className="flex items-center gap-2.5 px-1 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-[#2a3942] transition-colors cursor-pointer">
+            <div className="flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#2a3942] transition-colors group">
               <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
                 {initials}
               </div>
@@ -193,6 +205,16 @@ export default function NavBar({ path }: { path: string }) {
                   <RoleBadge role={agent.role || 'agent'} />
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                title="Sign out"
+                className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
             </div>
           )}
         </div>

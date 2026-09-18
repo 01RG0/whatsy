@@ -11,17 +11,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
+	"github.com/whatsy/backend/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // AgentHandler serves agent profile endpoints.
 type AgentHandler struct {
-	db *sql.DB
+	db        *sql.DB
+	jwtSecret string
 }
 
-// NewAgentHandler creates an AgentHandler backed by db.
-func NewAgentHandler(db *sql.DB) *AgentHandler {
-	return &AgentHandler{db: db}
+// NewAgentHandler creates an AgentHandler backed by db and jwtSecret.
+func NewAgentHandler(db *sql.DB, jwtSecret string) *AgentHandler {
+	return &AgentHandler{db: db, jwtSecret: jwtSecret}
 }
 
 type agent struct {
@@ -65,14 +67,31 @@ func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, agents)
 }
 
-// Me returns the authenticated agent.
+// Me returns the authenticated agent with the latest role and a refreshed token.
 func (h *AgentHandler) Me(w http.ResponseWriter, r *http.Request) {
 	claims, ok := ClaimsFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
-	h.getByID(w, r, claims.AgentID)
+	var a agent
+	err := h.db.QueryRowContext(r.Context(), "SELECT "+agentColumns+" FROM agents WHERE id = $1", claims.AgentID).
+		Scan(&a.ID, &a.Name, &a.Email, &a.Role, &a.Avatar, &a.CreatedAt)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})
+		return
+	}
+
+	token, _ := utils.GenerateToken(h.jwtSecret, a.ID, a.Name, a.Role)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":        a.ID,
+		"name":      a.Name,
+		"email":     a.Email,
+		"role":      a.Role,
+		"avatar":    a.Avatar,
+		"createdAt": a.CreatedAt,
+		"token":     token,
+	})
 }
 
 // UpdateMe updates the authenticated agent's name and/or avatar.

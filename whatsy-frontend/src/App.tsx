@@ -7,6 +7,7 @@ import AutoReplyPage from './pages/AutoReplyPage'
 import WhatsAppConnectionPage from './pages/WhatsAppConnectionPage'
 import TeamPage from './pages/TeamPage'
 import { isAdmin } from './lib/auth'
+import { API_BASE, getAuthHeader } from './api/inbox'
 
 export function navigate(href: string) {
   window.history.pushState({}, '', href)
@@ -26,6 +27,36 @@ function usePath() {
 function Router() {
   const path = usePath()
   const jwt = localStorage.getItem('whatsy_jwt')
+
+  useEffect(() => {
+    if (!jwt) return
+    fetch(`${API_BASE}/v1/agents/me`, { headers: getAuthHeader() })
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = await res.json()
+        if (data && data.id) {
+          if (data.token) {
+            localStorage.setItem('whatsy_jwt', data.token)
+          }
+          const raw = localStorage.getItem('whatsy_agent')
+          const current = raw ? JSON.parse(raw) : {}
+          if (current.role !== data.role || current.name !== data.name) {
+            localStorage.setItem(
+              'whatsy_agent',
+              JSON.stringify({
+                id: data.id,
+                name: data.name,
+                email: data.email,
+                role: data.role || 'agent',
+                avatar: data.avatar || '',
+              })
+            )
+            window.dispatchEvent(new Event('whatsy_agent_updated'))
+          }
+        }
+      })
+      .catch(() => {})
+  }, [jwt])
 
   if (path === '/login') return <LoginPage />
 
