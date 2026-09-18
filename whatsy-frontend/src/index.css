@@ -17,15 +17,16 @@ html, body, #root {
 
 :root {
   color-scheme: dark;
-  --light-app-bg: #f3f7f5;
+  --light-app-bg: #f0f2f5;
   --light-surface: #ffffff;
-  --light-surface-muted: #edf4f1;
-  --light-surface-subtle: #f8fbfa;
-  --light-text: #17352d;
-  --light-text-secondary: #5b7068;
-  --light-text-muted: #7b8e87;
-  --light-border: #d7e4df;
-  --light-accent-soft: #dff3eb;
+  --light-surface-muted: #f0f2f5;
+  --light-surface-subtle: #f8fafc;
+  --light-text: #111b21;
+  --light-text-secondary: #54656f;
+  --light-text-muted: #8696a0;
+  --light-border: #e9edef;
+  --light-border-subtle: #e2e8f0;
+  --light-accent-soft: #e8f8f5;
 }
 
 html:not(.dark) {
@@ -38,22 +39,24 @@ html:not(.dark) #root {
   color: var(--light-text);
 }
 
-/* Keep common light-mode surfaces and text consistent across pages. */
+/* Keep common light-mode surfaces and text crisp, high-contrast, and consistent across pages. */
 html:not(.dark) .bg-white { background-color: var(--light-surface) !important; }
 html:not(.dark) .bg-gray-50 { background-color: var(--light-surface-subtle) !important; }
 html:not(.dark) .bg-gray-100 { background-color: var(--light-surface-muted) !important; }
-html:not(.dark) .bg-gray-200 { background-color: #e3eeea !important; }
+html:not(.dark) .bg-gray-200 { background-color: #e2e8f0 !important; }
 html:not(.dark) .bg-green-50 { background-color: var(--light-accent-soft) !important; }
 html:not(.dark) .text-gray-900 { color: var(--light-text) !important; }
-html:not(.dark) .text-gray-700 { color: #2f4c42 !important; }
-html:not(.dark) .text-gray-600 { color: #486158 !important; }
+html:not(.dark) .text-gray-800 { color: #1f2937 !important; }
+html:not(.dark) .text-gray-700 { color: #374151 !important; }
+html:not(.dark) .text-gray-600 { color: #4b5563 !important; }
 html:not(.dark) .text-gray-500 { color: var(--light-text-secondary) !important; }
 html:not(.dark) .text-gray-400 { color: var(--light-text-muted) !important; }
-html:not(.dark) .border-gray-200,
-html:not(.dark) .border-gray-300 { border-color: var(--light-border) !important; }
+html:not(.dark) .border-gray-200 { border-color: var(--light-border) !important; }
+html:not(.dark) .border-gray-300 { border-color: #d1d5db !important; }
 html:not(.dark) .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--light-border) !important; }
-html:not(.dark) .hover\:bg-gray-100:hover { background-color: #e8f1ed !important; }
-html:not(.dark) .hover\:bg-gray-200:hover { background-color: #dceae5 !important; }
+html:not(.dark) .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--light-border) !important; }
+html:not(.dark) .hover\:bg-gray-100:hover { background-color: #f3f4f6 !important; }
+html:not(.dark) .hover\:bg-gray-200:hover { background-color: #e5e7eb !important; }
 html:not(.dark) .placeholder-gray-400::placeholder { color: var(--light-text-muted) !important; }
 
 /* WhatsApp-style typing bounce dots */

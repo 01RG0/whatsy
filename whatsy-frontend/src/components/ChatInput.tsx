@@ -6,6 +6,8 @@ interface ChatInputProps {
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
   onSendVoiceNote?: (audioBlob: Blob) => void;
   disabled?: boolean;
+  placeholder?: string;
+  disabledTooltip?: string;
   replyingTo?: { id: string; senderName: string; content: string } | null;
   onCancelReply?: () => void;
   onFocus?: () => void;
@@ -32,6 +34,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   onSendVoiceNote: _onSendVoiceNote,
   disabled = false,
+  placeholder = 'Type a message',
+  disabledTooltip,
   replyingTo,
   onCancelReply,
   onFocus,
@@ -45,6 +49,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const nextHeight = Math.min(el.scrollHeight, 128); // max height ~5-6 lines
+    el.style.height = `${Math.max(nextHeight, 24)}px`;
+  }, [text]);
 
   useEffect(() => {
     if (!showAttachMenu) return;
@@ -68,6 +81,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!text.trim() || disabled) return;
     onSendMessage({ message: text.trim(), replyTo: replyingTo?.id });
     setText('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     if (onCancelReply) onCancelReply();
   };
 
@@ -76,6 +92,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       handleSend();
     }
+    // Shift+Enter will naturally insert newline and trigger onChange -> auto-resize
   };
 
   const startRecording = async () => {
@@ -160,12 +177,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div
-      className="bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-[#222e35] px-4 pt-2 pb-2 relative flex flex-col"
+      className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] px-4 pt-2 pb-2 relative flex flex-col"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
       {/* Reply Preview */}
       {replyingTo && (
-        <div className="flex items-center justify-between bg-gray-100 dark:bg-[#182229] border-l-4 border-[#00a884] p-2.5 mb-2 rounded text-xs">
+        <div className="flex items-center justify-between bg-white dark:bg-[#182229] border-l-4 border-[#00a884] p-2.5 mb-2 rounded text-xs shadow-sm">
           <div className="flex flex-col min-w-0 pr-2">
             <span className="text-[#00a884] font-semibold">{replyingTo.senderName}</span>
             <span className="text-gray-500 dark:text-[#8696a0] truncate">{replyingTo.content}</span>
@@ -236,7 +253,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ) : (
           <>
             {/* Emoji */}
-            <button type="button" className="text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] p-2 rounded-full transition shrink-0" title="Emoji">
+            <button
+              type="button"
+              disabled={disabled || isUploading}
+              className={`text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] p-2 rounded-full transition shrink-0 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+              title={disabled && disabledTooltip ? disabledTooltip : 'Emoji'}
+            >
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M8 14s1.5 2 4 2 4-2 4-2" />
@@ -249,9 +271,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <button
               type="button"
               onClick={() => setShowAttachMenu((p) => !p)}
-              disabled={isUploading}
-              className={`p-2 rounded-full transition shrink-0 ${showAttachMenu ? 'text-[#00a884] bg-gray-100 dark:bg-[#2a3942]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'} disabled:opacity-50`}
-              title="Attach File"
+              disabled={disabled || isUploading}
+              className={`p-2 rounded-full transition shrink-0 ${showAttachMenu ? 'text-[#00a884] bg-gray-100 dark:bg-[#2a3942]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'disabled:opacity-50'}`}
+              title={disabled && disabledTooltip ? disabledTooltip : 'Attach File'}
             >
               {isUploading ? (
                 <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -266,17 +288,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
 
             {/* Textarea */}
-            <div className="flex-1 bg-gray-100 dark:bg-[#2a3942] rounded-lg px-3 py-2 flex items-center min-h-[42px] max-h-32">
+            <div className={`flex-1 bg-white dark:bg-[#2a3942] rounded-lg px-3 py-2 flex items-center min-h-[40px] max-h-[140px] border border-[#e9edef] dark:border-transparent ${disabled ? 'cursor-not-allowed opacity-80' : 'focus-within:border-[#00a884]'}`} title={disabled ? disabledTooltip : undefined}>
               <textarea
+                ref={textareaRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={onFocus}
                 onBlur={onBlur}
                 rows={1}
-                placeholder="Type a message"
-                disabled={disabled || isUploading}
-                className="w-full bg-transparent text-gray-900 dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto max-h-24 leading-relaxed select-text"
+                disabled={disabled}
+                placeholder={disabled ? (disabledTooltip || 'View-only mode') : placeholder}
+                className="w-full bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto leading-relaxed select-text disabled:cursor-not-allowed scroll-smooth"
               />
             </div>
 
@@ -286,8 +309,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 type="button"
                 onClick={handleSend}
                 disabled={disabled || isUploading}
-                className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50"
-                title="Send Message"
+                className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                title={disabled && disabledTooltip ? disabledTooltip : 'Send Message'}
               >
                 <svg className="w-5 h-5 translate-x-0.5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -298,8 +321,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 type="button"
                 onClick={startRecording}
                 disabled={disabled || isUploading}
-                className="p-2 text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] rounded-full transition shrink-0 disabled:opacity-50"
-                title="Record Voice Note"
+                className="p-2 text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] rounded-full transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={disabled && disabledTooltip ? disabledTooltip : 'Record Voice Note'}
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>

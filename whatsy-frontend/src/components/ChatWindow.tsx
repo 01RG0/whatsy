@@ -3,6 +3,7 @@ import { ZernioConversation, ZernioMessage, SendMessagePayload } from './types';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import type { AgentSummary } from '../api/inbox';
+import { canWrite, isViewer } from '../lib/auth';
 
 export interface ViewerInfo {
   agentId: string;
@@ -51,6 +52,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onAssign,
 }) => {
   type ReplyPreview = { id: string; senderName: string; content: string };
+  const isViewerMode = isViewer() || !canWrite();
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -103,9 +105,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   if (!conversation) {
     return (
-      <div className="flex-1 h-full bg-gray-100 dark:bg-[#222e35] border-b-[6px] border-[#00a884] flex flex-col items-center justify-center select-none">
+      <div className="flex-1 h-full bg-[#f0f2f5] dark:bg-[#222e35] border-b-[6px] border-[#00a884] flex flex-col items-center justify-center select-none">
         <div className="max-w-md text-center flex flex-col items-center p-6">
-          <div className="w-20 h-20 rounded-full bg-white dark:bg-[#111b21] flex items-center justify-center mb-6 shadow-md">
+          <div className="w-20 h-20 rounded-full bg-white dark:bg-[#111b21] flex items-center justify-center mb-6 shadow-sm">
             <svg className="w-10 h-10 text-[#00a884]" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/>
             </svg>
@@ -128,7 +130,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 h-full flex flex-col bg-[#efeae2] dark:bg-[#0b141a] relative overflow-hidden">
       {/* Header */}
-      <header className="h-[60px] bg-white dark:bg-[#202c33] px-4 flex items-center justify-between z-10 select-none border-b border-gray-200 dark:border-[#222e35]">
+      <header className="h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between z-10 select-none border-b border-[#e9edef] dark:border-[#222e35]">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => onViewContactInfo?.(conversation.participant.id)}>
           {onBack && (
             <button
@@ -188,9 +190,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="relative" ref={assignRef}>
               <button
                 type="button"
-                onClick={() => setAssignOpen((v) => !v)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-[#374248] hover:bg-gray-200 dark:hover:bg-[#2a3942] transition"
-                title="Assign conversation"
+                disabled={isViewerMode}
+                onClick={() => !isViewerMode && setAssignOpen((v) => !v)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-[#374248] transition ${
+                  isViewerMode ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-[#2a3942]'
+                }`}
+                title={isViewerMode ? 'View-only mode: cannot reassign conversations' : 'Assign conversation'}
               >
                 {conversation.assignedAgent ? (
                   <>
@@ -205,14 +210,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                       <circle cx="12" cy="7" r="4"/>
                     </svg>
-                    <span>Assign</span>
+                    <span>{isViewerMode ? 'Unassigned' : 'Assign'}</span>
                   </>
                 )}
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
+                {!isViewerMode && (
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                )}
               </button>
-              {assignOpen && (
+              {assignOpen && !isViewerMode && (
                 <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-200 dark:border-[#374248] z-50 py-1 overflow-hidden">
                   {conversation.assignedAgent && (
                     <button
@@ -291,8 +298,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   senderName: m.direction === 'outbound' ? 'You' : conversation.participant.displayName,
                   content: m.content || 'Attachment',
                 })}
-                onButtonClick={(_btnId, btnText) => onSendMessage({ message: btnText, replyTo: msg.id })}
-                onRetry={onRetryMessage}
+                onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
+                onRetry={isViewerMode ? undefined : onRetryMessage}
               />
             ))}
           </React.Fragment>
@@ -334,13 +341,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <ChatInput
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
-        disabled={typingLock !== null}
+        disabled={typingLock !== null || isViewerMode}
+        placeholder={isViewerMode ? 'View-only mode: only agents and admins can send messages.' : 'Type a message'}
+        disabledTooltip={isViewerMode ? 'View-only mode: only agents and admins can send messages.' : undefined}
         onSendMessage={(payload) => onSendMessage({
           ...payload,
           conversationId: conversation.id,
           participantId: conversation.participant.id,
         })}
-        onSendVoiceNote={onSendVoiceNote}
+        onSendVoiceNote={isViewerMode ? undefined : onSendVoiceNote}
         onFocus={onInputFocus}
         onBlur={onInputBlur}
       />

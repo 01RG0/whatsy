@@ -6,6 +6,7 @@ import StudentsPage from './pages/StudentsPage'
 import AutoReplyPage from './pages/AutoReplyPage'
 import WhatsAppConnectionPage from './pages/WhatsAppConnectionPage'
 import TeamPage from './pages/TeamPage'
+import { isAdmin } from './lib/auth'
 
 export function navigate(href: string) {
   window.history.pushState({}, '', href)
@@ -34,7 +35,7 @@ function Router() {
   }
 
   return (
-    <div className="flex h-[100dvh] bg-gray-100 dark:bg-[#0b141a] overflow-hidden">
+    <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
       <NavBar path={path} />
       <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
         <AppContent path={path} />
@@ -44,6 +45,29 @@ function Router() {
 }
 
 function AppContent({ path }: { path: string }) {
+  const adminRoutes = ['/team', '/settings', '/connection']
+  if (adminRoutes.includes(path) && !isAdmin()) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center mb-4">
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
+        <p className="text-gray-500 dark:text-gray-400 max-w-sm mb-6">
+          You don't have administrator permissions to access this page. Please contact your administrator.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          className="px-4 py-2 bg-[#00a884] hover:bg-[#008f6f] text-white font-medium rounded-lg transition-colors"
+        >
+          Return to Inbox
+        </button>
+      </div>
+    )
+  }
+
   if (path === '/students') return <StudentsPage />
   if (path === '/settings') return <AutoReplyPage />
   if (path === '/connection') return <WhatsAppConnectionPage />

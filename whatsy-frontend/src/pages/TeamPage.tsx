@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAuthHeader, API_BASE } from '../api/inbox'
+import { isAdmin } from '../lib/auth'
 
 interface Agent {
   id: string
@@ -72,6 +73,7 @@ function StatCard({ icon, label, value, pulse }: { icon: React.ReactNode; label:
 }
 
 export default function TeamPage() {
+  const admin = isAdmin()
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -205,15 +207,17 @@ export default function TeamPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-[#e9edef]">Team Management</h1>
           <p className="text-gray-500 dark:text-[#8696a0] text-sm mt-0.5">Manage your agents and team roles</p>
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="flex items-center gap-2 bg-[#00a884] hover:bg-[#00967a] text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Create Agent
-        </button>
+        {admin && (
+          <button
+            onClick={() => setShowInvite(true)}
+            className="flex items-center gap-2 bg-[#00a884] hover:bg-[#00967a] text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Create Agent
+          </button>
+        )}
       </div>
 
       {error && (
@@ -356,10 +360,12 @@ export default function TeamPage() {
                         onClick={() => setSelectedAgent(agent)}
                         className="px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-[#8696a0] bg-gray-100 dark:bg-[#202c33] hover:bg-gray-200 dark:hover:bg-[#2a3942] rounded-lg transition"
                       >Edit</button>
-                      <button
-                        onClick={() => setConfirmRemove(agent)}
-                        className="px-2.5 py-1 text-xs font-medium text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition"
-                      >Remove</button>
+                      {admin && (
+                        <button
+                          onClick={() => setConfirmRemove(agent)}
+                          className="px-2.5 py-1 text-xs font-medium text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition"
+                        >Remove</button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -520,18 +526,38 @@ export default function TeamPage() {
 
               {/* Role change */}
               <div>
-                <label className="block text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide mb-2">Role</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Role</label>
+                  {!admin && (
+                    <span className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      Admin only
+                    </span>
+                  )}
+                </div>
                 <select
                   value={selectedAgent.role}
-                  disabled={panelRoleChanging}
+                  disabled={!admin || panelRoleChanging}
                   onChange={e => changeRole(selectedAgent.id, e.target.value as Agent['role'])}
-                  className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00a884]"
+                  className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00a884] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <option value="admin">Admin</option>
                   <option value="agent">Agent</option>
                   <option value="viewer">Viewer</option>
                 </select>
                 <p className="text-xs text-gray-400 dark:text-[#8696a0] mt-1">{ROLE_DESCRIPTIONS[selectedAgent.role]}</p>
+                {!admin && (
+                  <p className="text-xs text-gray-400 dark:text-[#8696a0] mt-1.5 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5 shrink-0 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    Only admins can change agent roles.
+                  </p>
+                )}
                 {saveSuccess && (
                   <div className="flex items-center gap-1.5 mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -583,17 +609,19 @@ export default function TeamPage() {
             </div>
 
             {/* Danger zone */}
-            <div className="px-5 py-4 border-t border-gray-100 dark:border-[#222e35] space-y-2 shrink-0">
-              <button className="w-full py-2 text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition">
-                Suspend Agent
-              </button>
-              <button
-                onClick={() => { setConfirmRemove(selectedAgent); setSelectedAgent(null) }}
-                className="w-full py-2 text-sm font-medium text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition"
-              >
-                Remove Agent
-              </button>
-            </div>
+            {admin && (
+              <div className="px-5 py-4 border-t border-gray-100 dark:border-[#222e35] space-y-2 shrink-0">
+                <button className="w-full py-2 text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition">
+                  Suspend Agent
+                </button>
+                <button
+                  onClick={() => { setConfirmRemove(selectedAgent); setSelectedAgent(null) }}
+                  className="w-full py-2 text-sm font-medium text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition"
+                >
+                  Remove Agent
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

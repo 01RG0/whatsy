@@ -1,5 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ZernioMessage, DeliveryStatus } from './types';
+
+const LONG_MESSAGE_CHAR_LIMIT = 450;
+const LONG_MESSAGE_LINE_LIMIT = 7;
 
 interface MessageBubbleProps {
   message: ZernioMessage;
@@ -17,6 +20,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onRetry,
 }) => {
   const isOutbound = message.direction === 'outbound';
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const lineCount = (message.content || '').split('\n').length;
+  const isLongMessage = Boolean(
+    message.content &&
+    (message.content.length > LONG_MESSAGE_CHAR_LIMIT || lineCount > LONG_MESSAGE_LINE_LIMIT)
+  );
+
+  const displayedContent = useMemo(() => {
+    if (!message.content) return '';
+    if (!isLongMessage || isExpanded) return message.content;
+
+    // Truncate cleanly: take the first ~400 characters (or slice up to the 6th newline, whichever is shorter)
+    const charTruncated = message.content.slice(0, 400);
+    const lines = message.content.split('\n');
+    const lineTruncated = lines.length > 6 ? lines.slice(0, 6).join('\n') : message.content;
+
+    return charTruncated.length < lineTruncated.length ? charTruncated : lineTruncated;
+  }, [message.content, isLongMessage, isExpanded]);
 
   const formattedTime = useMemo(() => {
     try {
@@ -76,10 +98,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div className={`group relative flex w-full my-1 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] rounded-lg shadow-sm text-[14.2px] leading-[19px] overflow-hidden transition-all ${
+        className={`relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
           isOutbound
-            ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-gray-900 dark:text-[#e9edef] rounded-tr-none'
-            : 'bg-white dark:bg-[#202c33] text-gray-900 dark:text-[#d1d7db] rounded-tl-none'
+            ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-tr-none'
+            : 'bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db] rounded-tl-none'
         }`}
       >
         {/* Reply Quote Banner */}
@@ -87,8 +109,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div
             className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-l-4 cursor-pointer select-none ${
               isOutbound
-                ? 'bg-[#b7e0a0] dark:bg-[#025144] border-[#25d366]'
-                : 'bg-gray-100 dark:bg-[#182229] border-[#00a884]'
+                ? 'bg-[#c5ecc0] dark:bg-[#025144] border-[#00a884]'
+                : 'bg-[#f0f2f5] dark:bg-[#182229] border-[#00a884]'
             }`}
           >
             <span className="font-semibold text-[#53bdeb] mb-0.5">{message.replyTo.senderName}</span>
@@ -139,7 +161,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Text Content */}
         {message.content && message.content !== '[Unsupported message]' && (
-          <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">{message.content}</div>
+          <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
+            <span>{displayedContent}</span>
+            {isLongMessage && !isExpanded && (
+              <button
+                type="button"
+                onClick={() => setIsExpanded(true)}
+                className="text-[#00a884] dark:text-[#53bdeb] font-medium hover:underline ml-1 cursor-pointer select-none"
+              >
+                ... Read more
+              </button>
+            )}
+          </div>
         )}
         {message.content === '[Unsupported message]' && (!message.attachments || message.attachments.length === 0) && (
           <div className="flex items-center gap-2 px-3 pt-2 pb-1.5 text-gray-400 dark:text-[#8696a0] italic text-sm">

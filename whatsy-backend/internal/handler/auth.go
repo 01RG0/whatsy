@@ -60,12 +60,18 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	targetRole := "agent"
+	var count int
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM agents").Scan(&count); err == nil && count == 0 {
+		targetRole = "admin"
+	}
+
 	var id, name, email, role string
 	err = h.db.QueryRow(
 		`INSERT INTO agents (id, name, email, password_hash, role, avatar)
 		 VALUES (gen_random_uuid(), $1, $2, $3, $4, '')
 		 RETURNING id, name, email, role`,
-		req.Name, req.Email, hash, req.Role,
+		req.Name, req.Email, hash, targetRole,
 	).Scan(&id, &name, &email, &role)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {

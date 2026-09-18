@@ -59,3 +59,16 @@ func RequireAdmin(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// RequireNotViewer rejects requests from viewer agents with 403.
+func RequireNotViewer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := ClaimsFromContext(r.Context())
+		if !ok || claims.Role == "viewer" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "read-only access: action not permitted for viewer"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+

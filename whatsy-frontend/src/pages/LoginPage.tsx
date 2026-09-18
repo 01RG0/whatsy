@@ -20,9 +20,9 @@ export default function LoginPage() {
       })
       if (res.status === 401) { setError('Invalid email or password'); return }
       if (!res.ok) { setError('Server error, please try again'); return }
-      const data = await res.json() as { token: string; id: string; name: string; email: string; avatar: string }
+      const data = await res.json() as { token: string; id: string; name: string; email: string; avatar: string; role?: string }
       localStorage.setItem('whatsy_jwt', data.token)
-      localStorage.setItem('whatsy_agent', JSON.stringify({ id: data.id, name: data.name, email: data.email, avatar: data.avatar }))
+      localStorage.setItem('whatsy_agent', JSON.stringify({ id: data.id, name: data.name, email: data.email, avatar: data.avatar, role: data.role || 'agent' }))
       window.location.href = '/'
     } catch {
       setError('Connection error')
