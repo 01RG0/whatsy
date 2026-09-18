@@ -182,7 +182,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       if (!activeConversationId) return;
       try {
         const sentMessage = await sendMessage(activeConversationId, payload);
-        receiveMessage(activeConversationId, sentMessage);
+        receiveMessage(activeConversationId, { ...sentMessage, status: 'sent' });
         bumpConversation(activeConversationId, {
           lastMessage: {
             id: sentMessage.id,
@@ -190,7 +190,7 @@ export const WhatsAppInboxApp: React.FC = () => {
             type: sentMessage.type,
             direction: sentMessage.direction,
             createdAt: sentMessage.createdAt,
-            status: sentMessage.status,
+            status: 'sent',
           },
           updatedAt: sentMessage.createdAt,
         });
