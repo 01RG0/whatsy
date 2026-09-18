@@ -3,7 +3,6 @@ import { WhatsAppInboxApp } from './components/WhatsAppInboxApp'
 import NavBar from './components/NavBar'
 import LoginPage from './pages/LoginPage'
 import StudentsPage from './pages/StudentsPage'
-import BroadcastPage from './pages/BroadcastPage'
 import AutoReplyPage from './pages/AutoReplyPage'
 import WhatsAppConnectionPage from './pages/WhatsAppConnectionPage'
 import TeamPage from './pages/TeamPage'
@@ -46,7 +45,6 @@ function Router() {
 
 function AppContent({ path }: { path: string }) {
   if (path === '/students') return <StudentsPage />
-  if (path === '/broadcasts') return <BroadcastPage />
   if (path === '/settings') return <AutoReplyPage />
   if (path === '/connection') return <WhatsAppConnectionPage />
   if (path === '/team') return <TeamPage />
