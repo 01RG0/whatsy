@@ -271,6 +271,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	go func() {
 		bgCtx := context.Background()
 		_ = s.convRepo.UpdateLastMessage(bgCtx, conversationID, message.Content, string(message.Type))
+		_ = s.convRepo.ResetUnread(bgCtx, conversationID)
 		conversation, err := s.convRepo.GetByID(bgCtx, conversationID)
 		if err == nil && conversation != nil {
 			s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{

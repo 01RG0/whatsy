@@ -343,6 +343,8 @@ export const WhatsAppInboxApp: React.FC = () => {
           status: 'sent',
         },
         updatedAt: now,
+        unreadCount: 0,
+        isMarkedUnread: false,
       });
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
