@@ -9,6 +9,13 @@ import TeamPage from './pages/TeamPage'
 import { isAdmin } from './lib/auth'
 import { API_BASE, getAuthHeader } from './api/inbox'
 import { useT } from './i18n/translations'
+import { useWebSocket } from './store/useWebSocket'
+
+// Keeps the WebSocket alive on every authenticated page, not just the inbox.
+function WebSocketMount() {
+  useWebSocket();
+  return null;
+}
 
 export function navigate(href: string) {
   window.history.pushState({}, '', href)
@@ -100,6 +107,7 @@ function Router() {
           </div>
         </div>
       )}
+      <WebSocketMount />
       <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
         <NavBar path={path} />
         <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">

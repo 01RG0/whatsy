@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useInboxStore, type ViewerInfo, type TypingLock } from './useInboxStore';
 import type { ZernioMessage, ZernioConversation } from '../components/types';
 import { markRead } from '../api/inbox';
@@ -81,192 +81,197 @@ function getMyAgentId(): string {
   }
 }
 
-export function useWebSocket() {
-  const wsRef = useRef<WebSocket | null>(null);
-  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const backoffRef = useRef(1000);
-  const activeIdRef = useRef<string | null>(null);
+// Module-level singleton so multiple hook calls share one WS connection.
+const _ws = {
+  socket: null as WebSocket | null,
+  retryTimeout: null as ReturnType<typeof setTimeout> | null,
+  backoff: 1000,
+  activeId: null as string | null,
+  refCount: 0,
+  sendFn(action: WSAction) {
+    if (_ws.socket?.readyState === WebSocket.OPEN) {
+      _ws.socket.send(JSON.stringify(action));
+    }
+  },
+};
 
-  const setWsConnected = useInboxStore((state) => state.setWsConnected);
-  const receiveMessage = useInboxStore((state) => state.receiveMessage);
-  const updateMessageStatus = useInboxStore((state) => state.updateMessageStatus);
-  const setViewers = useInboxStore((state) => state.setViewers);
-  const setTypingLock = useInboxStore((state) => state.setTypingLock);
-  const bumpConversation = useInboxStore((state) => state.bumpConversation);
-  const updateConversation = useInboxStore((state) => state.updateConversation);
+function connect() {
+  const token = getToken();
+  const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
+  const ws = new WebSocket(url);
+  _ws.socket = ws;
+
+  const store = useInboxStore.getState;
+
+  ws.onopen = () => {
+    _ws.backoff = 1000;
+    store().setWsConnected(true);
+    if (_ws.activeId) {
+      _ws.sendFn({ action: 'SUBSCRIBE_STUDENT', studentId: _ws.activeId });
+    }
+  };
+
+  ws.onmessage = (evt) => {
+    let data: ServerEvent;
+    try {
+      data = JSON.parse(evt.data as string) as ServerEvent;
+    } catch {
+      return;
+    }
+
+    switch (data.event) {
+      case 'NEW_MESSAGE': {
+        const msg = data.message;
+        const conversationId = msg.conversationId || data.studentId;
+        store().receiveMessage(conversationId, { ...msg, conversationId });
+
+        const activeId = useInboxStore.getState().activeConversationId;
+        const isViewingActive =
+          conversationId === activeId &&
+          typeof document !== 'undefined' &&
+          document.visibilityState === 'visible';
+
+        store().bumpConversation(conversationId, {
+          ...(isViewingActive ? { unreadCount: 0 } : {}),
+          lastMessage: {
+            id: msg.id,
+            content: msg.content || '',
+            type: msg.type,
+            direction: msg.direction,
+            senderName: msg.senderName,
+            createdAt: msg.createdAt,
+            status: msg.status,
+          },
+          updatedAt: msg.createdAt,
+        });
+
+        if (isViewingActive) {
+          store().updateConversation({ id: conversationId, unreadCount: 0 });
+          markRead(conversationId).catch(() => undefined);
+        }
+
+        {
+          const exists = useInboxStore.getState().conversations.some((c) => c.id === conversationId);
+          if (!exists) {
+            import('../api/inbox').then(({ getConversations }) => {
+              getConversations('all', '').then((convs) => {
+                useInboxStore.getState().setConversations(convs);
+              }).catch(() => undefined);
+            });
+          }
+        }
+        break;
+      }
+      case 'MESSAGE_STATUS':
+        store().updateMessageStatus(data.messageId, data.status);
+        break;
+      case 'STUDENT_VIEWERS_CHANGED':
+        store().setViewers(data.studentId, data.viewers);
+        break;
+      case 'AGENT_TYPING_LOCK': {
+        if (data.lockedBy.agentId === getMyAgentId()) break;
+        const lock: TypingLock = { lockedBy: data.lockedBy, expiresInMs: data.expiresInMs };
+        store().setTypingLock(data.studentId, lock);
+        break;
+      }
+      case 'TYPING_LOCK_RELEASED':
+        store().setTypingLock(data.studentId, null);
+        break;
+      case 'REACTION': {
+        const { messageId, conversationId, emoji } = data;
+        useInboxStore.getState().addReaction(conversationId, messageId, emoji);
+        break;
+      }
+      case 'MESSAGE_DELETED': {
+        const { messageId, conversationId } = data;
+        useInboxStore.getState().deleteMessage(conversationId, messageId);
+        break;
+      }
+      case 'CONVERSATION_UPDATED': {
+        const patch = { ...data.conversation } as Partial<ZernioConversation> & { id: string };
+        const activeId = useInboxStore.getState().activeConversationId;
+        const isViewingActive =
+          patch.id === activeId &&
+          typeof document !== 'undefined' &&
+          document.visibilityState === 'visible';
+
+        if (isViewingActive) {
+          patch.unreadCount = 0;
+          if (typeof data.conversation.unreadCount === 'number' && data.conversation.unreadCount > 0) {
+            markRead(patch.id).catch(() => undefined);
+          }
+        } else if (
+          patch.id === activeId &&
+          typeof patch.unreadCount === 'number' &&
+          patch.unreadCount > 0
+        ) {
+          delete (patch as Record<string, unknown>).unreadCount;
+        }
+        store().updateConversation(patch);
+        break;
+      }
+    }
+  };
+
+  ws.onclose = () => {
+    store().setWsConnected(false);
+    _ws.socket = null;
+    if (_ws.refCount > 0) {
+      const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
+      _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
+      _ws.retryTimeout = setTimeout(connect, delay);
+    }
+  };
+
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+export function useWebSocket() {
+  const sendAction = useCallback((action: WSAction) => {
+    _ws.sendFn(action);
+  }, []);
+
   const activeConversationId = useInboxStore((state) => state.activeConversationId);
   const wsConnected = useInboxStore((state) => state.wsConnected);
 
-  const sendAction = useCallback((action: WSAction) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(action));
-    }
-  }, []);
-
-  const connect = useCallback(() => {
-    const token = getToken();
-    const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      backoffRef.current = 1000;
-      setWsConnected(true);
-      // re-subscribe if we had an active conversation
-      if (activeIdRef.current) {
-        sendAction({ action: 'SUBSCRIBE_STUDENT', studentId: activeIdRef.current });
-      }
-    };
-
-    ws.onmessage = (evt) => {
-      let data: ServerEvent;
-      try {
-        data = JSON.parse(evt.data as string) as ServerEvent;
-      } catch {
-        return;
-      }
-
-      switch (data.event) {
-        case 'NEW_MESSAGE': {
-          const msg = data.message;
-          const conversationId = msg.conversationId || data.studentId;
-          receiveMessage(conversationId, { ...msg, conversationId });
-
-          const activeId = useInboxStore.getState().activeConversationId;
-          const isViewingActive =
-            conversationId === activeId &&
-            typeof document !== 'undefined' &&
-            document.visibilityState === 'visible';
-
-          // Move the conversation to the top and update last message preview.
-          bumpConversation(conversationId, {
-            ...(isViewingActive ? { unreadCount: 0 } : {}),
-            lastMessage: {
-              id: msg.id,
-              content: msg.content || '',
-              type: msg.type,
-              direction: msg.direction,
-              senderName: msg.senderName,
-              createdAt: msg.createdAt,
-              status: msg.status,
-            },
-            updatedAt: msg.createdAt,
-          });
-
-          if (isViewingActive) {
-            updateConversation({ id: conversationId, unreadCount: 0 });
-            markRead(conversationId).catch(() => undefined);
-          }
-
-          // If this conversation isn't in the list yet (new contact), trigger a refresh
-          {
-            const exists = useInboxStore.getState().conversations.some((c) => c.id === conversationId);
-            if (!exists) {
-              import('../api/inbox').then(({ getConversations }) => {
-                getConversations('all', '').then((convs) => {
-                  useInboxStore.getState().setConversations(convs);
-                }).catch(() => undefined);
-              });
-            }
-          }
-          break;
-        }
-        case 'MESSAGE_STATUS':
-          updateMessageStatus(data.messageId, data.status);
-          break;
-        case 'STUDENT_VIEWERS_CHANGED':
-          setViewers(data.studentId, data.viewers);
-          break;
-        case 'AGENT_TYPING_LOCK': {
-          // Ignore lock events originating from this agent — we don't lock ourselves out.
-          if (data.lockedBy.agentId === getMyAgentId()) break;
-          const lock: TypingLock = { lockedBy: data.lockedBy, expiresInMs: data.expiresInMs };
-          setTypingLock(data.studentId, lock);
-          break;
-        }
-        case 'TYPING_LOCK_RELEASED':
-          setTypingLock(data.studentId, null);
-          break;
-        case 'REACTION': {
-          const { messageId, conversationId, emoji } = data;
-          useInboxStore.getState().addReaction(conversationId, messageId, emoji);
-          break;
-        }
-        case 'MESSAGE_DELETED': {
-          const { messageId, conversationId } = data;
-          useInboxStore.getState().deleteMessage(conversationId, messageId);
-          break;
-        }
-        case 'CONVERSATION_UPDATED': {
-          const patch = { ...data.conversation } as Partial<ZernioConversation> & { id: string };
-          const activeId = useInboxStore.getState().activeConversationId;
-          const isViewingActive =
-            patch.id === activeId &&
-            typeof document !== 'undefined' &&
-            document.visibilityState === 'visible';
-
-          if (isViewingActive) {
-            // User is viewing — keep unread at 0 and sync read state back to server
-            patch.unreadCount = 0;
-            if (typeof data.conversation.unreadCount === 'number' && data.conversation.unreadCount > 0) {
-              markRead(patch.id).catch(() => undefined);
-            }
-          } else if (
-            patch.id === activeId &&
-            typeof patch.unreadCount === 'number' &&
-            patch.unreadCount > 0
-          ) {
-            delete (patch as Record<string, unknown>).unreadCount;
-          }
-          updateConversation(patch);
-          break;
-        }
-      }
-    };
-
-    ws.onclose = () => {
-      setWsConnected(false);
-      wsRef.current = null;
-      const delay = Math.min(backoffRef.current, MAX_BACKOFF_MS);
-      backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
-      retryRef.current = setTimeout(connect, delay);
-    };
-
-    ws.onerror = () => {
-      ws.close();
-    };
-  }, [bumpConversation, receiveMessage, sendAction, setTypingLock, setViewers, setWsConnected, updateMessageStatus]);
-
-  // Initial connection
+  // Manage singleton lifecycle — only connect on first mount, only close on last unmount.
   useEffect(() => {
-    connect();
+    _ws.refCount += 1;
+    if (_ws.refCount === 1) {
+      connect();
+    }
     return () => {
-      if (retryRef.current) clearTimeout(retryRef.current);
-      wsRef.current?.close();
+      _ws.refCount -= 1;
+      if (_ws.refCount === 0) {
+        if (_ws.retryTimeout) clearTimeout(_ws.retryTimeout);
+        _ws.socket?.close();
+      }
     };
-  }, [connect]);
+  }, []);
 
   // Subscribe/unsubscribe when active conversation changes
   useEffect(() => {
-    const prev = activeIdRef.current;
+    const prev = _ws.activeId;
     if (prev && prev !== activeConversationId) {
       sendAction({ action: 'UNSUBSCRIBE_STUDENT', studentId: prev });
     }
     if (activeConversationId) {
-      activeIdRef.current = activeConversationId;
+      _ws.activeId = activeConversationId;
       sendAction({ action: 'SUBSCRIBE_STUDENT', studentId: activeConversationId });
     }
   }, [activeConversationId, sendAction]);
 
   const onInputFocus = useCallback(() => {
-    if (activeIdRef.current) {
-      sendAction({ action: 'TYPING_START', studentId: activeIdRef.current });
+    if (_ws.activeId) {
+      sendAction({ action: 'TYPING_START', studentId: _ws.activeId });
     }
   }, [sendAction]);
 
   const onInputBlur = useCallback(() => {
-    if (activeIdRef.current) {
-      sendAction({ action: 'TYPING_STOP', studentId: activeIdRef.current });
+    if (_ws.activeId) {
+      sendAction({ action: 'TYPING_STOP', studentId: _ws.activeId });
     }
   }, [sendAction]);
 
