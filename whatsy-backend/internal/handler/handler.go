@@ -232,7 +232,21 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case zernio.EventInboxMessageSent:
-		eventlog.Webhook(event.Type, "")
+		var payload zernio.InboundMessagePayload
+		if err := json.Unmarshal(event.Payload, &payload); err == nil && payload.ConversationID != "" {
+			eventlog.Webhook(event.Type, payload.ConversationID)
+			go func() {
+				localID, err := h.convRepo.GetLocalIDByZernioID(context.Background(), payload.ConversationID)
+				if err != nil || localID == "" {
+					return
+				}
+				if err := h.chatService.MarkConversationRead(context.Background(), localID); err != nil {
+					log.Printf("[webhook] mark read on outbound send: %v", err)
+				}
+			}()
+		} else {
+			eventlog.Webhook(event.Type, "")
+		}
 	case zernio.EventConversationStarted, zernio.LegacyEventConversationUpdated:
 		var payload zernio.ConversationUpdatedPayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
