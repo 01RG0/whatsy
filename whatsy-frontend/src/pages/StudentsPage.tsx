@@ -24,7 +24,6 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [filterGrade, setFilterGrade] = useState('')
   const [filterCourse, setFilterCourse] = useState('')
-  const [filterPayment, setFilterPayment] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', grade: '', enrolledCourse: '', paymentStatus: 'Pending' })
   const [saving, setSaving] = useState(false)
@@ -80,7 +79,6 @@ export default function StudentsPage() {
   const filtered = students.filter(s => {
     if (filterGrade && s.grade !== filterGrade) return false
     if (filterCourse && s.enrolledCourse !== filterCourse) return false
-    if (filterPayment && s.paymentStatus !== filterPayment) return false
     if (search) {
       const q = search.toLowerCase()
       return s.name.toLowerCase().includes(q) || s.phone.includes(q)
@@ -129,15 +127,9 @@ export default function StudentsPage() {
           <option value="">All Courses</option>
           {courses.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)} className={inputCls}>
-          <option value="">All Payment</option>
-          <option value="Paid">Paid</option>
-          <option value="Unpaid">Unpaid</option>
-          <option value="Pending">Pending</option>
-        </select>
-        {(search || filterGrade || filterCourse || filterPayment) && (
+        {(search || filterGrade || filterCourse) && (
           <button
-            onClick={() => { setSearch(''); setFilterGrade(''); setFilterCourse(''); setFilterPayment('') }}
+            onClick={() => { setSearch(''); setFilterGrade(''); setFilterCourse('') }}
             className="px-3 py-1.5 text-sm text-gray-500 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] transition-colors"
           >
             Clear filters
