@@ -220,6 +220,34 @@ func newAPIError(status int, body []byte) *APIError {
 	return apiErr
 }
 
+// EnsureWebhookActive fetches webhook settings and re-enables any that are
+// inactive. Called on server startup so deploys that cause consecutive failures
+// don't permanently silence inbound messages.
+func (c *Client) EnsureWebhookActive(ctx context.Context) error {
+	var resp struct {
+		Webhooks []struct {
+			ID       string `json:"_id"`
+			Name     string `json:"name"`
+			URL      string `json:"url"`
+			IsActive bool   `json:"isActive"`
+		} `json:"webhooks"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, "/webhooks/settings", nil, &resp); err != nil {
+		return fmt.Errorf("list webhooks: %w", err)
+	}
+	for _, wh := range resp.Webhooks {
+		if wh.IsActive {
+			continue
+		}
+		body := map[string]interface{}{"_id": wh.ID, "isActive": true}
+		if err := c.doJSON(ctx, http.MethodPut, "/webhooks/settings", body, nil); err != nil {
+			return fmt.Errorf("re-enable webhook %s (%s): %w", wh.Name, wh.ID, err)
+		}
+		fmt.Printf("[startup] re-enabled disabled webhook %q (%s)\n", wh.Name, wh.URL)
+	}
+	return nil
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if v != "" {

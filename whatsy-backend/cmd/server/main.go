@@ -118,9 +118,18 @@ func main() {
 		go relay.Subscribe(context.Background())
 	}
 
+	zernioClient := zernio.NewClient(cfg.ZernioAPIKey)
+
+	// Re-enable any Zernio webhooks that were auto-disabled during downtime.
+	go func() {
+		if err := zernioClient.EnsureWebhookActive(context.Background()); err != nil {
+			log.Printf("[startup] webhook check: %v", err)
+		}
+	}()
+
 	convRepo := repository.NewConversationRepo(db)
 	msgRepo := repository.NewMessageRepo(db)
-	chatService := service.NewChatService(db, convRepo, msgRepo, zernio.NewClient(cfg.ZernioAPIKey), hub)
+	chatService := service.NewChatService(db, convRepo, msgRepo, zernioClient, hub)
 	chatService.SetAutoReplier(service.NewAutoReplyService(db))
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
