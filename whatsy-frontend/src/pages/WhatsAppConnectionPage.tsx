@@ -571,13 +571,10 @@ export default function WhatsAppConnectionPage() {
         {/* Table */}
         <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] overflow-hidden">
           {/* Header */}
-          <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.2fr_0.8fr_1fr_1fr] gap-4 px-5 py-3 border-b border-gray-100 dark:border-[#222e35] text-xs font-medium text-gray-500 dark:text-[#8696a0]">
+          <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-4 px-5 py-3 border-b border-gray-100 dark:border-[#222e35] text-xs font-medium text-gray-500 dark:text-[#8696a0]">
             <span>Sender</span>
             <span>Number</span>
             <span>Type</span>
-            <span>Name review</span>
-            <span>Business verification</span>
-            <span>Calling</span>
             <span>Status</span>
             <span>Actions</span>
           </div>
@@ -602,7 +599,7 @@ export default function WhatsAppConnectionPage() {
             </div>
           ) : (
             senders.map(sender => (
-              <div key={sender.accountId} className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.2fr_0.8fr_1fr_1fr] gap-4 items-center px-5 py-4 border-b border-gray-50 dark:border-[#182229] last:border-0 hover:bg-gray-50/50 dark:hover:bg-[#182229]/50 transition-colors">
+              <div key={sender.accountId} className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-4 items-center px-5 py-4 border-b border-gray-50 dark:border-[#182229] last:border-0 hover:bg-gray-50/50 dark:hover:bg-[#182229]/50 transition-colors">
                 {/* Sender */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-[#25D366]/10 border border-[#25D366]/20 flex items-center justify-center shrink-0">
@@ -630,15 +627,6 @@ export default function WhatsAppConnectionPage() {
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-xs rounded-full font-medium">Live</span>
                   )}
                 </span>
-
-                {/* Name review */}
-                <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
-
-                {/* Business verification */}
-                <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
-
-                {/* Calling */}
-                <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
 
                 {/* Status */}
                 <span className="flex items-center gap-1.5">
