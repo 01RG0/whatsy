@@ -111,7 +111,7 @@ func ParseWebhookEventWithType(body []byte, eventType string) (*WebhookEvent, er
 	switch event.Type {
 	case EventInboxMessageCreated, EventInboxMessageSent,
 		EventInboxMessageStatus, EventMessageRead, EventMessageFailed,
-		EventConversationStarted,
+		EventConversationStarted, EventMessageDeleted, EventReactionReceived,
 		LegacyEventInboxMessageCreated, LegacyEventInboxMessageStatus,
 		LegacyEventConversationUpdated:
 	default:

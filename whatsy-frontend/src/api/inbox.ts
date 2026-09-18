@@ -55,7 +55,11 @@ export async function sendMessage(
 ): Promise<ZernioMessage> {
   const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID(),
+      ...getAuthHeader(),
+    },
     body: JSON.stringify(payload),
   })
   await throwIfError(res)

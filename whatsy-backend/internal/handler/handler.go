@@ -232,19 +232,63 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			eventlog.Webhook(event.Type, "")
 			h.hub.BroadcastToAll(payload)
 		}
+	case zernio.EventMessageDeleted:
+		var payload zernio.MessageDeletedPayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			eventlog.WebhookError(event.Type, err)
+		} else {
+			zernioMsgID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
+			eventlog.Webhook(event.Type, zernioMsgID)
+			localMsgID := zernioMsgID
+			if zernioMsgID != "" {
+				if msg, err := h.msgRepo.GetByZernioID(r.Context(), zernioMsgID); err == nil && msg != nil {
+					localMsgID = msg.ID
+				}
+				_ = h.msgRepo.DeleteByZernioID(r.Context(), zernioMsgID)
+			}
+			h.hub.BroadcastToAll(ws.MessageDeletedEvent{
+				Event:          ws.EventMessageDeleted,
+				MessageID:      localMsgID,
+				ConversationID: payload.ConversationID,
+			})
+		}
+	case zernio.EventReactionReceived:
+		var payload zernio.ReactionPayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			eventlog.WebhookError(event.Type, err)
+		} else {
+			zernioMsgID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
+			eventlog.Webhook(event.Type, zernioMsgID)
+			localMsgID := zernioMsgID
+			if msg, err := h.msgRepo.GetByZernioID(r.Context(), zernioMsgID); err == nil && msg != nil {
+				localMsgID = msg.ID
+			}
+			h.hub.BroadcastToAll(ws.ReactionEvent{
+				Event:          ws.EventReaction,
+				MessageID:      localMsgID,
+				ConversationID: payload.ConversationID,
+				Emoji:          payload.Emoji,
+			})
+		}
 	default:
 		if zernio.IsStatusEvent(event.Type) {
 			var payload zernio.MessageStatusPayload
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
 				eventlog.WebhookError(event.Type, err)
 			} else {
-				eventlog.Webhook(event.Type, firstNonEmpty(payload.PlatformMessageID, payload.MessageID))
+				zernioMsgID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
+				eventlog.Webhook(event.Type, zernioMsgID)
 				if err := h.chatService.HandleMessageStatus(r.Context(), payload); err != nil {
 					eventlog.WebhookError(event.Type, err)
 				}
+				// Resolve local message ID so the frontend can match it in the store.
+				localMsgID := zernioMsgID
+				if msg, err := h.msgRepo.GetByZernioID(r.Context(), zernioMsgID); err == nil && msg != nil {
+					localMsgID = msg.ID
+				}
 				h.hub.BroadcastToAll(ws.MessageStatusEvent{
 					Event:     ws.EventMessageStatus,
-					MessageID: firstNonEmpty(payload.PlatformMessageID, payload.MessageID),
+					MessageID: localMsgID,
 					Status:    payload.Status,
 				})
 			}

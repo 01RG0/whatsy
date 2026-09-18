@@ -43,6 +43,17 @@ interface ConversationUpdatedEvent {
   event: 'CONVERSATION_UPDATED';
   conversation: Partial<ZernioConversation> & { id: string };
 }
+interface ReactionEvent {
+  event: 'REACTION';
+  messageId: string;
+  conversationId: string;
+  emoji: string;
+}
+interface MessageDeletedEvent {
+  event: 'MESSAGE_DELETED';
+  messageId: string;
+  conversationId: string;
+}
 
 type ServerEvent =
   | NewMessageEvent
@@ -50,7 +61,9 @@ type ServerEvent =
   | ViewersChangedEvent
   | TypingLockEvent
   | TypingLockReleasedEvent
-  | ConversationUpdatedEvent;
+  | ConversationUpdatedEvent
+  | ReactionEvent
+  | MessageDeletedEvent;
 
 function getToken(): string {
   return localStorage.getItem('whatsy_jwt') ?? '';
@@ -146,6 +159,16 @@ export function useWebSocket() {
         case 'TYPING_LOCK_RELEASED':
           setTypingLock(data.studentId, null);
           break;
+        case 'REACTION': {
+          const { messageId, conversationId, emoji } = data;
+          useInboxStore.getState().addReaction(conversationId, messageId, emoji);
+          break;
+        }
+        case 'MESSAGE_DELETED': {
+          const { messageId, conversationId } = data;
+          useInboxStore.getState().deleteMessage(conversationId, messageId);
+          break;
+        }
         case 'CONVERSATION_UPDATED': {
           const patch = { ...data.conversation } as Partial<ZernioConversation> & { id: string };
           // For the active conversation, only apply unreadCount if it's going to 0

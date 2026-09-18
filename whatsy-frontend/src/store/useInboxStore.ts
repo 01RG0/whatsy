@@ -36,6 +36,8 @@ interface InboxState {
   setViewers: (studentId: string, viewers: ViewerInfo[]) => void;
   setTypingLock: (studentId: string, lock: TypingLock | null) => void;
   setWsConnected: (connected: boolean) => void;
+  addReaction: (conversationId: string, messageId: string, emoji: string) => void;
+  deleteMessage: (conversationId: string, messageId: string) => void;
 }
 
 export const useInboxStore = create<InboxState>((set) => ({
@@ -128,4 +130,30 @@ export const useInboxStore = create<InboxState>((set) => ({
     })),
 
   setWsConnected: (connected) => set({ wsConnected: connected }),
+
+  addReaction: (conversationId, messageId, emoji) =>
+    set((state) => {
+      const msgs = state.messages[conversationId];
+      if (!msgs) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: msgs.map((m) =>
+            m.id === messageId ? { ...m, reaction: emoji } : m
+          ),
+        },
+      };
+    }),
+
+  deleteMessage: (conversationId, messageId) =>
+    set((state) => {
+      const msgs = state.messages[conversationId];
+      if (!msgs) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: msgs.filter((m) => m.id !== messageId),
+        },
+      };
+    }),
 }));

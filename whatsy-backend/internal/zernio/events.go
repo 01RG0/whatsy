@@ -14,6 +14,8 @@ const (
 	EventMessageRead         = "message.read"
 	EventMessageFailed       = "message.failed"
 	EventConversationStarted = "conversation.started"
+	EventMessageDeleted      = "message.deleted"
+	EventReactionReceived    = "reaction.received"
 
 	EventConversationUpdated = "conversation.updated"
 
@@ -226,6 +228,75 @@ type ConversationUpdatedPayload struct {
 	UnreadCount    int    `json:"unreadCount"`
 	LastMessage    string `json:"lastMessage"`
 	LastMessageAt  string `json:"lastMessageAt"`
+}
+
+// ReactionPayload is the body of a reaction.received event.
+type ReactionPayload struct {
+	MessageID         string `json:"messageId"`
+	PlatformMessageID string `json:"platformMessageId"`
+	ConversationID    string `json:"conversationId"`
+	Emoji             string `json:"emoji"`
+	From              string `json:"from"`
+}
+
+// UnmarshalJSON handles the nested message/conversation shape.
+func (p *ReactionPayload) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Message struct {
+			ID                string `json:"id"`
+			PlatformMessageID string `json:"platformMessageId"`
+			ConversationID    string `json:"conversationId"`
+		} `json:"message"`
+		Conversation struct {
+			ID string `json:"id"`
+		} `json:"conversation"`
+		Reaction struct {
+			Emoji string `json:"emoji"`
+		} `json:"reaction"`
+		// flat fallback
+		MessageID      string `json:"messageId"`
+		ConversationID string `json:"conversationId"`
+		Emoji          string `json:"emoji"`
+		From           string `json:"from"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	p.PlatformMessageID = raw.Message.PlatformMessageID
+	p.MessageID = firstNonEmpty(raw.Message.ID, raw.MessageID)
+	p.ConversationID = firstNonEmpty(raw.Message.ConversationID, raw.Conversation.ID, raw.ConversationID)
+	p.Emoji = firstNonEmpty(raw.Reaction.Emoji, raw.Emoji)
+	p.From = raw.From
+	return nil
+}
+
+// MessageDeletedPayload is the body of a message.deleted event.
+type MessageDeletedPayload struct {
+	MessageID         string `json:"messageId"`
+	PlatformMessageID string `json:"platformMessageId"`
+	ConversationID    string `json:"conversationId"`
+}
+
+func (p *MessageDeletedPayload) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Message struct {
+			ID                string `json:"id"`
+			PlatformMessageID string `json:"platformMessageId"`
+			ConversationID    string `json:"conversationId"`
+		} `json:"message"`
+		Conversation struct {
+			ID string `json:"id"`
+		} `json:"conversation"`
+		MessageID      string `json:"messageId"`
+		ConversationID string `json:"conversationId"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	p.PlatformMessageID = raw.Message.PlatformMessageID
+	p.MessageID = firstNonEmpty(raw.Message.ID, raw.MessageID)
+	p.ConversationID = firstNonEmpty(raw.Message.ConversationID, raw.Conversation.ID, raw.ConversationID)
+	return nil
 }
 
 func firstTime(values ...time.Time) time.Time {

@@ -16,6 +16,8 @@ const (
 	EventAgentTypingLock        EventType = "AGENT_TYPING_LOCK"
 	EventTypingLockReleased     EventType = "TYPING_LOCK_RELEASED"
 	EventConversationUpdated    EventType = "CONVERSATION_UPDATED"
+	EventReaction               EventType = "REACTION"
+	EventMessageDeleted         EventType = "MESSAGE_DELETED"
 )
 
 // ActionType defines incoming client-to-server action types.
@@ -63,6 +65,21 @@ type AgentTypingLockEvent struct {
 type TypingLockReleasedEvent struct {
 	Event     EventType `json:"event"`
 	StudentID string    `json:"studentId"`
+}
+
+// ReactionEvent: {event:'REACTION', messageId:string, conversationId:string, emoji:string}
+type ReactionEvent struct {
+	Event          EventType `json:"event"`
+	MessageID      string    `json:"messageId"`
+	ConversationID string    `json:"conversationId"`
+	Emoji          string    `json:"emoji"`
+}
+
+// MessageDeletedEvent: {event:'MESSAGE_DELETED', messageId:string, conversationId:string}
+type MessageDeletedEvent struct {
+	Event          EventType `json:"event"`
+	MessageID      string    `json:"messageId"`
+	ConversationID string    `json:"conversationId"`
 }
 
 // ConversationUpdatedEvent: {event:'CONVERSATION_UPDATED', conversation:{...}}
