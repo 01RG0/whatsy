@@ -10,6 +10,74 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// GetProxy proxies any Zernio media URL through our backend, adding the API key.
+// The full Zernio URL is passed as ?url=<encoded> so we handle any URL format
+// that Zernio might return (upload-direct, webhook attachments, etc.).
+func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
+	rawURL := r.URL.Query().Get("url")
+	if rawURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url parameter required"})
+		return
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Hostname() != "zernio.com" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url must be a zernio.com URL"})
+		return
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
+	if err != nil {
+		log.Printf("[media-proxy] error creating request for %s: %v", rawURL, err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "fetch media"})
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+h.zernioAPIKey)
+
+	if rangeHdr := r.Header.Get("Range"); rangeHdr != "" {
+		req.Header.Set("Range", rangeHdr)
+	}
+
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("[media-proxy] error fetching %s from Zernio: %v", rawURL, err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "fetch media"})
+		return
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusNotFound {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		log.Printf("[media-proxy] Zernio 404 for %s: %s", rawURL, string(body))
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "media not found"})
+		return
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		log.Printf("[media-proxy] Zernio non-2xx for %s (status=%d): %s", rawURL, response.StatusCode, string(body))
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "fetch media"})
+		return
+	}
+
+	if ct := response.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	if cl := response.Header.Get("Content-Length"); cl != "" {
+		w.Header().Set("Content-Length", cl)
+	}
+	if cr := response.Header.Get("Content-Range"); cr != "" {
+		w.Header().Set("Content-Range", cr)
+	}
+	if ar := response.Header.Get("Accept-Ranges"); ar != "" {
+		w.Header().Set("Accept-Ranges", ar)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.WriteHeader(response.StatusCode)
+	if _, err := io.Copy(w, response.Body); err != nil {
+		return
+	}
+}
+
 // MediaHandler proxies WhatsApp media from Zernio to authenticated clients.
 type MediaHandler struct {
 	zernioAPIKey string

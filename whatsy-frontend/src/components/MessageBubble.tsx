@@ -38,24 +38,21 @@ function getMediaUrl(rawUrl: string): string {
   const token = localStorage.getItem('whatsy_jwt');
   let url = rawUrl;
 
-  // If it's a full Zernio media URL, route through our backend proxy.
-  // Preserve the accountId from the original URL so the backend doesn't need a DB lookup.
-  const zernioMediaMatch = url.match(/zernio\.com\/api\/v1\/whatsapp\/media\/([^?&/]+)(\?.*)?$/);
-  if (zernioMediaMatch) {
-    const mediaId = zernioMediaMatch[1];
-    const accountIdMatch = url.match(/[?&]accountId=([^&]+)/);
-    url = `/v1/whatsapp/media/${mediaId}${accountIdMatch ? `?accountId=${accountIdMatch[1]}` : ''}`;
+  // Any Zernio URL (any path format) → route through our generic proxy which adds the API key.
+  // This covers upload-direct responses, webhook attachment URLs, and any other Zernio format.
+  if (url.includes('zernio.com')) {
+    const proxyUrl = `${API_BASE}/v1/whatsapp/media-proxy?url=${encodeURIComponent(url)}`;
+    return token ? `${proxyUrl}&token=${encodeURIComponent(token)}` : proxyUrl;
   }
 
-  // Prepend API_BASE for relative paths
+  // Already a relative proxy path → prepend backend base
   if (url.startsWith('/v1/')) {
     url = `${API_BASE}${url}`;
   }
 
-  // Add JWT token for backend proxy auth (backend supports ?token= query param)
-  if (url.includes('/v1/whatsapp/media/') && token && !url.includes('token=')) {
-    const separator = url.includes('?') ? '&' : '?';
-    url = `${url}${separator}token=${encodeURIComponent(token)}`;
+  // Add JWT token for backend proxy auth on existing /v1/whatsapp/media/ paths
+  if (url.includes('/v1/whatsapp/media') && token && !url.includes('token=')) {
+    url += `${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
   }
 
   return url;

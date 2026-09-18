@@ -158,6 +158,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(handler.JWTMiddleware(cfg.JWTSecret))
 		r.Get("/v1/whatsapp/media/{mediaId}", mediaHandler.Get)
+		r.Get("/v1/whatsapp/media-proxy", mediaHandler.GetProxy)
 		r.With(handler.RequireNotViewer).Post("/v1/whatsapp/upload", uploadHandler.Upload)
 		r.Get("/v1/agents", agentHandler.List)
 		r.Get("/v1/agents/me", agentHandler.Me)
