@@ -74,11 +74,12 @@ export async function sendMessage(
 }
 
 export async function markRead(conversationId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/read`, {
+  // Fire-and-forget: never throw and never dispatch session_invalidated.
+  // If the session is truly dead the next getConversations/getMessages will catch it.
+  await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/read`, {
     method: 'POST',
     headers: getAuthHeader(),
-  })
-  await throwIfError(res)
+  }).catch(() => undefined)
 }
 
 export async function markUnread(conversationId: string): Promise<void> {
