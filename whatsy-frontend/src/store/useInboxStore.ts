@@ -49,7 +49,19 @@ export const useInboxStore = create<InboxState>((set) => ({
   typingLock: {},
   wsConnected: false,
 
-  setConversations: (convs) => set({ conversations: convs }),
+  setConversations: (convs) =>
+    set((state) => {
+      // If the user is viewing a conversation that isn't in the new list (e.g. it was
+      // below the 50-result page boundary), keep it at the top so the chat doesn't vanish.
+      if (state.activeConversationId) {
+        const stillPresent = convs.some((c) => c.id === state.activeConversationId);
+        if (!stillPresent) {
+          const kept = state.conversations.find((c) => c.id === state.activeConversationId);
+          if (kept) return { conversations: [kept, ...convs] };
+        }
+      }
+      return { conversations: convs };
+    }),
 
   appendConversations: (convs) =>
     set((state) => {
