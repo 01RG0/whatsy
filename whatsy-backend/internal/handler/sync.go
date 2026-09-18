@@ -205,7 +205,9 @@ func (h *SyncHandler) syncConversations(ctx context.Context, since time.Time, em
 func (h *SyncHandler) upsertConversation(ctx context.Context, conv zernioConversation) error {
 	phone := strings.ReplaceAll(conv.ParticipantUsername, " ", "")
 	if phone == "" {
-		phone = "+" + conv.ParticipantID
+		// ParticipantID is an internal MongoDB ObjectID, not a phone — use conv.ID
+		// so the fallback matches the autoCreateConversation pattern and can be healed.
+		phone = "+unknown-" + conv.ID
 	}
 	if !strings.HasPrefix(phone, "+") {
 		phone = "+" + phone

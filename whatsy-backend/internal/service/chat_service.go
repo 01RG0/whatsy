@@ -457,13 +457,20 @@ func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio
 		phone = "+" + phone
 	}
 
+	name := payload.ParticipantName
+	if name == "" {
+		name = phone
+	}
+
 	var studentID string
 	err := s.db.QueryRowContext(ctx,
 		`INSERT INTO students (name, phone, created_at, updated_at)
 		 VALUES ($1, $2, NOW(), NOW())
-		 ON CONFLICT (phone) DO UPDATE SET updated_at = NOW()
+		 ON CONFLICT (phone) DO UPDATE
+		   SET name = CASE WHEN students.name = students.phone OR students.name LIKE '+unknown-%' THEN EXCLUDED.name ELSE students.name END,
+		       updated_at = NOW()
 		 RETURNING id`,
-		phone, phone,
+		name, phone,
 	).Scan(&studentID)
 	if err != nil {
 		return "", fmt.Errorf("upsert student: %w", err)

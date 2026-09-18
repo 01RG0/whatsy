@@ -67,9 +67,10 @@ type InboundMessagePayload struct {
 		Type string
 		URL  string
 	}
-	AccountID string // accountId of the connected WhatsApp account
-	Timestamp time.Time
-	From      string
+	AccountID       string // accountId of the connected WhatsApp account
+	Timestamp       time.Time
+	From            string // sender phone number
+	ParticipantName string // sender display name from conversation.participant
 }
 
 type rawInboundMessage struct {
@@ -100,6 +101,14 @@ type rawInboundMessage struct {
 	Timestamp       time.Time `json:"timestamp"`
 	From            string    `json:"from"`
 
+	Conversation struct {
+		Participant struct {
+			Phone    string `json:"phone"`
+			Username string `json:"username"`
+			Name     string `json:"name"`
+		} `json:"participant"`
+	} `json:"conversation"`
+
 	Account struct {
 		AccountID string `json:"accountId"`
 	} `json:"account"`
@@ -122,7 +131,9 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 	p.MessageID = firstNonEmpty(m.ID, raw.MessageID, raw.ZernioMessageID)
 	p.Timestamp = firstTime(m.SentAt, m.Timestamp, raw.Timestamp)
 	p.AccountID = raw.Account.AccountID
-	p.From = raw.From
+	// Modern webhook: phone is inside conversation.participant; legacy uses top-level "from".
+	p.From = firstNonEmpty(raw.Conversation.Participant.Phone, raw.Conversation.Participant.Username, raw.From)
+	p.ParticipantName = raw.Conversation.Participant.Name
 
 	switch strings.ToLower(raw.Direction) {
 	case "incoming":
