@@ -44,7 +44,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       getConversations(filter, searchQuery)
         .then((convs) => {
           setConversations(convs);
-          if (convs.length < 50) setHasMoreConversations(false);
+          if (convs.length < 100) setHasMoreConversations(false);
         })
         .catch((err) => console.error('[WhatsAppInboxApp] fetch conversations:', err));
     });
@@ -203,7 +203,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       getConversations(filter, searchQuery, 50, lastId)
         .then((convs) => {
           appendConversations(convs);
-          if (convs.length < 50) setHasMoreConversations(false);
+          if (convs.length < 100) setHasMoreConversations(false);
         })
         .catch((err) => console.error('[WhatsAppInboxApp] load more conversations:', err))
         .finally(() => setIsLoadingMoreConversations(false));
@@ -214,7 +214,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     getConversations(filter, searchQuery)
       .then((convs) => {
         setConversations(convs);
-        setHasMoreConversations(convs.length >= 50);
+        setHasMoreConversations(convs.length >= 100);
       })
       .catch((err) => console.error('[WhatsAppInboxApp] refresh conversations:', err));
   }, [filter, searchQuery, setConversations]);

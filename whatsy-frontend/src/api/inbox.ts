@@ -16,7 +16,7 @@ async function throwIfError(res: Response): Promise<void> {
 export async function getConversations(
   filter: ConversationFilter = 'all',
   search = '',
-  limit = 50,
+  limit = 100,
   before?: string,
 ): Promise<ZernioConversation[]> {
   const params = new URLSearchParams({
