@@ -20,7 +20,6 @@ async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
   const token = localStorage.getItem('whatsy_jwt');
   const form = new FormData();
   form.append('file', blob, filename);
-  form.append('attachment', blob, filename);
   const res = await fetch(UPLOAD_URL, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -107,7 +106,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     streamRef.current = stream;
     audioChunksRef.current = [];
-    const recorder = new MediaRecorder(stream);
+    const mimeType = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
+      .find(m => MediaRecorder.isTypeSupported(m));
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     mediaRecorderRef.current = recorder;
     recorder.ondataavailable = (ev) => {
       if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
@@ -131,14 +132,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     recorder.onstop = async () => {
       stream?.getTracks().forEach((t) => t.stop());
       if (cancel) return;
-      const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/ogg' });
+      const mime = recorder.mimeType || 'audio/ogg';
+      const ext = mime.includes('webm') ? 'webm' : 'ogg';
+      const filename = `voice-message.${ext}`;
+      const blob = new Blob(audioChunksRef.current, { type: mime });
       setIsUploading(true);
       try {
-        const url = await uploadToBackend(blob, 'voice-message.ogg');
+        const url = await uploadToBackend(blob, filename);
         onSendMessage({
           voiceNote: true,
           attachmentType: 'audio',
-          attachmentName: 'voice-message.ogg',
+          attachmentName: filename,
           attachmentUrl: url,
           replyTo: replyingTo?.id,
         });

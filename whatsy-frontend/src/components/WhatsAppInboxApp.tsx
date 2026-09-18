@@ -237,7 +237,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         id: tempId,
         conversationId: activeConversationId,
         direction: 'outbound',
-        type: (payload.attachmentType === 'file' ? 'document' : (payload.attachmentType as ZernioMessage['type'])) || 'text',
+        type: payload.voiceNote ? 'voice_note' : (payload.attachmentType === 'file' ? 'document' : (payload.attachmentType as ZernioMessage['type'])) || 'text',
         content: payload.message || '',
         status: 'sent',
         createdAt: now,

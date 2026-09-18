@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ZernioMessage, DeliveryStatus } from './types';
 import { API_BASE } from '../api/inbox';
+import VoiceNotePlayer from './VoiceNotePlayer';
 
 const LONG_MESSAGE_CHAR_LIMIT = 450;
 const LONG_MESSAGE_LINE_LIMIT = 7;
@@ -231,7 +232,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                       </svg>
                     </div>
-                    <audio controls src={mediaUrl} preload="metadata" className="flex-1 min-w-0 max-w-[220px]" />
+                    <VoiceNotePlayer src={mediaUrl} isOutbound={isOutbound} messageId={message.id} />
                   </div>
                 );
               }
@@ -279,11 +280,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </svg>
               </div>
               {(message.mediaUrl || message.url) && (
-                <audio
-                  controls
+                <VoiceNotePlayer
                   src={getMediaUrl(message.mediaUrl || message.url!)}
-                  preload="metadata"
-                  className="flex-1 min-w-0 max-w-[220px]"
+                  isOutbound={isOutbound}
+                  messageId={message.id}
                 />
               )}
               {!(message.mediaUrl || message.url) && (
