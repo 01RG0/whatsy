@@ -51,6 +51,13 @@ export const WhatsAppInboxApp: React.FC = () => {
     import('../api/inbox').then(({ getConversations }) => {
       getConversations(filter, searchQuery)
         .then((convs) => {
+          convs.forEach((conv) => {
+            if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
+              conv.unreadCount = 0;
+              conv.isMarkedUnread = false;
+              markRead(conv.id).catch(() => undefined);
+            }
+          });
           setConversations(convs);
           if (convs.length < 100) setHasMoreConversations(false);
         })
@@ -165,6 +172,12 @@ export const WhatsAppInboxApp: React.FC = () => {
             const existingIds = new Set(store.conversations.map((c) => c.id));
             convs.forEach((conv) => {
               if (existingIds.has(conv.id) && conv.id !== store.activeConversationId) {
+                // Last message is agent's own reply — unread MUST be 0; fix the DB too.
+                if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
+                  markRead(conv.id).catch(() => undefined);
+                  store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
+                  return;
+                }
                 const local = store.conversations.find((c) => c.id === conv.id);
                 // Don't restore unread count if the user already cleared it locally —
                 // the markRead API call may still be in-flight on the server.
