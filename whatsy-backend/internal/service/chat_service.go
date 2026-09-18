@@ -76,8 +76,18 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	if err != nil {
 		return fmt.Errorf("resolve conversation id for zernio id %q: %w", payload.ConversationID, err)
 	}
+	// Auto-create the conversation on-the-fly when the worker hasn't synced it yet.
+	// This prevents the first message from a new contact being permanently dropped.
 	if localConvID == "" {
-		return fmt.Errorf("inbound message: no local conversation found for zernio id %q", payload.ConversationID)
+		localConvID, err = s.autoCreateConversation(ctx, payload)
+		if err != nil {
+			return fmt.Errorf("inbound message: auto-create conversation for zernio id %q: %w", payload.ConversationID, err)
+		}
+		masked := "****"
+		if len(payload.From) > 4 {
+			masked = "****" + payload.From[len(payload.From)-4:]
+		}
+		log.Printf("[chat] auto-created conversation %s for zernio id %q (from %s)", localConvID, payload.ConversationID, masked)
 	}
 
 	// Prefer the platform message id (WhatsApp wamid): it is the same id
@@ -433,6 +443,45 @@ func attachmentKind(t domain.ContentType) string {
 	default:
 		return "document"
 	}
+}
+
+// autoCreateConversation creates a student + conversation row from a webhook
+// payload when the worker hasn't synced the contact yet. Uses an upsert on
+// phone so duplicate rows are never created for the same number.
+func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio.InboundMessagePayload) (string, error) {
+	phone := payload.From
+	if phone == "" {
+		phone = "unknown-" + payload.ConversationID
+	}
+	if len(phone) > 0 && phone[0] != '+' {
+		phone = "+" + phone
+	}
+
+	var studentID string
+	err := s.db.QueryRowContext(ctx,
+		`INSERT INTO students (name, phone, created_at, updated_at)
+		 VALUES ($1, $2, NOW(), NOW())
+		 ON CONFLICT (phone) DO UPDATE SET updated_at = NOW()
+		 RETURNING id`,
+		phone, phone,
+	).Scan(&studentID)
+	if err != nil {
+		return "", fmt.Errorf("upsert student: %w", err)
+	}
+
+	var convID string
+	err = s.db.QueryRowContext(ctx,
+		`INSERT INTO conversations
+		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
+		 VALUES ($1, 'whatsapp', '', NOW(), 0, $2, NOW(), NOW())
+		 ON CONFLICT (zernio_conversation_id) DO UPDATE SET updated_at = NOW()
+		 RETURNING id`,
+		studentID, payload.ConversationID,
+	).Scan(&convID)
+	if err != nil {
+		return "", fmt.Errorf("upsert conversation: %w", err)
+	}
+	return convID, nil
 }
 
 func firstNonEmpty(values ...string) string {

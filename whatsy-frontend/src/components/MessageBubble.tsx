@@ -38,11 +38,13 @@ function getMediaUrl(rawUrl: string): string {
   const token = localStorage.getItem('whatsy_jwt');
   let url = rawUrl;
 
-  // If it's a full Zernio media URL, extract the media ID and route through our backend proxy.
-  // Our backend proxy handles Zernio auth + accountId lookup server-side.
-  const zernioMediaMatch = url.match(/zernio\.com\/api\/v1\/whatsapp\/media\/([^?&/]+)/);
+  // If it's a full Zernio media URL, route through our backend proxy.
+  // Preserve the accountId from the original URL so the backend doesn't need a DB lookup.
+  const zernioMediaMatch = url.match(/zernio\.com\/api\/v1\/whatsapp\/media\/([^?&/]+)(\?.*)?$/);
   if (zernioMediaMatch) {
-    url = `/v1/whatsapp/media/${zernioMediaMatch[1]}`;
+    const mediaId = zernioMediaMatch[1];
+    const accountIdMatch = url.match(/[?&]accountId=([^&]+)/);
+    url = `/v1/whatsapp/media/${mediaId}${accountIdMatch ? `?accountId=${accountIdMatch[1]}` : ''}`;
   }
 
   // Prepend API_BASE for relative paths
