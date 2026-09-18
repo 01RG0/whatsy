@@ -83,6 +83,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <span className="font-semibold text-base text-[#111b21] dark:text-[#e9edef] tracking-tight">Chats</span>
 
         <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
+          {conversations.some(c => c.unreadCount > 0 || c.isMarkedUnread) && (
+            <button
+              type="button"
+              onClick={() => onMarkAllRead?.()}
+              title="Mark all as read"
+              className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12l5 5L22 4" />
+                <path d="M9 12l5 5" opacity="0.5" />
+              </svg>
+            </button>
+          )}
           <button type="button" onClick={openNewChat} className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition" title="New Chat">
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
