@@ -246,7 +246,8 @@ func (h *SyncHandler) upsertConversation(ctx context.Context, conv zernioConvers
 		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
 		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, NOW(), NOW())
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
-		    SET last_message    = EXCLUDED.last_message,
+		    SET student_id      = EXCLUDED.student_id,
+		        last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
 		        unread_count    = EXCLUDED.unread_count,
 		        updated_at      = NOW()`,
@@ -255,5 +256,16 @@ func (h *SyncHandler) upsertConversation(ctx context.Context, conv zernioConvers
 	if err != nil {
 		return fmt.Errorf("upsert conversation: %w", err)
 	}
+
+	// Remove any +unknown- placeholder student that is now orphaned because the
+	// conversation was re-linked to the real student by the upsert above.
+	_, _ = h.db.ExecContext(ctx,
+		`DELETE FROM students
+		 WHERE phone LIKE '+unknown-%'
+		   AND NOT EXISTS (
+		       SELECT 1 FROM conversations WHERE student_id = students.id
+		   )`,
+	)
+
 	return nil
 }

@@ -53,6 +53,12 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
     setMenuOpen(true);
   };
 
+  // Guard against +unknown-<zernioConvID> placeholders created before sync
+  // has had a chance to backfill the real phone number.
+  const displayName = /^\+unknown-/i.test(conv.participant.displayName)
+    ? 'Unknown Contact'
+    : conv.participant.displayName;
+
   const isUnread = conv.isMarkedUnread || conv.unreadCount > 0;
   const isManuallyUnread = Boolean(conv.isMarkedUnread);
 
@@ -92,9 +98,9 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
         <img
           src={
             conv.participant.avatarUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(conv.participant.displayName)}&background=e5e7eb&color=374151`
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e5e7eb&color=374151`
           }
-          alt={conv.participant.displayName}
+          alt={displayName}
           className="w-12 h-12 rounded-full object-cover"
         />
         {conv.participant.isOnline && viewers.length === 0 && (
@@ -129,7 +135,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <h3 className="font-medium text-sm text-gray-900 dark:text-[#e9edef] truncate">
-            {conv.participant.displayName}
+            {displayName}
           </h3>
           <span
             className={`text-[11px] shrink-0 ml-2 ${

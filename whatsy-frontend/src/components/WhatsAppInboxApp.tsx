@@ -37,6 +37,12 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
 
+  const totalUnread = conversations.filter(c => c.unreadCount > 0 || c.isMarkedUnread).length;
+
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) Whatsy` : 'Whatsy';
+  }, [totalUnread]);
+
   // Re-fetch conversations on every filter or search change — instant results.
   useEffect(() => {
     setHasMoreConversations(true);
@@ -269,8 +275,18 @@ export const WhatsAppInboxApp: React.FC = () => {
     ? typingLock[activeConversationId] ?? null
     : null;
 
-  // Server already applied the filter; just apply local search highlight subset if needed.
-  const filteredConversations = conversations;
+  // Server applies filter/search, but WebSocket updates bypass that. Re-apply client-side
+  // so real-time pushes don't suddenly replace search results with unrelated conversations.
+  const filteredConversations = searchQuery
+    ? conversations.filter((c) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          c.participant?.displayName?.toLowerCase().includes(q) ||
+          c.participant?.phone?.toLowerCase().includes(q) ||
+          c.lastMessage?.content?.toLowerCase().includes(q)
+        );
+      })
+    : conversations;
 
   const handleSelectConversation = useCallback(
     (conv: ZernioConversation) => {

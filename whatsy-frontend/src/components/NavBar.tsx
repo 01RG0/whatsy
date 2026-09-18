@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { navigate } from '../App'
 import { getCurrentAgent } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
+import { useInboxStore } from '../store/useInboxStore'
 
 interface NavItemConfig {
   href: string
@@ -83,7 +84,7 @@ const navItems: NavItemConfig[] = [
   },
 ].filter((item) => item.href !== '/broadcasts')
 
-function NavItem({ href, icon, label, path }: { href: string; icon: React.ReactNode; label: string; path: string }) {
+function NavItem({ href, icon, label, path, badge }: { href: string; icon: React.ReactNode; label: string; path: string; badge?: number }) {
   const active = path === href || (href !== '/' && path.startsWith(href))
   return (
     <button
@@ -95,7 +96,14 @@ function NavItem({ href, icon, label, path }: { href: string; icon: React.ReactN
           : 'text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-[#e9edef]/60 dark:hover:bg-[#2a3942]'
         }`}
     >
-      {icon}
+      <span className="relative shrink-0">
+        {icon}
+        {badge != null && badge > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </span>
       <span className="hidden md:block">{label}</span>
     </button>
   )
@@ -155,6 +163,7 @@ export default function NavBar({ path }: { path: string }) {
   const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
+  const totalUnread = useInboxStore(s => s.conversations.filter(c => c.unreadCount > 0 || c.isMarkedUnread).length)
 
   useEffect(() => {
     const syncAgent = () => setAgent(getCurrentAgent())
@@ -186,7 +195,7 @@ export default function NavBar({ path }: { path: string }) {
         {/* Nav items */}
         <div className="flex flex-col gap-0.5 flex-1">
           {visibleNavItems.map(item => (
-            <NavItem key={item.href} {...item} path={path} />
+            <NavItem key={item.href} {...item} path={path} badge={item.href === '/' ? totalUnread : undefined} />
           ))}
         </div>
 
@@ -241,6 +250,7 @@ export default function NavBar({ path }: { path: string }) {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#111b21] border-t border-gray-200 dark:border-[#222e35] flex justify-around items-center h-14 px-2">
         {visibleNavItems.map(item => {
           const active = path === item.href || (item.href !== '/' && path.startsWith(item.href))
+          const badge = item.href === '/' ? totalUnread : 0
           return (
             <button
               key={item.href}
@@ -248,7 +258,14 @@ export default function NavBar({ path }: { path: string }) {
               className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors min-w-[44px] min-h-[44px] justify-center
                 ${active ? 'text-[#00a884]' : 'text-[#8696a0]'}`}
             >
-              {item.icon}
+              <span className="relative">
+                {item.icon}
+                {badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </span>
               <span className="text-[10px] font-medium">{item.label}</span>
             </button>
           )
