@@ -226,34 +226,37 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return nil, fmt.Errorf("create outbound message: %w", err)
 	}
-	eventlog.MessageSaved("outbound", message.ID, message.ConversationID)
+	eventlog.TraceStep2MessageSaved("outbound", message.ID, message.ConversationID)
+
+	// Resolve agent name synchronously so the returned message has it.
 	if agentID != "" && message.SenderName == "" {
 		var name, avatar string
 		_ = s.db.QueryRowContext(ctx, "SELECT name, avatar FROM agents WHERE id = $1", agentID).Scan(&name, &avatar)
 		message.SenderName = name
 		message.SenderAvatar = avatar
 	}
-	if err := s.convRepo.UpdateLastMessage(ctx, conversationID, message.Content, string(message.Type)); err != nil {
-		return nil, fmt.Errorf("update conversation last message: %w", err)
-	}
 
-	conversation, err := s.convRepo.GetByID(ctx, conversationID)
-	if err != nil {
-		return nil, fmt.Errorf("get updated conversation: %w", err)
-	}
-	if conversation == nil {
-		return nil, fmt.Errorf("get updated conversation: conversation %q not found", conversationID)
-	}
+	// Update conversation + broadcast in background so the POST returns fast.
+	go func() {
+		bgCtx := context.Background()
+		_ = s.convRepo.UpdateLastMessage(bgCtx, conversationID, message.Content, string(message.Type))
+		conversation, err := s.convRepo.GetByID(bgCtx, conversationID)
+		if err == nil && conversation != nil {
+			s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
+				Event:        websocket.EventConversationUpdated,
+				Conversation: *conversation,
+			})
+		}
+	}()
+
+	// Broadcast the new message to other connected tabs immediately.
 	s.hub.BroadcastToAll(websocket.NewMessageEvent{
 		Event:     websocket.EventNewMessage,
 		StudentID: conversationID,
 		Message:   message,
 	})
-	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
-		Event:        websocket.EventConversationUpdated,
-		Conversation: *conversation,
-	})
 
+	// Deliver to Zernio in background, then push status update to frontend.
 	go func() {
 		start := time.Now()
 		sent, err := s.zernioClient.SendMessage(context.Background(), zernioConvID, payload)
@@ -261,9 +264,19 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		eventlog.ZernioSend(message.ID, conversationID, dur, err)
 		if err != nil {
 			_ = s.msgRepo.UpdateZernioIDAndStatus(context.Background(), message.ID, "", domain.StatusFailed)
+			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+				Event:     websocket.EventMessageStatus,
+				MessageID: message.ID,
+				Status:    string(domain.StatusFailed),
+			})
 			return
 		}
 		_ = s.msgRepo.UpdateZernioIDAndStatus(context.Background(), message.ID, sent.ID, domain.StatusSent)
+		s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+			Event:     websocket.EventMessageStatus,
+			MessageID: message.ID,
+			Status:    string(domain.StatusSent),
+		})
 	}()
 
 	return &message, nil
