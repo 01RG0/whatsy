@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       ) : (
                         <span className="text-gray-500 dark:text-[#8696a0] truncate">
                           {conv.lastMessage?.direction === 'outbound' && (
-                            <span className="mr-1 text-gray-400">You:</span>
+                            <span className="mr-1 text-gray-400">{conv.lastMessage.senderName || 'You'}:</span>
                           )}
                           {conv.lastMessage ? (
                             conv.lastMessage.type === 'image' ? '📷 Photo'

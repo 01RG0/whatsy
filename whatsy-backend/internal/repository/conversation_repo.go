@@ -23,7 +23,7 @@ const conversationColumns = `
 	c.id, c.platform, s.id, s.name, s.phone, COALESCE(s.avatar_url, ''),
 	c.last_message, COALESCE(c.last_message_at, c.updated_at),
 	COALESCE(last_msg.id::text, ''), COALESCE(last_msg.content_type, 'text'),
-	COALESCE(last_msg.direction, ''), COALESCE(last_msg.status, 'sent'),
+	COALESCE(last_msg.direction, ''), COALESCE(last_msg.sender_name, ''), COALESCE(last_msg.status, 'sent'),
 	c.unread_count, COALESCE(tags.names, ARRAY[]::text[]),
 	COALESCE(a.id::text, ''), COALESCE(a.name, ''), COALESCE(a.avatar, ''),
 	c.updated_at`
@@ -33,10 +33,11 @@ const conversationJoins = `
 	JOIN students s ON s.id = c.student_id
 	LEFT JOIN agents a ON a.id = c.assigned_agent_id
 	LEFT JOIN LATERAL (
-		SELECT id, content_type, direction, status
-		FROM messages
+		SELECT m.id, m.content_type, m.direction, m.status, COALESCE(a.name, '') AS sender_name
+		FROM messages m
+		LEFT JOIN agents a ON a.id = m.sent_by_agent_id
 		WHERE conversation_id = c.id
-		ORDER BY timestamp DESC, id DESC
+		ORDER BY m.timestamp DESC, m.id DESC
 		LIMIT 1
 	) last_msg ON TRUE
 	LEFT JOIN LATERAL (
@@ -208,7 +209,7 @@ func scanConversation(row conversationScanner, accountID string) (domain.Convers
 		&conversation.ID, &conversation.Platform,
 		&conversation.Participant.ID, &conversation.Participant.DisplayName, &conversation.Participant.PhoneNumber, &conversation.Participant.AvatarURL,
 		&conversation.LastMessage.Content, &conversation.LastMessage.CreatedAt,
-		&conversation.LastMessage.ID, &conversation.LastMessage.Type, &conversation.LastMessage.Direction, &conversation.LastMessage.Status,
+		&conversation.LastMessage.ID, &conversation.LastMessage.Type, &conversation.LastMessage.Direction, &conversation.LastMessage.SenderName, &conversation.LastMessage.Status,
 		&conversation.UnreadCount, &tags,
 		&agentID, &agentName, &agentAvatar,
 		&conversation.UpdatedAt,

@@ -136,6 +136,7 @@ export function useWebSocket() {
               content: msg.content || '',
               type: msg.type,
               direction: msg.direction,
+              senderName: msg.senderName,
               createdAt: msg.createdAt,
               status: msg.status,
             },

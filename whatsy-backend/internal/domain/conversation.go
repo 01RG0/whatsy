@@ -18,12 +18,13 @@ type AssignedAgent struct {
 }
 
 type LastMessagePreview struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
-	Type      string    `json:"type"`
-	Direction string    `json:"direction"`
-	CreatedAt time.Time `json:"createdAt"`
-	Status    string    `json:"status"`
+	ID         string    `json:"id"`
+	Content    string    `json:"content"`
+	Type       string    `json:"type"`
+	Direction  string    `json:"direction"`
+	SenderName string    `json:"senderName,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Status     string    `json:"status"`
 }
 
 type Conversation struct {
@@ -38,5 +39,5 @@ type Conversation struct {
 	IsGroup       bool               `json:"isGroup"`
 	Tags          []string           `json:"tags"`
 	AssignedAgent *AssignedAgent     `json:"assignedAgent"`
-	UpdatedAt     time.Time         `json:"updatedAt"`
+	UpdatedAt     time.Time          `json:"updatedAt"`
 }

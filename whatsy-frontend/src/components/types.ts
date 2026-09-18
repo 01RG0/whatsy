@@ -104,6 +104,7 @@ export interface ZernioConversation {
     content: string;
     type: MessageType;
     direction: MessageDirection;
+    senderName?: string;
     createdAt: string;
     status: DeliveryStatus;
   };

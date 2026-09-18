@@ -201,6 +201,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           content: optimistic.content,
           type: optimistic.type,
           direction: 'outbound',
+          senderName: optimistic.senderName,
           createdAt: now,
           status: 'sent',
         },
@@ -210,6 +211,19 @@ export const WhatsAppInboxApp: React.FC = () => {
         try {
           const real = await sendMessage(activeConversationId, payload);
           useInboxStore.getState().replaceMessage(activeConversationId, tempId, { ...real, status: 'sent' });
+          updateConversation({
+            id: activeConversationId,
+            lastMessage: {
+              id: real.id,
+              content: real.content,
+              type: real.type,
+              direction: real.direction,
+              senderName: real.senderName,
+              createdAt: real.createdAt,
+              status: real.status,
+            },
+            updatedAt: real.createdAt,
+          });
           return;
         } catch (err) {
           if (attempt < 2) {
@@ -221,7 +235,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         }
       }
     },
-    [activeConversationId, bumpConversation, receiveMessage]
+    [activeConversationId, bumpConversation, receiveMessage, updateConversation]
   );
 
   const handleRetryMessage = useCallback(
