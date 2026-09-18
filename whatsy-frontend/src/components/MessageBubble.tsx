@@ -4,6 +4,23 @@ import { API_BASE } from '../api/inbox';
 import VoiceNotePlayer from './VoiceNotePlayer';
 
 const LONG_MESSAGE_CHAR_LIMIT = 450;
+
+async function downloadMedia(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename || 'image';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+  } catch {
+    window.open(url, '_blank');
+  }
+}
 const LONG_MESSAGE_LINE_LIMIT = 7;
 
 export function renderFormattedText(text: string): React.ReactNode {
@@ -215,16 +232,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       loading="lazy"
                       onError={() => setFailedImages((prev) => ({ ...prev, [idx]: true }))}
                     />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition">
-                      <div className="bg-black/40 rounded-full p-2">
-                        <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="11" cy="11" r="8" />
-                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                          <line x1="11" y1="8" x2="11" y2="14" />
-                          <line x1="8" y1="11" x2="14" y2="11" />
-                        </svg>
-                      </div>
-                    </div>
+                    {/* Download button — bottom-right, WhatsApp style */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); downloadMedia(mediaUrl, att.name || 'image.jpg'); }}
+                      className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition hover:bg-black/70"
+                      title="Download image"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
                   </div>
                 );
               }

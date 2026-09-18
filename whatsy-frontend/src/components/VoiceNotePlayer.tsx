@@ -125,9 +125,7 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
     audio.playbackRate = SPEED_OPTIONS[next];
   }, [speedIndex]);
 
-  const displayTime = isPlaying || currentTime > 0
-    ? `${formatTime(currentTime)} / ${formatTime(duration)}`
-    : formatTime(duration);
+  const displayTime = (isPlaying || currentTime > 0) ? formatTime(currentTime) : formatTime(duration);
 
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0">
