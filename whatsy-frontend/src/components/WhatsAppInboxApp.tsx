@@ -200,7 +200,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     setIsLoadingMoreConversations(true);
     const lastId = conversations[conversations.length - 1].id;
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 50, lastId)
+      getConversations(filter, searchQuery, 100, lastId)
         .then((convs) => {
           appendConversations(convs);
           if (convs.length < 100) setHasMoreConversations(false);

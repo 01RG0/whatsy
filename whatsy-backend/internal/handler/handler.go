@@ -47,7 +47,7 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	// an agent id; it must not overwrite the assigned_to_me filter key.
 	_ = r.URL.Query().Get("platform")
 
-	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), queryLimit(r, 50), r.URL.Query().Get("before"))
+	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), queryLimit(r, 100), r.URL.Query().Get("before"))
 	if err != nil {
 		log.Printf("[error] list conversations: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list conversations"})
