@@ -3,18 +3,26 @@ import { WhatsAppInboxApp } from './components/WhatsAppInboxApp'
 import NavBar from './components/NavBar'
 import LoginPage from './pages/LoginPage'
 import StudentsPage from './pages/StudentsPage'
-import AutoReplyPage from './pages/AutoReplyPage'
+import SettingsPage from './pages/SettingsPage'
 import WhatsAppConnectionPage from './pages/WhatsAppConnectionPage'
 import TeamPage from './pages/TeamPage'
 import { isAdmin } from './lib/auth'
 import { API_BASE, getAuthHeader } from './api/inbox'
 import { useT } from './i18n/translations'
 import { useWebSocket } from './store/useWebSocket'
+import { useSettingsStore } from './store/useSettingsStore'
 
 // Keeps the WebSocket alive on every authenticated page, not just the inbox.
 function WebSocketMount() {
   useWebSocket();
   return null;
+}
+
+// Pre-loads workspace settings after login so feature flags are available immediately.
+function SettingsMount() {
+  const { fetch, loaded } = useSettingsStore()
+  useEffect(() => { if (!loaded) fetch() }, [fetch, loaded])
+  return null
 }
 
 export function navigate(href: string) {
@@ -108,6 +116,7 @@ function Router() {
         </div>
       )}
       <WebSocketMount />
+      <SettingsMount />
       <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
         <NavBar path={path} />
         <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
@@ -144,7 +153,7 @@ function AppContent({ path }: { path: string }) {
   }
 
   if (path === '/students') return <StudentsPage />
-  if (path === '/settings') return <AutoReplyPage />
+  if (path === '/settings') return <SettingsPage />
   if (path === '/connection') return <WhatsAppConnectionPage />
   if (path === '/team') return <TeamPage />
   return <InboxApp />

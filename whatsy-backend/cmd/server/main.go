@@ -142,6 +142,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
 	studentHandler := handler.NewStudentHandler(db)
 	autoReplyHandler := handler.NewAutoReplyHandler(db)
+	settingsHandler := handler.NewSettingsHandler(db)
 	flowHandler := handler.NewFlowHandler(db, zernioClient)
 	templateHandler := handler.NewTemplateHandler(cfg.ZernioAPIKey, db)
 	broadcastHandler := handler.NewBroadcastHandler(cfg.ZernioAPIKey, db)
@@ -212,6 +213,10 @@ func main() {
 		r.With(handler.RequireAdmin).Post("/v1/auto-reply-rules", autoReplyHandler.Create)
 		r.With(handler.RequireAdmin).Patch("/v1/auto-reply-rules/{id}", autoReplyHandler.Update)
 		r.With(handler.RequireAdmin).Delete("/v1/auto-reply-rules/{id}", autoReplyHandler.Delete)
+
+		// Workspace settings & feature flags
+		r.Get("/v1/settings", settingsHandler.GetSettings)
+		r.With(handler.RequireAdmin).Put("/v1/settings", settingsHandler.UpdateSettings)
 		r.Get("/v1/whatsapp/flows", flowHandler.List)
 		r.With(handler.RequireAdmin).Post("/v1/whatsapp/flows", flowHandler.Create)
 		r.With(handler.RequireAdmin).Put("/v1/whatsapp/flows/{id}/json", flowHandler.UploadJSON)

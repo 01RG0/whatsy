@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SendMessagePayload } from './types';
 import { API_BASE } from '../api/inbox';
 import { useT } from '../i18n/translations';
+import { useSettingsStore } from '../store/useSettingsStore';
 
 interface ChatInputProps {
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
@@ -50,6 +51,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onBlur,
 }) => {
   const t = useT();
+  const interactiveEnabled = useSettingsStore(s => s.settings.interactive_messages_enabled);
   const [text, setText] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -356,14 +358,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
             <span>{t.document}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => { setShowAttachMenu(false); setShowInteractiveComposer(true); }}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
-          >
-            <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>
-            <span>{t.interactive_template}</span>
-          </button>
+          {interactiveEnabled && (
+            <button
+              type="button"
+              onClick={() => { setShowAttachMenu(false); setShowInteractiveComposer(true); }}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
+            >
+              <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>
+              <span>{t.interactive_template}</span>
+            </button>
+          )}
         </div>
       )}
 
