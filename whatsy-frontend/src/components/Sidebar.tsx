@@ -3,6 +3,7 @@ import { ZernioConversation, ConversationFilter } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
 import { useT } from '../i18n/translations';
+import { useLanguageStore } from '../store/useLanguageStore';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -42,12 +43,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMarkRead,
 }) => {
   const t = useT();
+  const { lang, setLang } = useLanguageStore();
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('whatsy_dark', String(next));
+  };
 
   const contactMatches = conversations.filter((conversation) => {
     const query = newChatSearch.trim().toLowerCase();
@@ -82,7 +92,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside data-testid="sidebar" className="w-full md:w-[380px] lg:w-[420px] h-full flex flex-col bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none">
       {/* Header */}
       <header className="relative h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between shrink-0 border-b border-[#e9edef] dark:border-[#222e35]">
-        <span className="font-semibold text-base text-[#111b21] dark:text-[#e9edef] tracking-tight">{t.sidebar_chats}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-base text-[#111b21] dark:text-[#e9edef] tracking-tight">{t.sidebar_chats}</span>
+          {/* Dark/Light + Language toggles — mobile only */}
+          <div className="flex items-center gap-1 md:hidden">
+            <button
+              type="button"
+              onClick={toggleDark}
+              title={dark ? 'Light mode' : 'Dark mode'}
+              className="p-1.5 rounded-full hover:bg-[#e9edef] dark:hover:bg-[#374248] text-[#54656f] dark:text-[#aebac1] transition"
+            >
+              {dark ? (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+              title={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'}
+              className="px-2 py-0.5 rounded-full text-[10px] font-bold hover:bg-[#e9edef] dark:hover:bg-[#374248] text-[#54656f] dark:text-[#aebac1] transition border border-[#d1d7db] dark:border-[#374248]"
+            >
+              {lang === 'en' ? 'ع' : 'EN'}
+            </button>
+          </div>
+        </div>
 
         <div className="flex items-center gap-1 text-[#54656f] dark:text-[#aebac1]">
           {conversations.some(c => c.unreadCount > 0 || c.isMarkedUnread) && (
