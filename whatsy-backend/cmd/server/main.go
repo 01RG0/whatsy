@@ -60,10 +60,6 @@ func main() {
 		}
 	}()
 
-	if err := runMigrations(db); err != nil {
-		log.Fatalf("migrations: %v", err)
-	}
-
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -268,6 +264,12 @@ func main() {
 			log.Fatalf("listen: %v", err)
 		}
 	}()
+
+	// Run migrations after the HTTP server is already listening so Railway's
+	// healthcheck at /health can pass even when migrations take a while.
+	if err := runMigrations(db); err != nil {
+		log.Printf("[WARN] migrations failed: %v — server running with potentially incomplete schema", err)
+	}
 
 	<-quit
 	log.Println("shutting down server...")
