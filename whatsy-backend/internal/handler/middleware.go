@@ -43,11 +43,23 @@ func JWTMiddleware(secret string, db *sql.DB) func(http.Handler) http.Handler {
 			// across the multi-tenant migration, and so the value is always authoritative.
 			var dbVersion int64
 			var tenantID *string // nullable — NULL for legacy rows not yet assigned a tenant
-			if err := db.QueryRowContext(r.Context(),
+			err = db.QueryRowContext(r.Context(),
 				`SELECT session_version, tenant_id::text FROM agents WHERE id = $1`, claims.AgentID,
-			).Scan(&dbVersion, &tenantID); err != nil {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-				return
+			).Scan(&dbVersion, &tenantID)
+			if err != nil {
+				// 42703 = undefined_column: tenant_id column not yet created (migration pending).
+				// Fall back to session_version-only query so auth still works.
+				if strings.Contains(err.Error(), "42703") || strings.Contains(err.Error(), `"tenant_id"`) {
+					if err2 := db.QueryRowContext(r.Context(),
+						`SELECT session_version FROM agents WHERE id = $1`, claims.AgentID,
+					).Scan(&dbVersion); err2 != nil {
+						writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+						return
+					}
+				} else {
+					writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+					return
+				}
 			}
 			if claims.SessionVersion != dbVersion {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "session_invalidated"})
