@@ -2,17 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { API_BASE, getAuthHeader } from '../api/inbox'
 import { useLanguageStore } from '../store/useLanguageStore'
 import { useT } from '../i18n/translations'
+import { useDarkModeStore } from '../store/useDarkModeStore'
 
 function AppearanceCard() {
   const t = useT()
   const { lang, setLang } = useLanguageStore()
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-  const toggleDark = () => {
-    const next = !dark
-    setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    localStorage.setItem('whatsy_dark', String(next))
-  }
+  const { dark, toggle: toggleDark } = useDarkModeStore()
   return (
     <div className="md:hidden bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-5 py-3 flex items-center gap-6">
       <button

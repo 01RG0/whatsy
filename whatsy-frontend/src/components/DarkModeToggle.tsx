@@ -1,19 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useDarkModeStore } from '../store/useDarkModeStore'
 
 export default function DarkModeToggle() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('whatsy_dark')
-    return saved ? saved === 'true' : true
-  })
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('whatsy_dark', String(dark))
-  }, [dark])
+  const { dark, toggle } = useDarkModeStore()
 
   return (
     <button
-      onClick={() => setDark((d) => !d)}
+      onClick={toggle}
       className="p-2 rounded-lg text-[#8696a0] hover:text-[#e9edef] hover:bg-[#2a3942] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
       title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
     >

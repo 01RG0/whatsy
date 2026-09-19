@@ -4,6 +4,7 @@ import AutoReplyPage from './AutoReplyPage'
 import { isAdmin } from '../lib/auth'
 import { useT } from '../i18n/translations'
 import { useLanguageStore } from '../store/useLanguageStore'
+import { useDarkModeStore } from '../store/useDarkModeStore'
 
 // ─── Feature definitions ────────────────────────────────────────────────────
 
@@ -92,14 +93,7 @@ function FeatureCard({ feature }: { feature: FeatureFlag }) {
 function AppearanceSection() {
   const t = useT()
   const { lang, setLang } = useLanguageStore()
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-
-  const toggleDark = () => {
-    const next = !dark
-    setDark(next)
-    document.documentElement.classList.toggle('dark', next)
-    localStorage.setItem('whatsy_dark', String(next))
-  }
+  const { dark, toggle: toggleDark } = useDarkModeStore()
 
   return (
     <div className="space-y-3">

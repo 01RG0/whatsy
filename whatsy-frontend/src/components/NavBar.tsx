@@ -5,6 +5,7 @@ import ChangePasswordModal from './ChangePasswordModal'
 import { useInboxStore } from '../store/useInboxStore'
 import { useLanguageStore } from '../store/useLanguageStore'
 import { useT } from '../i18n/translations'
+import { useDarkModeStore } from '../store/useDarkModeStore'
 
 
 const navItems = [
@@ -120,19 +121,11 @@ function NavItem({ href, icon, label, path, badge }: { href: string; icon: React
 
 function DarkModeButton() {
   const t = useT()
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('whatsy_dark')
-    return saved ? saved === 'true' : true
-  })
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('whatsy_dark', String(dark))
-  }, [dark])
+  const { dark, toggle } = useDarkModeStore()
 
   return (
     <button
-      onClick={() => setDark(d => !d)}
+      onClick={toggle}
       title={dark ? t.nav_light_mode : t.nav_dark_mode}
       className="p-2 rounded-lg text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-[#e9edef]/60 dark:hover:bg-[#2a3942] transition-colors"
     >

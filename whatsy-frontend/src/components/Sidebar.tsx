@@ -4,6 +4,7 @@ import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
 import { useT } from '../i18n/translations';
 import { useLanguageStore } from '../store/useLanguageStore';
+import { useDarkModeStore } from '../store/useDarkModeStore';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -44,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const t = useT();
   const { lang, setLang } = useLanguageStore();
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  const { dark, toggle: toggleDark } = useDarkModeStore();
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -52,12 +53,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const toggleDark = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('whatsy_dark', String(next));
-  };
 
   const contactMatches = conversations.filter((conversation) => {
     const query = newChatSearch.trim().toLowerCase();
@@ -135,8 +130,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 12l5 5L22 4" />
-                <path d="M9 12l5 5" opacity="0.5" />
+                <path d="M1 12l4 4 8-9" />
+                <path d="M7 12l4 4 8-9" />
               </svg>
             </button>
           )}
