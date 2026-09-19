@@ -11,6 +11,7 @@ import { API_BASE, getAuthHeader } from './api/inbox'
 import { useT } from './i18n/translations'
 import { useWebSocket } from './store/useWebSocket'
 import { useSettingsStore } from './store/useSettingsStore'
+import { useInboxStore } from './store/useInboxStore'
 
 // Keeps the WebSocket alive on every authenticated page, not just the inbox.
 function WebSocketMount() {
@@ -119,12 +120,19 @@ function Router() {
       <SettingsMount />
       <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
         <NavBar path={path} />
-        <main className="flex-1 flex flex-col min-w-0 pb-14 md:pb-0">
-          <AppContent path={path} />
-        </main>
+        <MobileAwareMain path={path} />
       </div>
     </>
   )
+}
+
+function MobileAwareMain({ path }: { path: string }) {
+  const isMobileChatOpen = useInboxStore((s) => s.isMobileChatOpen);
+  return (
+    <main className={`flex-1 flex flex-col min-w-0 md:pb-0 ${isMobileChatOpen ? 'pb-0' : 'pb-14'}`}>
+      <AppContent path={path} />
+    </main>
+  );
 }
 
 function AppContent({ path }: { path: string }) {

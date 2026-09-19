@@ -29,6 +29,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   const appendConversations = useInboxStore((s) => s.appendConversations);
   const setCurrentFilter = useInboxStore((s) => s.setCurrentFilter);
   const setCurrentSearch = useInboxStore((s) => s.setCurrentSearch);
+  const setMobileChatOpen = useInboxStore((s) => s.setMobileChatOpen);
 
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +51,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   // Keep currentFilter/currentSearch in the store so WS handler can access them.
   useEffect(() => { setCurrentFilter(filter); }, [filter, setCurrentFilter]);
   useEffect(() => { setCurrentSearch(searchQuery); }, [searchQuery, setCurrentSearch]);
+  useEffect(() => { setMobileChatOpen(showChatOnMobile); }, [showChatOnMobile, setMobileChatOpen]);
 
   // Re-fetch conversations on every filter or search change — instant results.
   useEffect(() => {

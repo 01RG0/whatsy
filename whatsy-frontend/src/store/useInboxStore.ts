@@ -27,6 +27,7 @@ interface InboxState {
   wsConnected: boolean;
   currentFilter: ConversationFilter;
   currentSearch: string;
+  isMobileChatOpen: boolean;
 
   setConversations: (convs: ZernioConversation[]) => void;
   appendConversations: (convs: ZernioConversation[]) => void;
@@ -42,6 +43,7 @@ interface InboxState {
   setWsConnected: (connected: boolean) => void;
   setCurrentFilter: (filter: ConversationFilter) => void;
   setCurrentSearch: (search: string) => void;
+  setMobileChatOpen: (open: boolean) => void;
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   replaceMessage: (conversationId: string, tempId: string, real: ZernioMessage) => void;
@@ -60,6 +62,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   wsConnected: false,
   currentFilter: 'all',
   currentSearch: '',
+  isMobileChatOpen: false,
 
   setConversations: (convs) =>
     set((state) => {
@@ -200,6 +203,7 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   setCurrentFilter: (currentFilter) => set({ currentFilter }),
   setCurrentSearch: (currentSearch) => set({ currentSearch }),
+  setMobileChatOpen: (isMobileChatOpen) => set({ isMobileChatOpen }),
 
   addReaction: (conversationId, messageId, emoji) =>
     set((state) => {
