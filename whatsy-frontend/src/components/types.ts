@@ -33,9 +33,12 @@ export interface Attachment {
 }
 
 export interface InteractiveButton {
-  id: string;
+  /** id: used for display/receipt (tapped button id from inbound tap events) */
+  id?: string;
+  /** payload: used for outbound — the value Zernio sends back when contact taps */
+  payload?: string;
   title: string;
-  type?: 'reply' | 'url' | 'call';
+  type?: 'reply' | 'url' | 'call' | 'postback' | 'button_reply' | 'list_reply';
   url?: string;
   phoneNumber?: string;
 }
@@ -132,6 +135,20 @@ export interface ZernioConversation {
   updatedAt: string;
 }
 
+export interface InteractiveListAction {
+  button?: string;
+  sections?: Array<{
+    title: string;
+    rows: Array<{ id: string; title: string; description?: string }>;
+  }>;
+}
+
+export interface InteractivePayload {
+  type: string;
+  body?: { text: string };
+  action?: InteractiveListAction;
+}
+
 export interface SendMessagePayload {
   accountId: string;
   conversationId?: string;
@@ -144,6 +161,7 @@ export interface SendMessagePayload {
   voiceNote?: boolean;
   replyTo?: string;
   buttons?: InteractiveButton[];
+  interactive?: InteractivePayload;
 }
 
 export type ConversationFilter = 'all' | 'unread' | 'groups' | 'assigned_to_me' | 'unanswered';

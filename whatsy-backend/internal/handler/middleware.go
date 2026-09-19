@@ -38,19 +38,23 @@ func JWTMiddleware(secret string, db *sql.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Verify the session version to enforce single-session per agent.
-			// Tokens issued before this column existed have sv=0; rows default to 0,
-			// so existing sessions pass until the next login rotates the version.
+			// Verify session version (single-session enforcement) and load tenant_id.
+			// tenant_id is read from DB rather than the JWT so old tokens stay valid
+			// across the multi-tenant migration, and so the value is always authoritative.
 			var dbVersion int64
+			var tenantID *string // nullable — NULL for legacy rows not yet assigned a tenant
 			if err := db.QueryRowContext(r.Context(),
-				`SELECT session_version FROM agents WHERE id = $1`, claims.AgentID,
-			).Scan(&dbVersion); err != nil {
+				`SELECT session_version, tenant_id::text FROM agents WHERE id = $1`, claims.AgentID,
+			).Scan(&dbVersion, &tenantID); err != nil {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 				return
 			}
 			if claims.SessionVersion != dbVersion {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "session_invalidated"})
 				return
+			}
+			if tenantID != nil {
+				claims.TenantID = *tenantID
 			}
 
 			ctx := context.WithValue(r.Context(), claimsContextKey, claims)

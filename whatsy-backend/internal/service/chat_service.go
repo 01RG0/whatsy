@@ -118,6 +118,18 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	if message.Type == "" {
 		message.Type = domain.ContentTypeText
 	}
+	// Inbound interactive tap: contact replied to a button or list row.
+	if payload.InteractiveType != "" {
+		message.Type = domain.ContentTypeInteractive
+		message.Interactive = &domain.Interactive{
+			Body: payload.Content,
+			Buttons: []domain.InteractiveButton{{
+				ID:    payload.InteractiveId,
+				Title: payload.InteractiveTitle,
+				Type:  payload.InteractiveType,
+			}},
+		}
+	}
 	if len(payload.Attachments) > 0 {
 		message.Attachments = make([]domain.Attachment, len(payload.Attachments))
 		for i, a := range payload.Attachments {
@@ -252,6 +264,35 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 			Name:     payload.AttachmentName,
 			MimeType: payload.AttachmentType,
 		}}
+	}
+	// Store outbound buttons/list so the agent's UI shows what was sent.
+	if len(payload.Buttons) > 0 {
+		iv := &domain.Interactive{Body: payload.Message}
+		for _, b := range payload.Buttons {
+			iv.Buttons = append(iv.Buttons, domain.InteractiveButton{ID: b.Payload, Title: b.Title, Type: b.Type})
+		}
+		message.Interactive = iv
+	} else if len(payload.QuickReplies) > 0 {
+		iv := &domain.Interactive{Body: payload.Message}
+		for _, qr := range payload.QuickReplies {
+			iv.Buttons = append(iv.Buttons, domain.InteractiveButton{ID: qr.Payload, Title: qr.Title, Type: qr.Type})
+		}
+		message.Interactive = iv
+	} else if payload.Interactive != nil {
+		iv := &domain.Interactive{}
+		if payload.Interactive.Body != nil {
+			iv.Body = payload.Interactive.Body.Text
+		}
+		if payload.Interactive.Action != nil {
+			for _, sec := range payload.Interactive.Action.Sections {
+				ls := domain.ListSection{Title: sec.Title}
+				for _, row := range sec.Rows {
+					ls.Rows = append(ls.Rows, domain.InteractiveButton{ID: row.ID, Title: row.Title})
+				}
+				iv.ListSections = append(iv.ListSections, ls)
+			}
+		}
+		message.Interactive = iv
 	}
 
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
@@ -434,6 +475,9 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
 	if payload.VoiceNote {
 		return domain.ContentTypeVoiceNote
+	}
+	if len(payload.Buttons) > 0 || len(payload.QuickReplies) > 0 || payload.Interactive != nil {
+		return domain.ContentTypeInteractive
 	}
 	if payload.AttachmentType != "" {
 		return domain.ContentType(payload.AttachmentType)

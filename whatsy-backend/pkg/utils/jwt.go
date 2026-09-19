@@ -8,12 +8,16 @@ import (
 )
 
 // JWTClaims contains the identity and authorization data carried by a JWT.
+// TenantID is NOT encoded in the token — it is looked up from the DB by
+// JWTMiddleware on every request and injected into the context. This keeps
+// old tokens valid across the multi-tenant migration.
 type JWTClaims struct {
 	AgentID        string `json:"agent_id"`
 	Name           string `json:"name"`
 	Avatar         string `json:"avatar"`
 	Role           string `json:"role"`
 	SessionVersion int64  `json:"sv"`
+	TenantID       string `json:"-"` // populated at request time, not from JWT
 	jwt.RegisteredClaims
 }
 

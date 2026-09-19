@@ -55,6 +55,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Interactive message composer state
+  const [showInteractiveComposer, setShowInteractiveComposer] = useState(false);
+  const [interactiveTab, setInteractiveTab] = useState<'buttons' | 'list'>('buttons');
+  const [interactiveBody, setInteractiveBody] = useState('');
+  const [interactiveButtons, setInteractiveButtons] = useState([{ title: '' }, { title: '' }]);
+  const [listSectionTitle, setListSectionTitle] = useState('');
+  const [listRows, setListRows] = useState([{ title: '', description: '' }]);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const docFileInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
@@ -224,6 +232,119 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
+      {/* Interactive Message Composer */}
+      {showInteractiveComposer && (
+        <div className="mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2a3942] overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-[#2a3942]">
+            <span className="text-sm font-semibold text-gray-700 dark:text-[#e9edef]">⚡ {t.interactive_template}</span>
+            <button type="button" onClick={() => setShowInteractiveComposer(false)} className="text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] p-1">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          {/* Tab switcher */}
+          <div className="flex border-b border-gray-100 dark:border-[#2a3942]">
+            {(['buttons', 'list'] as const).map((tab) => (
+              <button key={tab} type="button" onClick={() => setInteractiveTab(tab)}
+                className={`flex-1 py-2 text-xs font-medium transition ${interactiveTab === tab ? 'text-[#00a884] border-b-2 border-[#00a884]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-600 dark:hover:text-[#e9edef]'}`}>
+                {tab === 'buttons' ? '🔘 Reply Buttons' : '📋 List Message'}
+              </button>
+            ))}
+          </div>
+          <div className="p-4 flex flex-col gap-3">
+            {/* Body text */}
+            <div>
+              <label className="text-xs text-gray-500 dark:text-[#8696a0] mb-1 block">Message body</label>
+              <textarea value={interactiveBody} onChange={e => setInteractiveBody(e.target.value)} rows={2}
+                placeholder="Type your message..."
+                className="w-full rounded-lg border border-gray-200 dark:border-[#2a3942] bg-gray-50 dark:bg-[#182229] text-sm text-gray-800 dark:text-[#e9edef] px-3 py-2 resize-none focus:outline-none focus:border-[#00a884]" />
+            </div>
+
+            {interactiveTab === 'buttons' ? (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-gray-500 dark:text-[#8696a0]">Buttons (max 3)</label>
+                {interactiveButtons.map((btn, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input value={btn.title} onChange={e => {
+                        const next = [...interactiveButtons];
+                        next[i] = { title: e.target.value.slice(0, 20) };
+                        setInteractiveButtons(next);
+                      }}
+                      placeholder={`Button ${i + 1} title`} maxLength={20}
+                      className="flex-1 rounded-lg border border-gray-200 dark:border-[#2a3942] bg-gray-50 dark:bg-[#182229] text-sm text-gray-800 dark:text-[#e9edef] px-3 py-1.5 focus:outline-none focus:border-[#00a884]" />
+                    {interactiveButtons.length > 1 && (
+                      <button type="button" onClick={() => setInteractiveButtons(interactiveButtons.filter((_, j) => j !== i))}
+                        className="text-gray-400 dark:text-[#8696a0] hover:text-red-400 p-1">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {interactiveButtons.length < 3 && (
+                  <button type="button" onClick={() => setInteractiveButtons([...interactiveButtons, { title: '' }])}
+                    className="text-xs text-[#00a884] hover:text-[#06cf9c] self-start">+ Add button</button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-[#8696a0] mb-1 block">Section title</label>
+                  <input value={listSectionTitle} onChange={e => setListSectionTitle(e.target.value)} placeholder="e.g. Options"
+                    className="w-full rounded-lg border border-gray-200 dark:border-[#2a3942] bg-gray-50 dark:bg-[#182229] text-sm text-gray-800 dark:text-[#e9edef] px-3 py-1.5 focus:outline-none focus:border-[#00a884]" />
+                </div>
+                <label className="text-xs text-gray-500 dark:text-[#8696a0]">Rows (max 5)</label>
+                {listRows.map((row, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="flex-1 flex gap-2">
+                      <input value={row.title} onChange={e => { const next = [...listRows]; next[i] = { ...next[i], title: e.target.value.slice(0, 24) }; setListRows(next); }}
+                        placeholder="Title" maxLength={24}
+                        className="flex-1 rounded-lg border border-gray-200 dark:border-[#2a3942] bg-gray-50 dark:bg-[#182229] text-sm text-gray-800 dark:text-[#e9edef] px-3 py-1.5 focus:outline-none focus:border-[#00a884]" />
+                      <input value={row.description} onChange={e => { const next = [...listRows]; next[i] = { ...next[i], description: e.target.value }; setListRows(next); }}
+                        placeholder="Description (optional)"
+                        className="flex-1 rounded-lg border border-gray-200 dark:border-[#2a3942] bg-gray-50 dark:bg-[#182229] text-sm text-gray-800 dark:text-[#e9edef] px-3 py-1.5 focus:outline-none focus:border-[#00a884]" />
+                    </div>
+                    {listRows.length > 1 && (
+                      <button type="button" onClick={() => setListRows(listRows.filter((_, j) => j !== i))}
+                        className="text-gray-400 dark:text-[#8696a0] hover:text-red-400 p-1">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {listRows.length < 5 && (
+                  <button type="button" onClick={() => setListRows([...listRows, { title: '', description: '' }])}
+                    className="text-xs text-[#00a884] hover:text-[#06cf9c] self-start">+ Add row</button>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={disabled || !interactiveBody.trim() || (interactiveTab === 'buttons' && interactiveButtons.every(b => !b.title.trim())) || (interactiveTab === 'list' && listRows.every(r => !r.title.trim()))}
+              onClick={() => {
+                if (interactiveTab === 'buttons') {
+                  const validBtns = interactiveButtons.filter(b => b.title.trim());
+                  if (!validBtns.length) return;
+                  onSendMessage({ message: interactiveBody.trim(), buttons: validBtns.map(b => ({ type: 'postback', title: b.title.trim(), payload: b.title.trim().toLowerCase().replace(/\s+/g, '_') })) });
+                } else {
+                  const validRows = listRows.filter(r => r.title.trim());
+                  if (!validRows.length) return;
+                  onSendMessage({ message: interactiveBody.trim(), interactive: { type: 'list', body: { text: interactiveBody.trim() }, action: { button: 'Select', sections: [{ title: listSectionTitle || 'Options', rows: validRows.map((r, i) => ({ id: `row_${i}`, title: r.title.trim(), description: r.description || undefined })) }] } } });
+                }
+                setShowInteractiveComposer(false);
+                setInteractiveBody('');
+                setInteractiveButtons([{ title: '' }, { title: '' }]);
+                setListRows([{ title: '', description: '' }]);
+                setListSectionTitle('');
+              }}
+              className="w-full py-2 rounded-lg bg-[#00a884] hover:bg-[#06cf9c] text-white text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Send Interactive Message
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Attachment Popover */}
       {showAttachMenu && (
         <div ref={attachMenuRef} className="absolute bottom-full start-4 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
@@ -237,10 +358,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setShowAttachMenu(false);
-              onSendMessage({ message: 'Interactive Quick Template', buttons: [{ id: 'opt_1', title: 'Talk to Agent' }, { id: 'opt_2', title: 'View Catalog' }] });
-            }}
+            onClick={() => { setShowAttachMenu(false); setShowInteractiveComposer(true); }}
             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
           >
             <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>

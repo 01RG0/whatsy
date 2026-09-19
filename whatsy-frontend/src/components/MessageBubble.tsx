@@ -351,14 +351,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
-        {/* Interactive Buttons */}
-        {message.interactive?.buttons && (
+        {/* Interactive Buttons (outbound: agent sent reply buttons) */}
+        {message.interactive?.buttons && message.direction === 'outbound' && (
           <div className="border-t border-black/10 mt-1 flex flex-col divide-y divide-black/10">
-            {message.interactive.buttons.map((btn) => (
+            {message.interactive.buttons.map((btn, i) => (
               <button
-                key={btn.id}
+                key={btn.id ?? btn.payload ?? i}
                 type="button"
-                onClick={() => onButtonClick?.(btn.id, btn.title)}
+                onClick={() => onButtonClick?.(btn.id ?? btn.payload ?? '', btn.title)}
                 className="py-2 px-3 text-center text-sm font-medium text-[#53bdeb] hover:bg-black/5 dark:hover:bg-black/10 transition flex items-center justify-center gap-2"
               >
                 {btn.type === 'url' && (
@@ -374,6 +374,44 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 {btn.title}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Interactive List Sections (outbound: agent sent a list message) */}
+        {message.interactive?.listSections && message.interactive.listSections.length > 0 && (
+          <div className="border-t border-black/10 mt-1">
+            {message.interactive.listSections.map((section, si) => (
+              <div key={si}>
+                {section.title && (
+                  <div className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-[#8696a0]">
+                    {section.title}
+                  </div>
+                )}
+                {section.rows?.map((row, ri) => (
+                  <div key={row.id ?? ri} className="px-3 py-1.5 flex flex-col border-t border-black/5 first:border-0">
+                    <span className="text-sm text-gray-800 dark:text-[#e9edef]">{row.title}</span>
+                    {row.description && <span className="text-xs text-gray-400 dark:text-[#8696a0]">{row.description}</span>}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Inbound interactive reply: contact tapped a button or list row */}
+        {message.type === 'interactive' && message.direction === 'inbound' && message.interactive?.buttons?.[0] && (
+          <div className="mt-1 mx-1 mb-1 px-3 py-2 bg-black/5 dark:bg-white/5 rounded-lg flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-[#00a884] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-gray-400 dark:text-[#8696a0]">
+                {message.interactive.buttons[0].type === 'list_reply' ? 'Selected' : 'Tapped'}
+              </span>
+              <span className="text-sm font-medium text-gray-800 dark:text-[#e9edef] truncate">
+                {message.interactive.buttons[0].title || message.interactive.body}
+              </span>
+            </div>
           </div>
         )}
 

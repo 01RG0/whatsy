@@ -21,7 +21,8 @@ func NewMessageRepo(db *sql.DB) *MessageRepo {
 
 const messageColumns = `m.id, m.conversation_id, m.direction, m.content_type, m.content, m.status,
 	COALESCE(m.zernio_message_id, ''), m.attachments, m.timestamp,
-	COALESCE(m.sent_by_agent_id::text, ''), COALESCE(a.name, ''), COALESCE(a.avatar, '')`
+	COALESCE(m.sent_by_agent_id::text, ''), COALESCE(a.name, ''), COALESCE(a.avatar, ''),
+	COALESCE(m.interactive::text, ''), COALESCE(m.reply_to::text, '')`
 
 func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	if msg == nil {
@@ -35,9 +36,21 @@ func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 		}
 	}
 
+	var interactiveJSON, replyToJSON interface{}
+	if msg.Interactive != nil {
+		if b, err := json.Marshal(msg.Interactive); err == nil {
+			interactiveJSON = string(b)
+		}
+	}
+	if msg.ReplyTo != nil {
+		if b, err := json.Marshal(msg.ReplyTo); err == nil {
+			replyToJSON = string(b)
+		}
+	}
+
 	const query = `INSERT INTO messages
-		(conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, sent_by_agent_id)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7::jsonb, COALESCE($8, NOW()), NULLIF($9, '')::uuid)
+		(conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, sent_by_agent_id, interactive, reply_to)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7::jsonb, COALESCE($8, NOW()), NULLIF($9, '')::uuid, $10::jsonb, $11::jsonb)
 		RETURNING id, timestamp`
 	var createdAt any
 	if !msg.CreatedAt.IsZero() {
@@ -46,6 +59,7 @@ func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	err := r.db.QueryRowContext(ctx, query,
 		msg.ConversationID, msg.Direction, msg.Type, msg.Content, msg.Status,
 		msg.ZernioMessageID, attachments, createdAt, msg.SentByAgentID,
+		interactiveJSON, replyToJSON,
 	).Scan(&msg.ID, &msg.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("create message: %w", err)
@@ -174,11 +188,12 @@ type messageScanner interface {
 
 func scanMessage(row messageScanner) (domain.Message, error) {
 	var message domain.Message
-	var attachments []byte
+	var attachments, interactive, replyTo []byte
 	err := row.Scan(
 		&message.ID, &message.ConversationID, &message.Direction, &message.Type,
 		&message.Content, &message.Status, &message.ZernioMessageID, &attachments, &message.CreatedAt,
 		&message.SentByAgentID, &message.SenderName, &message.SenderAvatar,
+		&interactive, &replyTo,
 	)
 	if err != nil {
 		return message, err
@@ -186,6 +201,18 @@ func scanMessage(row messageScanner) (domain.Message, error) {
 	message.Attachments = []domain.Attachment{}
 	if len(attachments) > 0 {
 		_ = json.Unmarshal(attachments, &message.Attachments)
+	}
+	if len(interactive) > 0 {
+		var iv domain.Interactive
+		if err := json.Unmarshal(interactive, &iv); err == nil {
+			message.Interactive = &iv
+		}
+	}
+	if len(replyTo) > 0 {
+		var rt domain.ReplyTo
+		if err := json.Unmarshal(replyTo, &rt); err == nil {
+			message.ReplyTo = &rt
+		}
 	}
 	return message, nil
 }

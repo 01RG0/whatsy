@@ -67,10 +67,14 @@ type InboundMessagePayload struct {
 		Type string
 		URL  string
 	}
-	AccountID       string // accountId of the connected WhatsApp account
-	Timestamp       time.Time
-	From            string // sender phone number
-	ParticipantName string // sender display name from conversation.participant
+	AccountID        string // accountId of the connected WhatsApp account
+	Timestamp        time.Time
+	From             string // sender phone number
+	ParticipantName  string // sender display name from conversation.participant
+	// Interactive tap fields — set when a contact taps a button or list row.
+	InteractiveType  string // "list_reply" | "button_reply" | "nfm_reply"
+	InteractiveId    string // tapped button/row id
+	InteractiveTitle string // display title of the tapped item
 }
 
 type rawInboundMessage struct {
@@ -95,6 +99,11 @@ type rawInboundMessage struct {
 			PhoneNumber string `json:"phoneNumber"`
 			Name        string `json:"name"`
 		} `json:"sender"`
+		Metadata struct {
+			InteractiveType  string `json:"interactiveType"`  // list_reply | button_reply | nfm_reply
+			InteractiveId    string `json:"interactiveId"`
+			InteractiveTitle string `json:"interactiveTitle"`
+		} `json:"metadata"`
 	} `json:"message"`
 	// Legacy flat payload fields.
 	ConversationID  string    `json:"conversationId"`
@@ -156,6 +165,9 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 
 	p.Content = firstNonEmpty(m.Text, m.Content, raw.Content)
 	p.Type = firstNonEmpty(m.Type, raw.Type)
+	p.InteractiveType = m.Metadata.InteractiveType
+	p.InteractiveId = m.Metadata.InteractiveId
+	p.InteractiveTitle = m.Metadata.InteractiveTitle
 	p.MediaURL = raw.MediaURL
 	if p.MediaURL == "" && len(m.Attachments) > 0 {
 		p.MediaURL = m.Attachments[0].URL

@@ -39,21 +39,71 @@ func NewClient(apiKey string) *Client {
 	}
 }
 
+// Button is a reply button for outbound interactive messages (max 3 per message).
+// Mutually exclusive with QuickReplies.
+type Button struct {
+	Type    string `json:"type"`    // always "postback"
+	Title   string `json:"title"`
+	Payload string `json:"payload"`
+}
+
+// QuickReply is a quick-reply option (max 13 per message).
+// Mutually exclusive with Buttons.
+type QuickReply struct {
+	Type    string `json:"type"`    // always "postback"
+	Title   string `json:"title"`
+	Payload string `json:"payload"`
+}
+
+// InteractiveAction holds the action part of a list/CTA interactive message.
+type InteractiveAction struct {
+	Button   string               `json:"button,omitempty"`
+	Sections []InteractiveSection `json:"sections,omitempty"`
+}
+
+// InteractiveSection is a section within a list message.
+type InteractiveSection struct {
+	Title string           `json:"title,omitempty"`
+	Rows  []InteractiveRow `json:"rows,omitempty"`
+}
+
+// InteractiveRow is a selectable row within a list section.
+type InteractiveRow struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+}
+
+// InteractiveBody holds the body text of an interactive message.
+type InteractiveBody struct {
+	Text string `json:"text"`
+}
+
+// Interactive represents a WhatsApp interactive message (list, CTA URL, flow).
+// Set in the `interactive` field of SendMessagePayload.
+type Interactive struct {
+	Type   string             `json:"type"`             // "list" | "cta_url" | "location_request_message" | "flow"
+	Body   *InteractiveBody   `json:"body,omitempty"`
+	Action *InteractiveAction `json:"action,omitempty"`
+}
+
 // SendMessagePayload is the JSON body for POST /v1/inbox/conversations/{id}/messages.
 // accountId is required by the Zernio send-message endpoint; message, or an
 // attachment, must be present. attachmentType is one of image, video, audio,
 // file. quickReplies and buttons are mutually exclusive (max 13 / max 3).
 type SendMessagePayload struct {
-	AccountID      string   `json:"accountId"`
-	ConversationID string   `json:"conversationId,omitempty"`
-	ParticipantID  string   `json:"participantId,omitempty"`
-	Message        string   `json:"message"`
-	AttachmentURL  string   `json:"attachmentUrl,omitempty"`
-	AttachmentType string   `json:"attachmentType,omitempty"` // image, video, audio, file
-	AttachmentName string   `json:"attachmentName,omitempty"` // WhatsApp document display name
-	VoiceNote      bool     `json:"voiceNote,omitempty"`      // WhatsApp audio -> PTT (.ogg OPUS)
-	ReplyTo        string   `json:"replyTo,omitempty"`        // WhatsApp: platform message id (wamid)
-	Buttons        []string `json:"buttons,omitempty"`
+	AccountID      string       `json:"accountId"`
+	ConversationID string       `json:"conversationId,omitempty"`
+	ParticipantID  string       `json:"participantId,omitempty"`
+	Message        string       `json:"message"`
+	AttachmentURL  string       `json:"attachmentUrl,omitempty"`
+	AttachmentType string       `json:"attachmentType,omitempty"` // image, video, audio, file
+	AttachmentName string       `json:"attachmentName,omitempty"` // WhatsApp document display name
+	VoiceNote      bool         `json:"voiceNote,omitempty"`      // WhatsApp audio -> PTT (.ogg OPUS)
+	ReplyTo        string       `json:"replyTo,omitempty"`        // WhatsApp: platform message id (wamid)
+	Buttons        []Button     `json:"buttons,omitempty"`        // max 3, mutually exclusive with QuickReplies
+	QuickReplies   []QuickReply `json:"quickReplies,omitempty"`   // max 13
+	Interactive    *Interactive `json:"interactive,omitempty"`    // list / CTA URL / flow
 }
 
 // SentMessage is returned after a successful send.
