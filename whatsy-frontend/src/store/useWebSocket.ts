@@ -131,8 +131,17 @@ function connect() {
           typeof document !== 'undefined' &&
           document.visibilityState === 'visible';
 
+        const unreadPatch = isViewingActive
+          ? { unreadCount: 0 }
+          : msg.direction === 'inbound'
+          ? (() => {
+              const cur = useInboxStore.getState().conversations.find((c) => c.id === conversationId);
+              return { unreadCount: (cur?.unreadCount ?? 0) + 1 };
+            })()
+          : {};
+
         store().bumpConversation(conversationId, {
-          ...(isViewingActive ? { unreadCount: 0 } : {}),
+          ...unreadPatch,
           lastMessage: {
             id: msg.id,
             content: msg.content || '',
