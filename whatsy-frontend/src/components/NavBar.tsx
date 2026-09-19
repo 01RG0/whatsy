@@ -177,6 +177,7 @@ export default function NavBar({ path }: { path: string }) {
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
   const totalUnread = useInboxStore(s => s.totalUnread)
   const activeConversationId = useInboxStore(s => s.activeConversationId)
+  const isMobileChatOpen = useInboxStore(s => s.isMobileChatOpen)
 
   useEffect(() => {
     const syncAgent = () => setAgent(getCurrentAgent())
@@ -264,7 +265,7 @@ export default function NavBar({ path }: { path: string }) {
       />
 
       {/* Mobile: bottom tab bar — hidden while a chat is open */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#111b21] border-t border-gray-200 dark:border-[#222e35] flex justify-around items-center h-14 px-2 transition-transform duration-200 ${path === '/' && activeConversationId ? 'translate-y-full pointer-events-none' : 'translate-y-0'}`}>
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#111b21] border-t border-gray-200 dark:border-[#222e35] flex justify-around items-center h-14 px-2 transition-transform duration-200 ${path === '/' && activeConversationId && isMobileChatOpen ? 'translate-y-full pointer-events-none' : 'translate-y-0'}`}>
         {visibleNavItems.map(item => {
           const active = path === item.href || (item.href !== '/' && path.startsWith(item.href))
           const badge = item.href === '/' ? totalUnread : 0
