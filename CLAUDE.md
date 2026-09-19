@@ -3,6 +3,7 @@
 Welcome to the **Whatsy** repository — the comprehensive Zernio API, WhatsApp UI & Shared Inbox development environment.
 
 ## Key Navigation Pointers
+- **Agent Onboarding**: [`AGENT_ONBOARDING.md`](file:///D:/pRoG/whatsy/AGENT_ONBOARDING.md) — first 5 minutes for any AI agent session: what this project is, how to run it, where things live, conventions, gotchas.
 - **Master API Reference**: [`CLAUDE_ZERNIO_API_MASTER.md`](file:///D:/pRoG/whatsy/CLAUDE_ZERNIO_API_MASTER.md) (727 API operations, endpoints, parameters, schemas, and cURL / Python / Node.js code snippets).
 - **Master File Map & Sitemap**: [`FILE_MAP.md`](file:///D:/pRoG/whatsy/FILE_MAP.md) (Every file and directory mapped with links).
 - **Documentation Suite**: [`docs/`](file:///D:/pRoG/whatsy/docs/) (893 individual Markdown documentation files).

@@ -1,10 +1,46 @@
-# Whatsy - Zernio API & WhatsApp UI / Inbox Knowledge Base
+# Whatsy
 
-A comprehensive, organized knowledge base and developer kit for the **Zernio API** (Social Media API across 16+ platforms) and **WhatsApp Web / Shared Inbox UI**. Specially structured for **Claude**, LLMs, and modern developers.
+Whatsy is a production **WhatsApp Shared Inbox** — a multi-agent team inbox for WhatsApp Business. Support agents collaborate on inbound WhatsApp conversations in real time, built on the [Zernio API](https://zernio.com) as the WhatsApp Business API provider.
+
+**New here?** → Start with [`AGENT_ONBOARDING.md`](AGENT_ONBOARDING.md) | Architecture: [`PROJECT_MAP.md`](PROJECT_MAP.md) | Data flow: [`DATA_FLOW.md`](DATA_FLOW.md)
 
 ---
 
-## Directory Overview
+## Quick Start
+
+```bash
+# Backend (Go)
+cd whatsy-backend
+cp .env.example .env      # fill in DATABASE_URL, JWT_SECRET, ZERNIO_API_KEY
+go run ./cmd/server        # http://localhost:8080
+
+# Frontend (React + Vite)
+cd whatsy-frontend
+npm install
+npm run dev                # http://localhost:5173
+```
+
+Full setup, env vars, Docker, and gotchas: see [`AGENT_ONBOARDING.md`](AGENT_ONBOARDING.md).
+
+---
+
+## Repository Structure
+
+This repo has two layers:
+
+| Layer | Path | What it is |
+|---|---|---|
+| **Live App — Backend** | `whatsy-backend/` | Go HTTP server, PostgreSQL, Zernio API integration, WebSockets |
+| **Live App — Frontend** | `whatsy-frontend/` | React 19 + TypeScript + Vite + Tailwind SPA |
+| **Knowledge Base — Docs** | `docs/` | 893 Zernio API Markdown reference docs |
+| **Knowledge Base — Master Ref** | `CLAUDE_ZERNIO_API_MASTER.md` | 727-operation Zernio API reference with code snippets |
+| **Knowledge Base — Resources** | `resources/` | UI component references, open-source repo lists |
+
+---
+
+## Zernio API Knowledge Base
+
+A comprehensive, organized knowledge base and developer kit for the **Zernio API** (Social Media API across 16+ platforms). Structured for Claude, LLMs, and developers working with the Zernio API directly.
 
 ```
 D:\pRoG\whatsy\
@@ -17,7 +53,7 @@ D:\pRoG\whatsy\
 │
 ├── resources/
 │   ├── WHATSAPP_UI_INBOX_REPOS_AND_CODE.md # Curated GitHub repos, architecture blueprint & API mapping
-│   └── whatsapp-ui-components/            # Production-ready React/TypeScript/Tailwind components
+│   └── whatsapp-ui-components/            # Reference React/TypeScript/Tailwind components
 │       ├── types.ts                       # Complete TypeScript data contracts mapping Zernio API models
 │       ├── Sidebar.tsx                    # Search, filter pills, conversation list, unread counters
 │       ├── ChatWindow.tsx                 # Header with status/actions, message stream, date separators
@@ -28,14 +64,8 @@ D:\pRoG\whatsy\
 ├── CLAUDE_ZERNIO_API_MASTER.md            # 2.46MB master reference cataloging 727 API operations
 ├── openapi.yaml                           # Official Zernio OpenAPI 3.x specification
 ├── llms.txt                               # Official documentation page index
-├── llms-full.txt                          # Raw uncompressed documentation dump
-├── organize_docs.py                       # Automated documentation extraction & cleanup pipeline
-└── generate_api_master.py                 # Automated OpenAPI-to-Markdown master reference generator
+└── llms-full.txt                          # Raw uncompressed documentation dump
 ```
-
----
-
-## Key Highlights
 
 ### 1. Zernio API Master Reference (`CLAUDE_ZERNIO_API_MASTER.md`)
 - **727 API Operations** across 487 endpoints.
