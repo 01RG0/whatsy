@@ -146,6 +146,7 @@ cd whatsy-backend && go build ./...
 - Standard Go project layout (`cmd/`, `internal/`, `pkg/`).
 - Handlers take db/repo/service deps via constructor injection. No global state.
 - Each handler file maps to a feature domain (agent, auth, auto_reply, broadcast, etc.).
+- **Worker** (`cmd/worker/main.go`): a separate process that deep-syncs ALL conversations + messages from Zernio every 5 minutes (paginated). More thorough than the main server's incremental sync. Requires `DIRECT_DATABASE_URL` (bypasses PgBouncer) and `ZERNIO_API_KEY`. Deploy separately (`Dockerfile.worker`).
 
 ### Frontend
 - No file-based routing. Pages are plain components switched in `AppContent()` in `src/App.tsx`. Add new pages there.

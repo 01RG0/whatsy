@@ -1,128 +1,81 @@
-# Whatsy Roadmap — Features to Add Later
+# Whatsy Product Status & Roadmap
 
-Based on a full audit of the Zernio API documentation (727 endpoints). These features are available via the API but not yet implemented in Whatsy.
+## Done
 
-## Priority 1 — Chat Enhancements
+Features already implemented and running in the live application:
 
-### Reply-to (Quote Replies)
-Send `replyTo` field with the platform message ID (wamid) to quote a specific message. WhatsApp shows it as a quoted reply bubble. The API field is already supported on `POST /v1/inbox/conversations/{id}/messages`.
-
-### Interactive Messages
-- **Reply buttons** — up to 3 buttons (`buttons` field)
-- **Quick replies** — up to 13 options (`quickReplies` field)
-- **List messages** — scrollable sections with rows (`interactive.type: "list"`)
-- **CTA URL button** — `interactive.type: "cta_url"`
-- **Location request** — `interactive.type: "location_request_message"`
-
-### Location Sharing
-Send a pin via `location` field (latitude, longitude, name, address). Receive locations from contacts via `message.received` webhook.
-
-### Contact Cards
-Send vCard-style contact cards via the `contacts` array field on send message.
-
----
-
-## Priority 2 — Engagement & Tracking
-
-### Inbox Analytics Dashboard
-7 API endpoints available:
-- Volume over time
-- Heatmap (day × hour)
-- Source breakdown (human, workflow, broadcast, API, etc.)
-- Response-time stats
-- Top accounts
-- Conversation analytics (list + detail)
-
-Filterable by `profileId`, `platform`, `accountId`, `source`.
-
-### WhatsApp Flows (Forms & Surveys)
-14 API endpoints. Create interactive form-based experiences sent as messages:
-- Categories: sign up, booking, lead gen, support, survey
-- Two modes: `navigate` (Zernio-hosted) and `data_exchange` (self-hosted dynamic)
-- Submissions arrive via `message.received` as `nfm_reply`
-
-### Broadcast Scheduling
-`POST /v1/broadcasts/{id}/schedule` with `scheduledAt` (ISO 8601). Currently only immediate send is implemented.
-
-### Webhook Log Redelivery
-`POST /v1/webhooks/logs/redeliver` — replay failed webhook events. Could build a "catch up missed messages" admin button.
+- **Shared Inbox**: WhatsApp conversations management with message threading.
+- **Agent Assignment**: Assigning conversations to specific team members.
+- **Unread Tracking**: Unread message badges and state management.
+- **Canned Responses**: Pre-saved quick response templates for agents.
+- **Auto-Reply Rules**: Keyword-based automated replies.
+- **WhatsApp Connection Management**: QR code pairing and webhook lifecycle handling.
+- **Template Listing**: Viewing available WhatsApp message templates.
+- **Broadcast Send**: Immediate broadcast messaging to contacts.
+- **Contact Management**: Dedicated students / contacts directory page.
+- **Team Management**: Multi-user workspace with invite functionality.
+- **Dark Mode**: Dark theme UI support.
+- **Internationalization (i18n)**: Arabic (AR) and English (EN) localization with RTL support.
+- **Real-Time WebSocket Updates**: Live incoming messages and status synchronization.
+- **Typing Indicators**: Real-time typing status display.
+- **Media Send / Receive**: Sending and receiving images, documents, and media attachments.
+- **Voice Note Playback**: Audio playback for recorded WhatsApp voice notes.
 
 ---
 
-## Priority 3 — Automation
+## In Progress
 
-### Workflow Automation Engine
-16 node types available:
-- `trigger` (inbound_message, api_call, whatsapp_event)
-- `send_message`, `condition`, `delay`, `wait_for_reply`
-- `a_b_split`, `set_variable`, `set_field`
-- `add_tag`, `remove_tag`, `enroll_sequence`
-- `webhook` (external API calls)
-- `ai` (LLM integration)
-- `handoff` (transfer to human agent)
-- `start_call` (WhatsApp voice)
-
-Data interpolation with `{{variable}}` syntax. Would replace/extend the current keyword-based auto-reply.
-
-### Sequences (Drip Campaigns)
-Time-based linear follow-up campaigns. Enroll contacts after conversations. Good for onboarding flows, follow-ups, reminders.
-
-### Comment-to-DM Automation
-Auto-DM users who comment specific keywords on posts. Includes keyword matching (contains/exact/regex), typo tolerance, delay settings, A/B variations, link tracking.
+*(No active tasks currently tracked)*
 
 ---
 
-## Priority 4 — CRM & Contacts
+## Backlog
 
-### Contact Custom Fields
-- `GET/POST/DELETE/PATCH /v1/custom-fields` — define custom field schemas
-- `PUT/DELETE /v1/contacts/{id}/fields/{slug}` — set values per contact
-- Could extend the students table with dynamic fields
+Remaining features and enhancements from the Zernio API audit, organized by priority:
 
-### Contact Tags
-Full tag management on contacts for segmentation and filtering.
+### Priority 1 — Chat Enhancements
 
-### Contact Subscriptions
-`isSubscribed` flag controls broadcast eligibility. Respect opt-outs.
-
----
-
-## Priority 5 — Advanced WhatsApp
-
-### WhatsApp Calling
-- Enable/disable calling per number
-- Initiate outbound voice calls
-- List call history, get recordings
-- Per-minute cost estimation
-- Requires calling enabled on the WhatsApp number
-
-### WhatsApp Groups
-- Create, list, manage groups (non-coexistence numbers only)
-- Manage participants, invite links, join requests
-- 9 API endpoints
-
-### Meta Business Agent (AI)
-Full AI agent infrastructure:
-- Knowledge base (FAQs, website crawling, file uploads)
-- Custom skills and UI skills
-- MCP-based external tool connectors
-- Budget management, testing, evaluations
-
-### Direct Send (No Template Required)
-`category: "utility"` on send allows business-initiated messages outside the 24-hour window without a pre-approved template. WABA must be eligible.
+- **Reply-to (Quote Replies)**: Send `replyTo` field with the platform message ID (`wamid`) to quote a specific message. WhatsApp renders it as a quoted reply bubble. Supported on `POST /v1/inbox/conversations/{id}/messages`.
+- **Interactive Messages**:
+  - **Reply buttons**: Up to 3 buttons (`buttons` field).
+  - **Quick replies**: Up to 13 options (`quickReplies` field).
+  - **List messages**: Scrollable sections with rows (`interactive.type: "list"`).
+  - **CTA URL button**: `interactive.type: "cta_url"`.
+  - **Location request**: `interactive.type: "location_request_message"`.
+- **Location Sharing**: Send pins via `location` field (latitude, longitude, name, address) and receive contact locations via `message.received` webhook.
+- **Contact Cards**: Send vCard-style contact cards via the `contacts` array field on outgoing messages.
 
 ---
 
-## Technical Improvements
+### Priority 2 — Engagement & Tracking
 
-### Scoped API Keys
-`zrk_` prefix keys restricted to specific profiles. Useful for multi-tenant isolation if Whatsy serves multiple businesses.
+- **Inbox Analytics Dashboard**:
+  - Volume over time.
+  - Heatmap (day × hour).
+  - Source breakdown (human, workflow, broadcast, API, etc.).
+  - Response-time statistics.
+  - Top accounts.
+  - Conversation analytics (list + detail).
+  - Filterable by `profileId`, `platform`, `accountId`, and `source`.
+- **WhatsApp Flows (Forms & Surveys)**: Interactive form-based experiences sent as messages across categories (sign-up, booking, lead gen, support, survey). Supports `navigate` (Zernio-hosted) and `data_exchange` (dynamic) modes with `nfm_reply` webhook handling.
+- **Broadcast Scheduling**: Schedule broadcasts ahead of time (`POST /v1/broadcasts/{id}/schedule` with `scheduledAt` ISO 8601 timestamp).
+- **Webhook Log Redelivery**: Replay failed webhook events (`POST /v1/webhooks/logs/redeliver`) to catch up on missed messages.
 
-### Content-Hash Dedup
-Zernio returns 409 for identical `(platform, accountId, content + media)` within 24 hours. Handle gracefully instead of erroring.
+---
 
-### Rate Limit Headers
-Monitor `X-RateLimit-Remaining` and `X-RateLimit-Reset` on responses. Current limits: 600 req/min (3+ accounts), 60 req/min (free).
+### Priority 3 — Automation, CRM & Advanced WhatsApp
 
-### WhatsApp Number Health
-`GET /v1/whatsapp/number-info` — check quality rating (GREEN/YELLOW/RED), messaging tier, throughput, status. Could show in the admin panel.
+- **Workflow Automation Engine**: Visual 16-node automation pipeline (`trigger`, `send_message`, `condition`, `delay`, `wait_for_reply`, `a_b_split`, `set_variable`, `set_field`, `add_tag`, `remove_tag`, `enroll_sequence`, `webhook`, `ai`, `handoff`, `start_call`) with `{{variable}}` interpolation to replace or extend keyword rules.
+- **Sequences (Drip Campaigns)**: Time-based linear follow-up campaigns to enroll contacts after conversations for onboarding and reminders.
+- **Comment-to-DM Automation**: Auto-DM users commenting on posts with keyword matching, typo tolerance, delays, A/B variations, and link tracking.
+- **Contact Custom Fields**: Dynamic custom field schemas (`/v1/custom-fields`) and per-contact field values (`/v1/contacts/{id}/fields/{slug}`).
+- **Contact Tags & Subscriptions**: Full tagging for contact segmentation, plus `isSubscribed` broadcast opt-out management.
+- **WhatsApp Calling**: Inbound/outbound voice call initiation, call history, recording access, and per-minute cost estimation.
+- **WhatsApp Groups**: Group creation, participant management, invite links, and join requests.
+- **Meta Business Agent (AI)**: Knowledge base FAQs/crawling, custom UI skills, MCP tool connectors, and automated evaluations.
+- **Direct Send (Utility)**: Business-initiated messaging outside 24h window using `category: "utility"` without pre-approved template where eligible.
+- **Technical Improvements**:
+  - **Scoped API Keys**: `zrk_` profile-scoped keys for multi-tenant isolation.
+  - **Content-Hash Dedup**: Graceful handling of HTTP 409 duplicates within 24 hours.
+  - **Rate Limit Headers**: Active monitoring of `X-RateLimit-Remaining` and `X-RateLimit-Reset`.
+  - **WhatsApp Number Health**: Health checks (`/v1/whatsapp/number-info`) reporting quality rating, tier, and throughput in admin view.
