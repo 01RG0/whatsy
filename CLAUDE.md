@@ -13,6 +13,21 @@ Welcome to the **Whatsy** repository — the comprehensive Zernio API, WhatsApp 
   - Bot Engines, Flow Builders & CRMs: [`resources/WHATSAPP_FUNCTIONS_AND_BOTS_REPOS.md`](file:///D:/pRoG/whatsy/resources/WHATSAPP_FUNCTIONS_AND_BOTS_REPOS.md)
 - **Claude MCP Server & Skills**: [`resources/claude-skills-and-mcp/`](file:///D:/pRoG/whatsy/resources/claude-skills-and-mcp/)
 
+## Sub-Agent CLI Tool Paths (this machine)
+
+When invoking CLI agents directly (not through dispatch.py), use these absolute paths:
+
+| CLI | Binary | How to invoke |
+|---|---|---|
+| **agy** (Antigravity/Gemini) | `D:\pRoG\Archives\coder\agy.exe` | `agy -p "prompt"` or `agy --print --mode=accept-edits "prompt"` |
+| **Cursor** | via `C:\Users\ahmed\AppData\Roaming\Cursor\` (not in PATH) | `cursor --headless "prompt"` — verify with `cursor --help` first |
+| **freebuff** | in PATH | `freebuff "prompt"` |
+| **kilo** | in PATH | `kilo run --auto "prompt"` |
+| **codex** | in PATH | `codex exec --sandbox workspace-write "prompt"` |
+| **jules** | in PATH | `jules run --dir <path> "prompt"` |
+
+**dispatch.py note:** Always run from `D:\pRoG\whatsy\` so it loads the local `.env` first. If a CLI shows as "not installed" inside dispatch.py but works in the terminal, the subprocess lost PATH — invoke it directly via Bash instead.
+
 ## Core API Conventions (Zernio API)
 - **Base URL**: `https://zernio.com/api/v1`
 - **Auth**: `Authorization: Bearer sk_...` (67 characters: `sk_` + 64 hex chars).
