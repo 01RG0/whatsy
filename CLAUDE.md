@@ -21,13 +21,13 @@ When invoking CLI agents directly or through dispatch.py, use these paths:
 |---|---|---|---|
 | **agy** (Antigravity/Gemini) | ✅ installed | `D:\pRoG\Archives\coder\agy.exe` | `agy --print --mode=accept-edits "prompt"` |
 | **kilo** (Kilo Code) | ✅ installed | `D:\pRoG\Archives\coder\kilo` | `kilo run --auto "prompt"` |
-| **codex** (OpenAI) | ✅ installed | `D:\pRoG\Archives\coder\codex` | `codex exec --sandbox workspace-write "prompt"` |
-| **freebuff** | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\freebuff` | `freebuff "prompt"` |
+| **codex** (OpenAI) | ✅ installed ✅ authed | `D:\pRoG\Archives\coder\codex` | `codex exec --sandbox workspace-write "prompt"` |
+| **freebuff** | ✅ installed ✅ authed | `C:\Users\ahmed\AppData\Roaming\npm\freebuff` | `freebuff "prompt"` |
+| **grok** (xAI) | ✅ installed ✅ authed | `C:\Users\ahmed\.grok\bin\grok.exe` | `grok --print "prompt"` |
 | **jules** (Google) | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\jules` | `jules run --dir <path> "prompt"` |
 | **cline** | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\cline` | `cline "prompt"` |
 | **opencode** | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\opencode` | `opencode "prompt"` |
 | **vibe** (Mistral) | ✅ installed | `C:\Users\ahmed\.local\bin\vibe.exe` | `vibe run "prompt"` |
-| **grok** (xAI) | ✅ installed | `C:\Users\ahmed\.grok\bin\grok.exe` | `grok --print "prompt"` |
 | **cursor** | ❌ not in PATH | `C:\Users\ahmed\AppData\Roaming\Cursor\` (exe location unknown) | `cursor --headless "prompt"` |
 | **hermes** | ❌ not installed | — | — |
 
