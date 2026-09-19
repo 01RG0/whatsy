@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   ZernioConversation,
   ZernioMessage,
+  ConversationFilter,
 } from '../components/types';
 export type { ZernioConversation };
 
@@ -24,6 +25,8 @@ interface InboxState {
   viewers: Record<string, ViewerInfo[]>;
   typingLock: Record<string, TypingLock | null>;
   wsConnected: boolean;
+  currentFilter: ConversationFilter;
+  currentSearch: string;
 
   setConversations: (convs: ZernioConversation[]) => void;
   appendConversations: (convs: ZernioConversation[]) => void;
@@ -37,6 +40,8 @@ interface InboxState {
   setViewers: (studentId: string, viewers: ViewerInfo[]) => void;
   setTypingLock: (studentId: string, lock: TypingLock | null) => void;
   setWsConnected: (connected: boolean) => void;
+  setCurrentFilter: (filter: ConversationFilter) => void;
+  setCurrentSearch: (search: string) => void;
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   replaceMessage: (conversationId: string, tempId: string, real: ZernioMessage) => void;
@@ -53,6 +58,8 @@ export const useInboxStore = create<InboxState>((set) => ({
   viewers: {},
   typingLock: {},
   wsConnected: false,
+  currentFilter: 'all',
+  currentSearch: '',
 
   setConversations: (convs) =>
     set((state) => {
@@ -190,6 +197,9 @@ export const useInboxStore = create<InboxState>((set) => ({
     })),
 
   setWsConnected: (connected) => set({ wsConnected: connected }),
+
+  setCurrentFilter: (currentFilter) => set({ currentFilter }),
+  setCurrentSearch: (currentSearch) => set({ currentSearch }),
 
   addReaction: (conversationId, messageId, emoji) =>
     set((state) => {

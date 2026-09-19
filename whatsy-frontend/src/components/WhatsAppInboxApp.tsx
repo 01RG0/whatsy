@@ -27,6 +27,8 @@ export const WhatsAppInboxApp: React.FC = () => {
   const bumpConversation = useInboxStore((s) => s.bumpConversation);
 
   const appendConversations = useInboxStore((s) => s.appendConversations);
+  const setCurrentFilter = useInboxStore((s) => s.setCurrentFilter);
+  const setCurrentSearch = useInboxStore((s) => s.setCurrentSearch);
 
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +46,10 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     document.title = totalUnread > 0 ? `(${totalUnread}) Whatsy` : 'Whatsy';
   }, [totalUnread]);
+
+  // Keep currentFilter/currentSearch in the store so WS handler can access them.
+  useEffect(() => { setCurrentFilter(filter); }, [filter, setCurrentFilter]);
+  useEffect(() => { setCurrentSearch(searchQuery); }, [searchQuery, setCurrentSearch]);
 
   // Re-fetch conversations on every filter or search change — instant results.
   useEffect(() => {
@@ -178,10 +184,8 @@ export const WhatsAppInboxApp: React.FC = () => {
                   store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
                   return;
                 }
-                const local = store.conversations.find((c) => c.id === conv.id);
-                // Don't restore unread count if the user already cleared it locally —
-                // the markRead API call may still be in-flight on the server.
-                if (local?.unreadCount === 0 && !local?.isMarkedUnread && conv.unreadCount > 0) {
+                if (conv.id === store.activeConversationId) {
+                  // Actively viewing — always keep it marked as read.
                   store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
                 } else {
                   store.updateConversation(conv);
@@ -301,17 +305,19 @@ export const WhatsAppInboxApp: React.FC = () => {
     : null;
 
   // Server applies filter/search, but WebSocket updates bypass that. Re-apply client-side
-  // so real-time pushes don't suddenly replace search results with unrelated conversations.
-  const filteredConversations = searchQuery
-    ? conversations.filter((c) => {
-        const q = searchQuery.toLowerCase();
-        return (
-          c.participant?.displayName?.toLowerCase().includes(q) ||
-          c.participant?.phoneNumber?.toLowerCase().includes(q) ||
-          c.lastMessage?.content?.toLowerCase().includes(q)
-        );
-      })
-    : conversations;
+  // so real-time changes (mark-read, new messages) are reflected immediately.
+  const filteredConversations = conversations.filter((c) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!(
+        c.participant?.displayName?.toLowerCase().includes(q) ||
+        c.participant?.phoneNumber?.toLowerCase().includes(q) ||
+        c.lastMessage?.content?.toLowerCase().includes(q)
+      )) return false;
+    }
+    if (filter === 'unread') return (c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread;
+    return true;
+  });
 
   const handleSelectConversation = useCallback(
     (conv: ZernioConversation) => {

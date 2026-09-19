@@ -154,7 +154,8 @@ function connect() {
           const exists = useInboxStore.getState().conversations.some((c) => c.id === conversationId);
           if (!exists) {
             import('../api/inbox').then(({ getConversations }) => {
-              getConversations('all', '').then((convs) => {
+              const { currentFilter, currentSearch } = useInboxStore.getState();
+              getConversations(currentFilter, currentSearch).then((convs) => {
                 useInboxStore.getState().setConversations(convs);
               }).catch(() => undefined);
             });
