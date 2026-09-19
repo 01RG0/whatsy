@@ -15,18 +15,23 @@ Welcome to the **Whatsy** repository — the comprehensive Zernio API, WhatsApp 
 
 ## Sub-Agent CLI Tool Paths (this machine)
 
-When invoking CLI agents directly (not through dispatch.py), use these absolute paths:
+When invoking CLI agents directly or through dispatch.py, use these paths:
 
-| CLI | Binary | How to invoke |
-|---|---|---|
-| **agy** (Antigravity/Gemini) | `D:\pRoG\Archives\coder\agy.exe` | `agy -p "prompt"` or `agy --print --mode=accept-edits "prompt"` |
-| **Cursor** | via `C:\Users\ahmed\AppData\Roaming\Cursor\` (not in PATH) | `cursor --headless "prompt"` — verify with `cursor --help` first |
-| **freebuff** | in PATH | `freebuff "prompt"` |
-| **kilo** | in PATH | `kilo run --auto "prompt"` |
-| **codex** | in PATH | `codex exec --sandbox workspace-write "prompt"` |
-| **jules** | in PATH | `jules run --dir <path> "prompt"` |
+| CLI | Status | Absolute Path | Invocation |
+|---|---|---|---|
+| **agy** (Antigravity/Gemini) | ✅ installed | `D:\pRoG\Archives\coder\agy.exe` | `agy --print --mode=accept-edits "prompt"` |
+| **kilo** (Kilo Code) | ✅ installed | `D:\pRoG\Archives\coder\kilo` | `kilo run --auto "prompt"` |
+| **codex** (OpenAI) | ✅ installed | `D:\pRoG\Archives\coder\codex` | `codex exec --sandbox workspace-write "prompt"` |
+| **freebuff** | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\freebuff` | `freebuff "prompt"` |
+| **jules** (Google) | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\jules` | `jules run --dir <path> "prompt"` |
+| **cline** | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\cline` | `cline "prompt"` |
+| **opencode** | ✅ installed | `C:\Users\ahmed\AppData\Roaming\npm\opencode` | `opencode "prompt"` |
+| **vibe** (Mistral) | ✅ installed | `C:\Users\ahmed\.local\bin\vibe.exe` | `vibe run "prompt"` |
+| **grok** (xAI) | ✅ installed | `C:\Users\ahmed\.grok\bin\grok.exe` | `grok --print "prompt"` |
+| **cursor** | ❌ not in PATH | `C:\Users\ahmed\AppData\Roaming\Cursor\` (exe location unknown) | `cursor --headless "prompt"` |
+| **hermes** | ❌ not installed | — | — |
 
-**dispatch.py note:** Always run from `D:\pRoG\whatsy\` so it loads the local `.env` first. If a CLI shows as "not installed" inside dispatch.py but works in the terminal, the subprocess lost PATH — invoke it directly via Bash instead.
+**Dispatch note:** `agy`, `kilo`, `codex` live in `D:\pRoG\Archives\coder\` — this dir must be on PATH for dispatch.py subprocesses to find them. `vibe` is in `C:\Users\ahmed\.local\bin\`, `grok` in `C:\Users\ahmed\.grok\bin\`. dispatch.py has absolute-path fallbacks for all of these. Always run dispatch.py from `D:\pRoG\whatsy\` so it loads local `.env` first.
 
 ## Core API Conventions (Zernio API)
 - **Base URL**: `https://zernio.com/api/v1`
