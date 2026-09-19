@@ -36,6 +36,29 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
+
+  // On mobile, push a history entry when a chat opens so the system back button
+  // closes the chat instead of exiting the app.
+  const openChatOnMobile = useCallback(() => {
+    window.history.pushState({ mobileChatOpen: true }, '');
+    setShowChatOnMobile(true);
+    setMobileChatOpen(true);
+  }, [setMobileChatOpen]);
+
+  const closeChatOnMobile = useCallback(() => {
+    setShowChatOnMobile(false);
+    setMobileChatOpen(false);
+  }, [setMobileChatOpen]);
+
+  useEffect(() => {
+    const handler = (e: PopStateEvent) => {
+      if (showChatOnMobile && !(e.state as { mobileChatOpen?: boolean } | null)?.mobileChatOpen) {
+        closeChatOnMobile();
+      }
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, [showChatOnMobile, closeChatOnMobile]);
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [showConnected, setShowConnected] = useState(false);
@@ -51,7 +74,6 @@ export const WhatsAppInboxApp: React.FC = () => {
   // Keep currentFilter/currentSearch in the store so WS handler can access them.
   useEffect(() => { setCurrentFilter(filter); }, [filter, setCurrentFilter]);
   useEffect(() => { setCurrentSearch(searchQuery); }, [searchQuery, setCurrentSearch]);
-  useEffect(() => { setMobileChatOpen(showChatOnMobile); }, [showChatOnMobile, setMobileChatOpen]);
 
   // Re-fetch conversations on every filter or search change — instant results.
   useEffect(() => {
@@ -326,7 +348,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       setActiveConversation(conv.id);
       updateConversation({ id: conv.id, unreadCount: 0, isMarkedUnread: false });
       markRead(conv.id).catch(() => undefined);
-      setShowChatOnMobile(true);
+      openChatOnMobile();
     },
     [setActiveConversation, updateConversation]
   );
@@ -490,7 +512,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           onAssign={handleAssign}
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
-          onBack={() => setShowChatOnMobile(false)}
+          onBack={() => { window.history.back(); }}
           onLoadMoreMessages={handleLoadMoreMessages}
           hasMoreMessages={activeConversationId ? (hasMoreMessages[activeConversationId] ?? false) : false}
           isLoadingMoreMessages={isLoadingMoreMessages}

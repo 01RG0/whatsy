@@ -170,6 +170,18 @@ func (r *MessageRepo) DeleteByZernioID(ctx context.Context, zernioMsgID string) 
 	return nil
 }
 
+func (r *MessageRepo) GetByID(ctx context.Context, id string) (*domain.Message, error) {
+	query := "SELECT " + messageColumns + messageFrom + "WHERE m.id = $1"
+	message, err := scanMessage(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get message by id: %w", err)
+	}
+	return &message, nil
+}
+
 func (r *MessageRepo) GetByZernioID(ctx context.Context, zernioMsgID string) (*domain.Message, error) {
 	query := "SELECT " + messageColumns + messageFrom + "WHERE m.zernio_message_id = $1"
 	message, err := scanMessage(r.db.QueryRowContext(ctx, query, zernioMsgID))

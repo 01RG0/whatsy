@@ -295,6 +295,24 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		message.Interactive = iv
 	}
 
+	// If the agent is replying to a previous message, look it up to store the
+	// quote context and resolve its WhatsApp message ID for the quoted-reply API.
+	if payload.ReplyTo != "" {
+		if replied, err := s.msgRepo.GetByID(ctx, payload.ReplyTo); err == nil && replied != nil {
+			senderName := replied.SenderName
+			if replied.Direction == "outbound" {
+				senderName = "You"
+			}
+			message.ReplyTo = &domain.ReplyTo{
+				ID:         replied.ID,
+				SenderName: senderName,
+				Content:    replied.Content,
+			}
+			// Use the platform wamid so WhatsApp renders a native quoted-reply bubble.
+			payload.ReplyTo = replied.ZernioMessageID
+		}
+	}
+
 	if err := s.msgRepo.Create(ctx, &message); err != nil {
 		return nil, fmt.Errorf("create outbound message: %w", err)
 	}

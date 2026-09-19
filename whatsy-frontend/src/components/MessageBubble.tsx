@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { ZernioMessage, DeliveryStatus } from './types';
 import { API_BASE } from '../api/inbox';
 import VoiceNotePlayer from './VoiceNotePlayer';
@@ -94,6 +94,46 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const t = useT();
   const isOutbound = message.direction === 'outbound';
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Swipe-to-reply gesture (mobile)
+  const [swipeX, setSwipeX] = useState(0);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeActive = useRef(false);
+  const didTrigger = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!onReply) return;
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    swipeActive.current = false;
+    didTrigger.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!onReply || !touchStart.current) return;
+    const dx = e.touches[0].clientX - touchStart.current.x;
+    const dy = Math.abs(e.touches[0].clientY - touchStart.current.y);
+    if (!swipeActive.current) {
+      if (Math.abs(dx) < 8 && dy < 8) return;
+      if (Math.abs(dx) > dy) swipeActive.current = true;
+      else { touchStart.current = null; return; }
+    }
+    if (dx > 0) {
+      e.preventDefault();
+      const capped = Math.min(dx * 0.55, 72);
+      setSwipeX(capped);
+      if (capped >= 55 && !didTrigger.current) {
+        didTrigger.current = true;
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (swipeX >= 55 && onReply) onReply(message);
+    setSwipeX(0);
+    touchStart.current = null;
+    swipeActive.current = false;
+  };
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
 
   const lineCount = (message.content || '').split('\n').length;
@@ -170,13 +210,34 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   return (
-    <div className={`group relative flex w-full my-1 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+    <div
+      className={`group relative flex w-full my-1 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
+      {/* Swipe-to-reply indicator */}
+      {swipeX > 6 && (
+        <div
+          className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#e9edef] dark:bg-[#374248] flex items-center justify-center text-[#54656f] dark:text-[#aebac1] pointer-events-none"
+          style={{ opacity: Math.min(swipeX / 55, 1) }}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 10h10a5 5 0 015 5v3M3 10l6-6M3 10l6 6" />
+          </svg>
+        </div>
+      )}
       <div
         className={`relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
           isOutbound
             ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ltr:rounded-tr-none rtl:rounded-tl-none'
             : 'bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db] ltr:rounded-tl-none rtl:rounded-tr-none'
         }`}
+        style={{
+          transform: `translateX(${swipeX}px)`,
+          transition: swipeX === 0 ? 'transform 0.2s ease' : 'none',
+        }}
       >
         {/* Reply Quote Banner */}
         {message.replyTo && (
