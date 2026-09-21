@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useLabelStore } from '../store/useLabelStore'
 import { LabelPill } from './LabelPill'
 import type { Label } from './types'
+import { isLightColor } from '../utils/colorUtils'
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -239,11 +240,3 @@ export const LabelManager: React.FC<LabelManagerProps> = ({ onClose }) => {
   )
 }
 
-function isLightColor(hex: string): boolean {
-  const c = hex.replace('#', '')
-  if (c.length < 6) return true
-  const r = parseInt(c.slice(0, 2), 16)
-  const g = parseInt(c.slice(2, 4), 16)
-  const b = parseInt(c.slice(4, 6), 16)
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150
-}

@@ -34,6 +34,18 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
   const [menuOpen, setMenuOpen] = useState(false);
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const labelPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!labelPickerOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (labelPickerRef.current && !labelPickerRef.current.contains(e.target as Node)) {
+        setLabelPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [labelPickerOpen]);
 
   useEffect(() => {
     if (!contextMenu && !menuOpen) return;
@@ -312,12 +324,14 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
 
       {/* Label picker popover */}
       {labelPickerOpen && (
-        <ConversationLabelPicker
-          conversationId={conv.id}
-          assignedNames={conv.tags ?? []}
-          onUpdate={(names) => onTagsChange?.(conv.id, names)}
-          onClose={() => setLabelPickerOpen(false)}
-        />
+        <div ref={labelPickerRef}>
+          <ConversationLabelPicker
+            conversationId={conv.id}
+            assignedNames={conv.tags ?? []}
+            onUpdate={(names) => onTagsChange?.(conv.id, names)}
+            onClose={() => setLabelPickerOpen(false)}
+          />
+        </div>
       )}
 
     </div>

@@ -1,5 +1,6 @@
 import React from 'react'
 import type { Label } from './types'
+import { isLightColor } from '../utils/colorUtils'
 
 interface LabelPillProps {
   label: Label
@@ -36,13 +37,3 @@ export const LabelPill: React.FC<LabelPillProps> = ({ label, onRemove, size = 'x
   )
 }
 
-/** Returns true when the hex color is light enough to need dark text. */
-function isLightColor(hex: string): boolean {
-  const c = hex.replace('#', '')
-  if (c.length < 6) return true
-  const r = parseInt(c.slice(0, 2), 16)
-  const g = parseInt(c.slice(2, 4), 16)
-  const b = parseInt(c.slice(4, 6), 16)
-  // Perceived luminance formula
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150
-}

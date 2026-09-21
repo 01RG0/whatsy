@@ -6,7 +6,8 @@ import { useT } from '../i18n/translations';
 import { useLanguageStore } from '../store/useLanguageStore';
 import { useDarkModeStore } from '../store/useDarkModeStore';
 import { useLabelStore } from '../store/useLabelStore';
-import { LabelManager } from './LabelManager';
+import { LabelManager } from './LabelManager'
+import { isLightColor } from '../utils/colorUtils';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -252,7 +253,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onLabelFilterChange?.(null)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition shrink-0 flex items-center gap-1 ${
               activeLabelId === null
-                ? 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0]'
+                ? 'bg-[#d9fdd3] text-[#008069] dark:bg-[#005c4b] dark:text-[#e9edef]'
                 : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
             }`}
           >
@@ -322,11 +323,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-function isLightColor(hex: string): boolean {
-  const c = hex.replace('#', '')
-  if (c.length < 6) return true
-  const r = parseInt(c.slice(0, 2), 16)
-  const g = parseInt(c.slice(2, 4), 16)
-  const b = parseInt(c.slice(4, 6), 16)
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150
-}
