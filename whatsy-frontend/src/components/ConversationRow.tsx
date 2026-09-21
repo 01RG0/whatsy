@@ -15,6 +15,9 @@ interface ConversationRowProps {
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
   onTagsChange?: (conversationId: string, tags: string[]) => void;
+  selectionMode?: boolean;
+  isChecked?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 export const ConversationRow: React.FC<ConversationRowProps> = ({
@@ -26,6 +29,9 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
   onMarkUnread,
   onMarkRead,
   onTagsChange,
+  selectionMode = false,
+  isChecked = false,
+  onToggleSelect,
 }) => {
   const t = useT();
   const { getByName } = useLabelStore();
@@ -114,6 +120,25 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
           : 'hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]/70'
       }`}
     >
+      {/* Checkbox — shown in selection mode */}
+      {selectionMode && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect?.(conv.id); }}
+          className="shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition"
+          style={{
+            backgroundColor: isChecked ? '#00a884' : 'transparent',
+            borderColor: isChecked ? '#00a884' : '#aebac1',
+          }}
+        >
+          {isChecked && (
+            <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          )}
+        </button>
+      )}
+
       {/* Avatar + team presence overlay */}
       <div className="relative shrink-0">
         <img
