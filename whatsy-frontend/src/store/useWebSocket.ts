@@ -252,7 +252,21 @@ export function useWebSocket() {
     if (_ws.refCount === 1) {
       connect();
     }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        const s = _ws.socket;
+        if (!s || s.readyState === WebSocket.CLOSED || s.readyState === WebSocket.CLOSING) {
+          if (_ws.retryTimeout) clearTimeout(_ws.retryTimeout);
+          _ws.backoff = 1000;
+          connect();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
       _ws.refCount -= 1;
       if (_ws.refCount === 0) {
         if (_ws.retryTimeout) clearTimeout(_ws.retryTimeout);
