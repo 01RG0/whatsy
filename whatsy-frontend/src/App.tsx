@@ -14,8 +14,8 @@ import { useSettingsStore } from './store/useSettingsStore'
 import { useInboxStore } from './store/useInboxStore'
 
 // Keeps the WebSocket alive on every authenticated page, not just the inbox.
-function WebSocketMount() {
-  useWebSocket();
+function WebSocketMount({ token, onTokenRefresh }: { token?: string | null; onTokenRefresh?: (token: string) => void }) {
+  useWebSocket({ token, onTokenRefresh });
   return null;
 }
 
@@ -46,6 +46,7 @@ function Router() {
   const path = usePath()
   const jwt = localStorage.getItem('whatsy_jwt')
   const [sessionBanner, setSessionBanner] = useState(false)
+  const [validatedToken, setValidatedToken] = useState<string | null>(null)
 
   useEffect(() => {
     const handler = () => {
@@ -73,6 +74,7 @@ function Router() {
         if (data && data.id) {
           if (data.token) {
             localStorage.setItem('whatsy_jwt', data.token)
+            setValidatedToken(data.token)
           }
           const raw = localStorage.getItem('whatsy_agent')
           const current = raw ? JSON.parse(raw) : {}
@@ -127,7 +129,7 @@ function Router() {
           </div>
         </div>
       )}
-      <WebSocketMount />
+      <WebSocketMount token={validatedToken} onTokenRefresh={setValidatedToken} />
       <SettingsMount />
       <div style={{ height: 'var(--vvh, 100dvh)' }} className="flex bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
         <NavBar path={path} />
@@ -154,7 +156,7 @@ function AppContent({ path }: { path: string }) {
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center mb-4">
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
         </div>
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t.access_denied}</h2>
