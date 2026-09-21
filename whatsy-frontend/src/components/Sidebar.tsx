@@ -68,6 +68,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     fetchLabels().catch(() => undefined);
   }, [fetchLabels]);
 
+  const labelCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    conversations.forEach((c) => {
+      (c.tags ?? []).forEach((name) => {
+        counts[name] = (counts[name] ?? 0) + 1;
+      });
+    });
+    return counts;
+  }, [conversations]);
 
   const contactMatches = conversations.filter((conversation) => {
     const query = newChatSearch.trim().toLowerCase();
@@ -274,9 +283,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'opacity-80 hover:opacity-100'
               }`}
               style={{ backgroundColor: label.color, color: isLightColor(label.color) ? '#1a1a1a' : '#fff' }}
-              title={label.name}
+              title={`${label.name}${labelCounts[label.name] ? ` (${labelCounts[label.name]})` : ''}`}
             >
-              {label.name}
+              {label.name}{labelCounts[label.name] ? ` · ${labelCounts[label.name]}` : ''}
             </button>
           ))}
         </div>
