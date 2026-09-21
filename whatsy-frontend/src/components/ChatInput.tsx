@@ -3,6 +3,7 @@ import { SendMessagePayload } from './types';
 import { API_BASE } from '../api/inbox';
 import { useT } from '../i18n/translations';
 import { useSettingsStore } from '../store/useSettingsStore';
+import ImageAnnotator from './ImageAnnotator';
 
 interface ChatInputProps {
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
@@ -59,6 +60,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [waveformBars, setWaveformBars] = useState<number[]>([0.3, 0.5, 0.8, 0.6, 0.4, 0.7, 0.5, 0.3]);
   const waveformAnimRef = useRef<number | null>(null);
+  const [annotatorFile, setAnnotatorFile] = useState<File | null>(null);
 
   // Interactive message composer state
   const [showInteractiveComposer, setShowInteractiveComposer] = useState(false);
@@ -205,6 +207,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     streamRef.current = null;
   };
 
+  const handleAnnotatorConfirm = async (blob: Blob) => {
+    setAnnotatorFile(null);
+    setIsUploading(true);
+    try {
+      const url = await uploadToBackend(blob, 'annotated-image.png');
+      onSendMessage({
+        message: text.trim() || '',
+        attachmentUrl: url,
+        attachmentType: 'image',
+        attachmentName: 'annotated-image.png',
+        replyTo: replyingTo?.id,
+      });
+      setText('');
+      if (onCancelReply) onCancelReply();
+    } catch (err) {
+      console.error('Annotated image upload failed:', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -215,11 +238,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setShowAttachMenu(false);
     if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
     if (docFileInputRef.current) docFileInputRef.current.value = '';
+
+    if (attachmentType === 'image') {
+      setAnnotatorFile(file);
+      return;
+    }
+
     setIsUploading(true);
     try {
       const url = await uploadToBackend(file, file.name);
       onSendMessage({
-        message: text.trim() || (attachmentType === 'image' ? '' : file.name),
+        message: text.trim() || file.name,
         attachmentUrl: url,
         attachmentType,
         attachmentName: file.name,
@@ -235,6 +264,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
+    <>
+    {annotatorFile && (
+      <ImageAnnotator
+        file={annotatorFile}
+        onConfirm={handleAnnotatorConfirm}
+        onCancel={() => setAnnotatorFile(null)}
+      />
+    )}
     <div
       className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] px-4 pt-2 pb-2 relative flex flex-col"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
@@ -515,5 +552,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
