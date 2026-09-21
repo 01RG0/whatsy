@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { ZernioConversation, ConversationFilter } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
+import { BulkActionBar } from './BulkActionBar';
 import { useT } from '../i18n/translations';
 import { useLanguageStore } from '../store/useLanguageStore';
 import { useDarkModeStore } from '../store/useDarkModeStore';
@@ -23,6 +24,13 @@ interface SidebarProps {
   onMarkAllRead?: () => void;
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
+  selectionMode?: boolean;
+  onToggleSelectionMode?: () => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
+  onBulkAssignLabel?: (labelId: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -42,6 +50,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMarkAllRead,
   onMarkUnread,
   onMarkRead,
+  selectionMode = false,
+  onToggleSelectionMode,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onSelectAll,
+  onClearSelection,
+  onBulkAssignLabel,
 }) => {
   const t = useT();
   const { lang, setLang } = useLanguageStore();
@@ -135,6 +150,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </button>
           )}
+          <button
+            type="button"
+            onClick={onToggleSelectionMode}
+            title={selectionMode ? 'Cancel selection' : 'Select conversations'}
+            className={`p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition ${selectionMode ? 'text-[#00a884]' : ''}`}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
           <button type="button" onClick={openNewChat} className="p-2 hover:bg-[#e9edef] dark:hover:bg-[#374248] rounded-full transition" title={t.sidebar_new_chat_title}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
@@ -228,6 +256,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
+      {/* Bulk action bar — shown when selection mode is active */}
+      {selectionMode && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          onSelectAll={onSelectAll}
+          onClearSelection={onClearSelection}
+          onBulkAssignLabel={onBulkAssignLabel}
+        />
+      )}
+
       {/* Conversations List */}
       <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#202c33]/40">
         {conversations.length === 0 ? (
@@ -248,6 +286,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onSelect={() => onSelectConversation(conv)}
               onMarkUnread={onMarkUnread}
               onMarkRead={onMarkRead}
+              selectionMode={selectionMode}
+              isChecked={selectedIds.has(conv.id)}
+              onToggleSelect={onToggleSelect}
             />
           ))
         )}

@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
-import { getMessages, getConversations, sendMessage, markRead, markUnread, assignConversation, getAgents } from '../api/inbox';
+import { getMessages, getConversations, sendMessage, markRead, markUnread, assignConversation, getAgents, addConversationLabel } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 import { useT } from '../i18n/translations';
@@ -34,6 +34,8 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
 
@@ -313,6 +315,34 @@ export const WhatsAppInboxApp: React.FC = () => {
     [updateConversation]
   );
 
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+  }, [filteredConversations]);
+
+  const handleBulkAssignLabel = useCallback(async (labelId: string) => {
+    const ids = Array.from(selectedIds);
+    await Promise.all(ids.map(id =>
+      addConversationLabel(id, labelId)
+        .then(tags => updateConversation({ id, tags }))
+        .catch(() => undefined)
+    ));
+    handleClearSelection();
+  }, [selectedIds, updateConversation, handleClearSelection]);
+
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
 
@@ -496,6 +526,13 @@ export const WhatsAppInboxApp: React.FC = () => {
           onMarkAllRead={handleMarkAllRead}
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
+          selectionMode={selectionMode}
+          onToggleSelectionMode={() => setSelectionMode(v => !v)}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
+          onBulkAssignLabel={handleBulkAssignLabel}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>
