@@ -268,6 +268,18 @@ func (r sendMessageResponse) toSentMessage() *SentMessage {
 	return &SentMessage{ID: id, Status: status, Timestamp: ts}
 }
 
+// PatchContactTags overwrites the tags array on a Zernio contact. This is
+// best-effort: callers should fire it in a goroutine and ignore errors.
+func (c *Client) PatchContactTags(ctx context.Context, zernioContactID string, tags []string) error {
+	if zernioContactID == "" {
+		return nil
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	return c.doJSON(ctx, "PATCH", "/contacts/"+url.PathEscape(zernioContactID), map[string]any{"tags": tags}, nil)
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, body any, dest any) error {
 	var rdr io.Reader
 	if body != nil {

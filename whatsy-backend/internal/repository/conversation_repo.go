@@ -49,13 +49,14 @@ const conversationJoins = `
 
 // List returns conversations for the requested view. The current schema has no
 // account column; accountID is therefore used by the assigned_to_me filter.
-func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search string, limit int, beforeID string) ([]domain.Conversation, error) {
+// labelID optionally restricts results to conversations with that tag assigned.
+func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search, labelID string, limit int, beforeID string) ([]domain.Conversation, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 
-	where := make([]string, 0, 4)
-	args := make([]any, 0, 4)
+	where := make([]string, 0, 5)
+	args := make([]any, 0, 5)
 	addArg := func(value any) string {
 		args = append(args, value)
 		return fmt.Sprintf("$%d", len(args))
@@ -83,6 +84,10 @@ func (r *ConversationRepo) List(ctx context.Context, accountID, filter, search s
 	if search = strings.TrimSpace(search); search != "" {
 		placeholder := addArg("%" + search + "%")
 		where = append(where, "(s.phone ILIKE "+placeholder+" OR s.name ILIKE "+placeholder+")")
+	}
+
+	if labelID != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM conversation_tags ct WHERE ct.conversation_id = c.id AND ct.tag_id = "+addArg(labelID)+"::uuid)")
 	}
 
 	query := "SELECT " + conversationColumns + " " + conversationJoins

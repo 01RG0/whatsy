@@ -1,4 +1,4 @@
-import type { ZernioConversation, ZernioMessage, SendMessagePayload, ConversationFilter } from '../components/types'
+import type { ZernioConversation, ZernioMessage, SendMessagePayload, ConversationFilter, Label } from '../components/types'
 export const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 export function getAuthHeader(): Record<string, string> {
@@ -21,6 +21,7 @@ export async function getConversations(
   search = '',
   limit = 100,
   before?: string,
+  labelId?: string,
 ): Promise<ZernioConversation[]> {
   const params = new URLSearchParams({
     platform: 'whatsapp',
@@ -28,6 +29,7 @@ export async function getConversations(
     limit: String(limit),
     ...(search ? { search } : {}),
     ...(before ? { before } : {}),
+    ...(labelId ? { label: labelId } : {}),
   })
   const res = await fetch(`${API_BASE}/v1/inbox/conversations?${params}`, {
     headers: getAuthHeader(),
@@ -108,4 +110,62 @@ export async function getAgents(): Promise<AgentSummary[]> {
   const res = await fetch(`${API_BASE}/v1/agents`, { headers: getAuthHeader() })
   await throwIfError(res)
   return res.json() as Promise<AgentSummary[]>
+}
+
+// ─── Labels ──────────────────────────────────────────────────────────────────
+
+export async function getLabels(): Promise<Label[]> {
+  const res = await fetch(`${API_BASE}/v1/labels`, { headers: getAuthHeader() })
+  await throwIfError(res)
+  const json = await res.json() as { labels?: Label[] }
+  return json.labels ?? []
+}
+
+export async function createLabel(name: string, color: string): Promise<Label> {
+  const res = await fetch(`${API_BASE}/v1/labels`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ name, color }),
+  })
+  await throwIfError(res)
+  return res.json() as Promise<Label>
+}
+
+export async function updateLabel(id: string, name: string, color: string): Promise<Label> {
+  const res = await fetch(`${API_BASE}/v1/labels/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ name, color }),
+  })
+  await throwIfError(res)
+  return res.json() as Promise<Label>
+}
+
+export async function deleteLabel(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/labels/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeader(),
+  })
+  await throwIfError(res)
+}
+
+export async function addConversationLabel(conversationId: string, labelId: string): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/labels`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ labelId }),
+  })
+  await throwIfError(res)
+  const json = await res.json() as { tags?: string[] }
+  return json.tags ?? []
+}
+
+export async function removeConversationLabel(conversationId: string, labelId: string): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/labels/${labelId}`, {
+    method: 'DELETE',
+    headers: getAuthHeader(),
+  })
+  await throwIfError(res)
+  const json = await res.json() as { tags?: string[] }
+  return json.tags ?? []
 }

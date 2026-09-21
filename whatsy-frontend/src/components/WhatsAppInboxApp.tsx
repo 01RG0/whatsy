@@ -33,6 +33,7 @@ export const WhatsAppInboxApp: React.FC = () => {
 
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeLabelId, setActiveLabelId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
@@ -75,11 +76,11 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => { setCurrentFilter(filter); }, [filter, setCurrentFilter]);
   useEffect(() => { setCurrentSearch(searchQuery); }, [searchQuery, setCurrentSearch]);
 
-  // Re-fetch conversations on every filter or search change — instant results.
+  // Re-fetch conversations on every filter, search, or label change — instant results.
   useEffect(() => {
     setHasMoreConversations(true);
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery)
+      getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
         .then((convs) => {
           convs.forEach((conv) => {
             if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
@@ -93,7 +94,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         })
         .catch((err) => console.error('[WhatsAppInboxApp] fetch conversations:', err));
     });
-  }, [filter, searchQuery, setConversations]);
+  }, [filter, searchQuery, activeLabelId, setConversations]);
 
   // Reload message history when switching conversations.
   // Use mergeMessages (not setMessages) so any realtime messages that arrived
@@ -140,7 +141,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     const handleActiveFocus = () => {
       if (document.visibilityState !== 'visible') return;
       import('../api/inbox').then(({ getConversations }) => {
-        getConversations(filter, searchQuery)
+        getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
           .then(setConversations)
           .catch(() => undefined);
       });
@@ -159,7 +160,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       document.removeEventListener('visibilitychange', handleActiveFocus);
       window.removeEventListener('focus', handleActiveFocus);
     };
-  }, [activeConversationId, mergeMessages, filter, searchQuery, setConversations, updateConversation]);
+  }, [activeConversationId, mergeMessages, filter, searchQuery, activeLabelId, setConversations, updateConversation]);
 
   // Flash "Connected" banner for 3s when WS connects.
   useEffect(() => {
@@ -256,7 +257,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     setIsLoadingMoreConversations(true);
     const lastId = conversations[conversations.length - 1].id;
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 100, lastId)
+      getConversations(filter, searchQuery, 100, lastId, activeLabelId ?? undefined)
         .then((convs) => {
           appendConversations(convs);
           if (convs.length < 100) setHasMoreConversations(false);
@@ -264,16 +265,23 @@ export const WhatsAppInboxApp: React.FC = () => {
         .catch((err) => console.error('[WhatsAppInboxApp] load more conversations:', err))
         .finally(() => setIsLoadingMoreConversations(false));
     });
-  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, appendConversations]);
+  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, activeLabelId, appendConversations]);
 
   const handleRefreshConversations = useCallback(() => {
-    getConversations(filter, searchQuery)
+    getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
       .then((convs) => {
         setConversations(convs);
         setHasMoreConversations(convs.length >= 100);
       })
       .catch((err) => console.error('[WhatsAppInboxApp] refresh conversations:', err));
-  }, [filter, searchQuery, setConversations]);
+  }, [filter, searchQuery, activeLabelId, setConversations]);
+
+  const handleTagsChange = useCallback(
+    (conversationId: string, tags: string[]) => {
+      updateConversation({ id: conversationId, tags });
+    },
+    [updateConversation]
+  );
 
   const handleMarkAllRead = useCallback(() => {
     const unread = conversations.filter((conversation) => conversation.unreadCount > 0 || conversation.isMarkedUnread);
@@ -496,6 +504,9 @@ export const WhatsAppInboxApp: React.FC = () => {
           onMarkAllRead={handleMarkAllRead}
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
+          onTagsChange={handleTagsChange}
+          activeLabelId={activeLabelId}
+          onLabelFilterChange={setActiveLabelId}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>

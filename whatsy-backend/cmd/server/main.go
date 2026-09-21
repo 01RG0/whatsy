@@ -131,6 +131,8 @@ func main() {
 	// Retry any outbound messages left stuck in "pending" from a killed deploy.
 	go chatService.RetryStuckMessages(context.Background())
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
+	tagService := service.NewTagService(db)
+	labelHandler := handler.NewLabelHandler(tagService)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
 	agentHandler := handler.NewAgentHandler(db, cfg.JWTSecret, hub)
 	mediaHandler := handler.NewMediaHandler(cfg.ZernioAPIKey, db)
@@ -230,6 +232,18 @@ func main() {
 		r.With(handler.RequireAdmin).Post("/v1/whatsapp/connection/test", waConnHandler.SendTest)
 		r.Get("/v1/sync/stream", syncHandler.Sync)
 		r.Post("/v1/sync", syncHandler.SyncJSON)
+
+		// Labels
+		r.Get("/v1/labels", labelHandler.List)
+		r.With(handler.RequireAdmin).Post("/v1/labels", labelHandler.Create)
+		r.With(handler.RequireAdmin).Patch("/v1/labels/{id}", labelHandler.Update)
+		r.With(handler.RequireAdmin).Delete("/v1/labels/{id}", labelHandler.Delete)
+		r.Get("/v1/inbox/conversations/{id}/labels", labelHandler.ListConversationLabels)
+		r.With(handler.RequireNotViewer).Post("/v1/inbox/conversations/{id}/labels", labelHandler.AddConversationLabel)
+		r.With(handler.RequireNotViewer).Delete("/v1/inbox/conversations/{id}/labels/{labelId}", labelHandler.RemoveConversationLabel)
+		r.Get("/v1/students/{id}/labels", labelHandler.ListStudentLabels)
+		r.With(handler.RequireNotViewer).Post("/v1/students/{id}/labels", labelHandler.AddStudentLabel)
+		r.With(handler.RequireNotViewer).Delete("/v1/students/{id}/labels/{labelId}", labelHandler.RemoveStudentLabel)
 	})
 
 	// Serve React SPA from ./public if it exists (production Docker image).

@@ -165,3 +165,10 @@ export interface SendMessagePayload {
 }
 
 export type ConversationFilter = 'all' | 'unread' | 'groups' | 'assigned_to_me' | 'unanswered';
+
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}

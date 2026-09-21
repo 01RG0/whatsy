@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ZernioConversation } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { useT } from '../i18n/translations';
+import { useLabelStore } from '../store/useLabelStore';
+import { LabelPill } from './LabelPill';
+import { ConversationLabelPicker } from './ConversationLabelPicker';
 
 interface ConversationRowProps {
   conversation: ZernioConversation;
@@ -11,6 +14,7 @@ interface ConversationRowProps {
   onSelect: () => void;
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
+  onTagsChange?: (conversationId: string, tags: string[]) => void;
 }
 
 export const ConversationRow: React.FC<ConversationRowProps> = ({
@@ -21,11 +25,14 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
   onSelect,
   onMarkUnread,
   onMarkRead,
+  onTagsChange,
 }) => {
   const t = useT();
+  const { getByName } = useLabelStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showHoverMenu, setShowHoverMenu] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -152,6 +159,20 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
           </span>
         </div>
 
+        {/* Label pills */}
+        {(conv.tags ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-0.5 mb-0.5 pointer-events-none">
+            {(conv.tags ?? []).slice(0, 3).map((name) => {
+              const label = getByName(name);
+              if (!label) return null;
+              return <LabelPill key={name} label={label} size="xs" />;
+            })}
+            {(conv.tags ?? []).length > 3 && (
+              <span className="text-[10px] text-gray-400 dark:text-[#8696a0] self-center">+{(conv.tags ?? []).length - 3}</span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <p className="text-xs truncate pe-2 flex items-center gap-1">
             {typingLock ? (
@@ -271,8 +292,34 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
               <span>{t.mark_as_unread}</span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              setContextMenu(null);
+              setLabelPickerOpen(true);
+            }}
+            className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+          >
+            <svg className="w-4 h-4 text-[#8696a0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+            <span>Labels</span>
+          </button>
         </div>
       )}
+
+      {/* Label picker popover */}
+      {labelPickerOpen && (
+        <ConversationLabelPicker
+          conversationId={conv.id}
+          assignedNames={conv.tags ?? []}
+          onUpdate={(names) => onTagsChange?.(conv.id, names)}
+          onClose={() => setLabelPickerOpen(false)}
+        />
+      )}
+
     </div>
   );
 };

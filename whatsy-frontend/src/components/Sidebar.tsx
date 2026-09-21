@@ -1,10 +1,12 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ZernioConversation, ConversationFilter } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
 import { useT } from '../i18n/translations';
 import { useLanguageStore } from '../store/useLanguageStore';
 import { useDarkModeStore } from '../store/useDarkModeStore';
+import { useLabelStore } from '../store/useLabelStore';
+import { LabelManager } from './LabelManager';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -23,6 +25,9 @@ interface SidebarProps {
   onMarkAllRead?: () => void;
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
+  onTagsChange?: (conversationId: string, tags: string[]) => void;
+  activeLabelId?: string | null;
+  onLabelFilterChange?: (labelId: string | null) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -42,16 +47,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMarkAllRead,
   onMarkUnread,
   onMarkRead,
+  onTagsChange,
+  activeLabelId = null,
+  onLabelFilterChange,
 }) => {
   const t = useT();
   const { lang, setLang } = useLanguageStore();
   const { dark, toggle: toggleDark } = useDarkModeStore();
+  const { labels, fetch: fetchLabels } = useLabelStore();
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showLabelManager, setShowLabelManager] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchLabels().catch(() => undefined);
+  }, [fetchLabels]);
 
 
   const contactMatches = conversations.filter((conversation) => {
@@ -84,6 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
+    <>
     <aside data-testid="sidebar" className="w-full md:w-[380px] lg:w-[420px] h-full flex flex-col bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#222e35] select-none">
       {/* Header */}
       <header className="relative h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between shrink-0 border-b border-[#e9edef] dark:border-[#222e35]">
@@ -156,6 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button type="button" onClick={() => { onRefresh?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_refresh}</button>
             <button type="button" onClick={() => { onMarkAllRead?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_mark_all_read}</button>
             <button type="button" onClick={() => { window.location.assign('/settings') }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_open_settings}</button>
+            <button type="button" onClick={() => { setShowLabelManager(true); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">Manage labels</button>
             <div className="my-1 border-t border-[#e9edef] dark:border-[#374151]" />
             <p className="px-3 py-2 text-xs text-gray-400 dark:text-[#8696a0]">{t.sidebar_export_unavailable}</p>
           </div>
@@ -228,6 +244,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
+      {/* Label Filter — shown only when labels exist */}
+      {labels.length > 0 && (
+        <div className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto border-b border-[#e9edef] dark:border-[#222e35] scrollbar-none bg-white dark:bg-[#111b21]">
+          <button
+            type="button"
+            onClick={() => onLabelFilterChange?.(null)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition shrink-0 flex items-center gap-1 ${
+              activeLabelId === null
+                ? 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0]'
+                : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
+            }`}
+          >
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+            Labels
+          </button>
+          {labels.map((label) => (
+            <button
+              key={label.id}
+              type="button"
+              onClick={() => onLabelFilterChange?.(activeLabelId === label.id ? null : label.id)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition shrink-0 ${
+                activeLabelId === label.id
+                  ? 'ring-2 ring-offset-1 ring-[#00a884]'
+                  : 'opacity-80 hover:opacity-100'
+              }`}
+              style={{ backgroundColor: label.color, color: isLightColor(label.color) ? '#1a1a1a' : '#fff' }}
+              title={label.name}
+            >
+              {label.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Conversations List */}
       <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#202c33]/40">
         {conversations.length === 0 ? (
@@ -248,6 +301,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onSelect={() => onSelectConversation(conv)}
               onMarkUnread={onMarkUnread}
               onMarkRead={onMarkRead}
+              onTagsChange={onTagsChange}
             />
           ))
         )}
@@ -261,5 +315,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
     </aside>
+
+    {/* Label manager modal */}
+    {showLabelManager && <LabelManager onClose={() => setShowLabelManager(false)} />}
+  </>
   );
 };
+
+function isLightColor(hex: string): boolean {
+  const c = hex.replace('#', '')
+  if (c.length < 6) return true
+  const r = parseInt(c.slice(0, 2), 16)
+  const g = parseInt(c.slice(2, 4), 16)
+  const b = parseInt(c.slice(4, 6), 16)
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150
+}

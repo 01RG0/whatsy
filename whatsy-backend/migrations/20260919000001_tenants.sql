@@ -57,8 +57,16 @@ WHERE id = '00000000-0000-0000-0000-000000000001'
   AND owner_id IS NULL;
 
 -- 6. Add FK from tenants.owner_id → agents once agents has the column.
-ALTER TABLE tenants ADD CONSTRAINT IF NOT EXISTS tenants_owner_id_fkey
-    FOREIGN KEY (owner_id) REFERENCES agents(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'tenants' AND constraint_name = 'tenants_owner_id_fkey'
+    ) THEN
+        ALTER TABLE tenants ADD CONSTRAINT tenants_owner_id_fkey
+            FOREIGN KEY (owner_id) REFERENCES agents(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- 7. Drop the global email uniqueness constraint and replace with per-tenant uniqueness.
 -- Only drop if it exists; the new constraint tolerates the same email in different tenants.
