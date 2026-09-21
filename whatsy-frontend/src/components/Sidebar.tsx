@@ -27,8 +27,9 @@ interface SidebarProps {
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
   onTagsChange?: (conversationId: string, tags: string[]) => void;
-  activeLabelId?: string | null;
-  onLabelFilterChange?: (labelId: string | null) => void;
+  activeLabelIds?: string[];
+  onLabelFilterChange?: (labelId: string) => void;
+  onLabelFilterClear?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,8 +50,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMarkUnread,
   onMarkRead,
   onTagsChange,
-  activeLabelId = null,
+  activeLabelIds = [],
   onLabelFilterChange,
+  onLabelFilterClear,
 }) => {
   const t = useT();
   const { lang, setLang } = useLanguageStore();
@@ -259,9 +261,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto border-b border-[#e9edef] dark:border-[#222e35] scrollbar-none bg-white dark:bg-[#111b21]">
           <button
             type="button"
-            onClick={() => onLabelFilterChange?.(null)}
+            onClick={() => onLabelFilterClear?.()}
             className={`px-3 py-1 rounded-full text-xs font-medium transition shrink-0 flex items-center gap-1 ${
-              activeLabelId === null
+              activeLabelIds.length === 0
                 ? 'bg-[#d9fdd3] text-[#008069] dark:bg-[#005c4b] dark:text-[#e9edef]'
                 : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
             }`}
@@ -276,9 +278,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={label.id}
               type="button"
-              onClick={() => onLabelFilterChange?.(activeLabelId === label.id ? null : label.id)}
+              onClick={() => onLabelFilterChange?.(label.id)}
               className={`px-2.5 py-1 rounded-full text-xs font-medium transition shrink-0 ${
-                activeLabelId === label.id
+                activeLabelIds.includes(label.id)
                   ? 'ring-2 ring-offset-1 ring-[#00a884]'
                   : 'opacity-80 hover:opacity-100'
               }`}
