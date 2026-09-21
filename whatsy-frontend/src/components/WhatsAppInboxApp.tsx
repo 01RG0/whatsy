@@ -524,6 +524,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           onAssign={handleAssign}
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
+          onTagsChange={handleTagsChange}
           onBack={() => { window.history.back(); }}
           onLoadMoreMessages={handleLoadMoreMessages}
           hasMoreMessages={activeConversationId ? (hasMoreMessages[activeConversationId] ?? false) : false}

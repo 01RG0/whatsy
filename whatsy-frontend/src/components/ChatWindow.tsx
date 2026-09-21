@@ -3,6 +3,7 @@ import { ZernioConversation, ZernioMessage, SendMessagePayload } from './types';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { ImageLightbox } from './ImageLightbox';
+import { ConversationLabelPicker } from './ConversationLabelPicker';
 import type { AgentSummary } from '../api/inbox';
 import { canWrite, isViewer } from '../lib/auth';
 import { useT } from '../i18n/translations';
@@ -36,6 +37,7 @@ interface ChatWindowProps {
   onAssign?: (agentId: string) => void;
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
+  onTagsChange?: (conversationId: string, tags: string[]) => void;
   onLoadMoreMessages?: () => void;
   hasMoreMessages?: boolean;
   isLoadingMoreMessages?: boolean;
@@ -59,6 +61,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onAssign,
   onMarkUnread,
   onMarkRead,
+  onTagsChange,
   onLoadMoreMessages,
   hasMoreMessages = false,
   isLoadingMoreMessages = false,
@@ -70,14 +73,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const assignRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
+  const labelPickerRef = useRef<HTMLDivElement>(null);
 
-  // Close assign & options dropdowns on outside click.
+  // Close assign, options, and label picker dropdowns on outside click.
   useEffect(() => {
-    if (!assignOpen && !optionsOpen) return;
+    if (!assignOpen && !optionsOpen && !labelPickerOpen) return;
     const handler = (e: MouseEvent) => {
       if (assignRef.current && !assignRef.current.contains(e.target as Node)) {
         setAssignOpen(false);
@@ -85,10 +90,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
         setOptionsOpen(false);
       }
+      if (labelPickerRef.current && !labelPickerRef.current.contains(e.target as Node)) {
+        setLabelPickerOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [assignOpen, optionsOpen]);
+  }, [assignOpen, optionsOpen, labelPickerOpen]);
 
   const prevMessageCountRef = useRef(0);
   const prevConvIdRef = useRef<string | null>(null);
@@ -228,6 +236,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
 
         <div className="flex items-center gap-1 text-gray-500 dark:text-[#aebac1]">
+          {/* Label picker */}
+          {!isViewerMode && (
+            <div className="relative" ref={labelPickerRef}>
+              <button
+                type="button"
+                onClick={() => setLabelPickerOpen(v => !v)}
+                title="Labels"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-[#374248] hover:bg-gray-200 dark:hover:bg-[#2a3942] transition"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+                {(conversation.tags ?? []).length > 0
+                  ? <span>{(conversation.tags ?? []).length}</span>
+                  : <span>Label</span>}
+              </button>
+              {labelPickerOpen && (
+                <ConversationLabelPicker
+                  conversationId={conversation.id}
+                  assignedNames={conversation.tags ?? []}
+                  onUpdate={(names) => { onTagsChange?.(conversation.id, names); }}
+                  onClose={() => setLabelPickerOpen(false)}
+                />
+              )}
+            </div>
+          )}
           {/* Assigned agent chip + assign dropdown */}
           {onAssign && agents.length > 0 && (
             <div className="relative" ref={assignRef}>
