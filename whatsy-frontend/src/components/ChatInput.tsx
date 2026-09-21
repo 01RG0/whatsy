@@ -57,6 +57,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [waveformBars, setWaveformBars] = useState<number[]>([0.3, 0.5, 0.8, 0.6, 0.4, 0.7, 0.5, 0.3]);
+  const waveformAnimRef = useRef<number | null>(null);
 
   // Interactive message composer state
   const [showInteractiveComposer, setShowInteractiveComposer] = useState(false);
@@ -96,6 +98,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       document.removeEventListener('touchstart', handler);
     };
   }, [showAttachMenu]);
+
+  useEffect(() => {
+    if (!isRecording) {
+      if (waveformAnimRef.current) cancelAnimationFrame(waveformAnimRef.current);
+      setWaveformBars([0.3, 0.5, 0.8, 0.6, 0.4, 0.7, 0.5, 0.3]);
+      return;
+    }
+    let lastUpdate = 0;
+    const animate = (ts: number) => {
+      if (ts - lastUpdate > 80) {
+        lastUpdate = ts;
+        setWaveformBars(prev => prev.map(() => 0.2 + Math.random() * 0.8));
+      }
+      waveformAnimRef.current = requestAnimationFrame(animate);
+    };
+    waveformAnimRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (waveformAnimRef.current) cancelAnimationFrame(waveformAnimRef.current);
+    };
+  }, [isRecording]);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -380,9 +403,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <div className="flex items-end gap-2">
         {isRecording ? (
           <div className="flex-1 flex items-center justify-between bg-gray-100 dark:bg-[#111b21] rounded-lg px-4 py-2 text-gray-700 dark:text-[#e9edef]">
-            <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-sm font-mono">
+            <div className="flex items-center gap-2">
+              <div className="flex items-end gap-[2px] h-5">
+                {waveformBars.map((h, i) => (
+                  <div
+                    key={i}
+                    className="w-[3px] rounded-full bg-red-500 transition-all duration-75"
+                    style={{ height: `${h * 100}%`, minHeight: '3px' }}
+                  />
+                ))}
+              </div>
+              <span className="text-sm font-mono text-red-500">
                 {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
               </span>
             </div>
