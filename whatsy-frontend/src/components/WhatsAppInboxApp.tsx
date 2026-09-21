@@ -7,6 +7,7 @@ import { getMessages, getConversations, sendMessage, markRead, markUnread, assig
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 import { useT } from '../i18n/translations';
+import { useLabelStore } from '../store/useLabelStore';
 
 export const WhatsAppInboxApp: React.FC = () => {
   const t = useT();
@@ -31,10 +32,18 @@ export const WhatsAppInboxApp: React.FC = () => {
   const setCurrentSearch = useInboxStore((s) => s.setCurrentSearch);
   const setMobileChatOpen = useInboxStore((s) => s.setMobileChatOpen);
 
+  const { labels: allLabels } = useLabelStore();
+
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeLabelId, setActiveLabelId] = useState<string | null>(null);
+  const [activeLabelIds, setActiveLabelIds] = useState<string[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
+
+  const handleLabelFilterToggle = useCallback((labelId: string) => {
+    setActiveLabelIds(prev =>
+      prev.includes(labelId) ? prev.filter(id => id !== labelId) : [...prev, labelId]
+    );
+  }, []);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
 
@@ -80,7 +89,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     setHasMoreConversations(true);
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
+      getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
         .then((convs) => {
           convs.forEach((conv) => {
             if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
@@ -94,7 +103,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         })
         .catch((err) => console.error('[WhatsAppInboxApp] fetch conversations:', err));
     });
-  }, [filter, searchQuery, activeLabelId, setConversations]);
+  }, [filter, searchQuery, activeLabelIds, setConversations]);
 
   // Reload message history when switching conversations.
   // Use mergeMessages (not setMessages) so any realtime messages that arrived
@@ -141,7 +150,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     const handleActiveFocus = () => {
       if (document.visibilityState !== 'visible') return;
       import('../api/inbox').then(({ getConversations }) => {
-        getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
+        getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
           .then(setConversations)
           .catch(() => undefined);
       });
@@ -160,7 +169,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       document.removeEventListener('visibilitychange', handleActiveFocus);
       window.removeEventListener('focus', handleActiveFocus);
     };
-  }, [activeConversationId, mergeMessages, filter, searchQuery, activeLabelId, setConversations, updateConversation]);
+  }, [activeConversationId, mergeMessages, filter, searchQuery, activeLabelIds, setConversations, updateConversation]);
 
   // Flash "Connected" banner for 3s when WS connects.
   useEffect(() => {
@@ -257,7 +266,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     setIsLoadingMoreConversations(true);
     const lastId = conversations[conversations.length - 1].id;
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 100, lastId, activeLabelId ?? undefined)
+      getConversations(filter, searchQuery, 100, lastId, activeLabelIds[0] ?? undefined)
         .then((convs) => {
           appendConversations(convs);
           if (convs.length < 100) setHasMoreConversations(false);
@@ -265,16 +274,16 @@ export const WhatsAppInboxApp: React.FC = () => {
         .catch((err) => console.error('[WhatsAppInboxApp] load more conversations:', err))
         .finally(() => setIsLoadingMoreConversations(false));
     });
-  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, activeLabelId, appendConversations]);
+  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, activeLabelIds, appendConversations]);
 
   const handleRefreshConversations = useCallback(() => {
-    getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
+    getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
       .then((convs) => {
         setConversations(convs);
         setHasMoreConversations(convs.length >= 100);
       })
       .catch((err) => console.error('[WhatsAppInboxApp] refresh conversations:', err));
-  }, [filter, searchQuery, activeLabelId, setConversations]);
+  }, [filter, searchQuery, activeLabelIds, setConversations]);
 
   const handleTagsChange = useCallback(
     (conversationId: string, tags: string[]) => {
@@ -349,6 +358,10 @@ export const WhatsAppInboxApp: React.FC = () => {
     }
     if (filter === 'unread') return (c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread;
     if (filter === 'unanswered') return !c.lastMessage?.direction || c.lastMessage.direction === 'inbound';
+    if (activeLabelIds.length > 0) {
+      const activeNames = activeLabelIds.map(id => allLabels.find(l => l.id === id)?.name).filter(Boolean) as string[];
+      if (activeNames.length > 0 && !activeNames.every(name => (c.tags ?? []).includes(name))) return false;
+    }
     return true;
   });
 
@@ -505,8 +518,9 @@ export const WhatsAppInboxApp: React.FC = () => {
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
           onTagsChange={handleTagsChange}
-          activeLabelId={activeLabelId}
-          onLabelFilterChange={setActiveLabelId}
+          activeLabelIds={activeLabelIds}
+          onLabelFilterChange={handleLabelFilterToggle}
+          onLabelFilterClear={() => setActiveLabelIds([])}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>
