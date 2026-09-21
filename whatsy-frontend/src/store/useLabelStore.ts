@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Label } from '../components/types'
-import { getLabels, createLabel, updateLabel, deleteLabel } from '../api/inbox'
+import { API_BASE, getAuthHeader, createLabel, updateLabel, deleteLabel } from '../api/inbox'
 
 interface LabelState {
   labels: Label[]
@@ -20,8 +20,14 @@ export const useLabelStore = create<LabelState>((set, get) => ({
   activeLabelId: null,
 
   fetch: async () => {
-    const labels = await getLabels()
-    set({ labels })
+    try {
+      const res = await window.fetch(`${API_BASE}/v1/labels`, { headers: getAuthHeader() })
+      if (!res.ok) return
+      const json = await res.json() as { labels?: Label[] }
+      set({ labels: json.labels ?? [] })
+    } catch {
+      // silently ignore — never trigger a logout for a background labels fetch
+    }
   },
 
   add: async (name, color) => {
