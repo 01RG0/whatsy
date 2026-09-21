@@ -198,10 +198,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rotate the session version — this invalidates any previously issued token for this agent.
+	// Read current session version — do NOT increment on login so other devices stay valid.
+	// session_version is only incremented on explicit "log out all devices" action.
 	var sessionVersion int64
 	if err := h.db.QueryRow(
-		`UPDATE agents SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version`, id,
+		`SELECT session_version FROM agents WHERE id = $1`, id,
 	).Scan(&sessionVersion); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create session"})
 		return

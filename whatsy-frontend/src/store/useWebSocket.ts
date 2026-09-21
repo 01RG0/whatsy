@@ -223,9 +223,15 @@ function connect() {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     store().setWsConnected(false);
     _ws.socket = null;
+    // Code 4001 = auth rejected; no token = nothing to auth with.
+    // In both cases stop retrying and let the session-invalidated flow handle logout.
+    if (event.code === 4001 || !getToken()) {
+      window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
+      return;
+    }
     if (_ws.refCount > 0) {
       const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
       _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
