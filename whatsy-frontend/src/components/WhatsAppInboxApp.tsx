@@ -346,10 +346,6 @@ export const WhatsAppInboxApp: React.FC = () => {
     setSelectionMode(false);
   }, []);
 
-  const handleSelectAll = useCallback(() => {
-    setSelectedIds(new Set(filteredConversations.map(c => c.id)));
-  }, [filteredConversations]);
-
   const handleBulkAssignLabel = useCallback(async (labelId: string) => {
     const ids = Array.from(selectedIds);
     await Promise.all(ids.map(id =>
@@ -394,6 +390,10 @@ export const WhatsAppInboxApp: React.FC = () => {
     }
     return true;
   });
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+  }, [filteredConversations]);
 
   const handleSelectConversation = useCallback(
     (conv: ZernioConversation) => {
