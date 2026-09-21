@@ -94,6 +94,17 @@ function Router() {
       .catch(() => {})
   }, [jwt])
 
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      document.documentElement.style.setProperty('--vvh', `${vv.height}px`);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    return () => vv.removeEventListener('resize', update);
+  }, []);
+
   if (path === '/login') return <LoginPage />
 
   if (!jwt) {
@@ -118,7 +129,7 @@ function Router() {
       )}
       <WebSocketMount />
       <SettingsMount />
-      <div className="flex h-[100dvh] bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
+      <div style={{ height: 'var(--vvh, 100dvh)' }} className="flex bg-[#f0f2f5] dark:bg-[#0b141a] overflow-hidden">
         <NavBar path={path} />
         <MobileAwareMain path={path} />
       </div>
