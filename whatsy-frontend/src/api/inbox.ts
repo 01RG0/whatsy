@@ -9,9 +9,7 @@ export function getAuthHeader(): Record<string, string> {
 async function throwIfError(res: Response): Promise<void> {
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
-    if (res.status === 401) {
-      window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'))
-    }
+// Ignored auto logout on 401
     throw new Error(`[${res.status}] ${text}`)
   }
 }

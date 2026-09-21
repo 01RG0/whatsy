@@ -45,16 +45,12 @@ function Router() {
   const t = useT()
   const path = usePath()
   const jwt = localStorage.getItem('whatsy_jwt')
-  const [sessionBanner, setSessionBanner] = useState(false)
+  const sessionBanner = false
   const [validatedToken, setValidatedToken] = useState<string | null>(jwt)
 
   useEffect(() => {
-    const handler = () => {
-      localStorage.removeItem('whatsy_jwt')
-      localStorage.removeItem('whatsy_agent')
-      setSessionBanner(true)
-      setTimeout(() => { window.location.replace('/login') }, 2500)
-    }
+    // Session auto-logout disabled per user request
+    const handler = () => {}
     window.addEventListener('whatsy:session_invalidated', handler)
     return () => window.removeEventListener('whatsy:session_invalidated', handler)
   }, [])
@@ -65,8 +61,7 @@ function Router() {
       .then(async (res) => {
         if (!res.ok) {
           if (res.status === 401) {
-            const body = await res.text().catch(() => '')
-            try { if (JSON.parse(body).error === 'session_invalidated') window.dispatchEvent(new CustomEvent('whatsy:session_invalidated')) } catch { /* ignore */ }
+            // Ignored auto-logout check
           }
           return
         }

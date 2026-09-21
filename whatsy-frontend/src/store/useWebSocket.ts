@@ -267,7 +267,7 @@ function connect() {
             const body = await res.text().catch(() => '');
             try {
               if (JSON.parse(body).error === 'session_invalidated') {
-                window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
+                // Auto logout disabled
               }
             } catch { /* ignore */ }
           }
@@ -285,7 +285,7 @@ function connect() {
     
     // No token available in localStorage - trigger session invalidation
     if (!localStorage.getItem('whatsy_jwt')) {
-      window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
+      // Auto logout disabled
       return;
     }
 
