@@ -27,13 +27,13 @@ export const ConversationLabelPicker: React.FC<ConversationLabelPickerProps> = (
     if (busy) return
     setBusy(label.id)
     try {
-      let updatedLabels: Label[]
+      let updatedTagNames: string[]
       if (isAssigned(label)) {
-        updatedLabels = await removeConversationLabel(conversationId, label.id)
+        updatedTagNames = await removeConversationLabel(conversationId, label.id)
       } else {
-        updatedLabels = await addConversationLabel(conversationId, label.id)
+        updatedTagNames = await addConversationLabel(conversationId, label.id)
       }
-      onUpdate(updatedLabels.map((l) => l.name))
+      onUpdate(updatedTagNames)
     } catch {
       // ignore — server errors don't close the picker
     } finally {
