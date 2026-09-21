@@ -72,7 +72,10 @@ let _externalToken: string | null = null;
 let _onTokenRefresh: ((token: string) => void) | null = null;
 
 function getToken(): string {
-  return _externalToken || localStorage.getItem('whatsy_jwt') || '';
+  if (typeof _externalToken === 'string' && _externalToken !== '') {
+    return _externalToken;
+  }
+  return localStorage.getItem('whatsy_jwt') || '';
 }
 
 function getAuthHeader(): HeadersInit {
@@ -280,8 +283,8 @@ function connect() {
       return;
     }
     
-    // No token available - trigger session invalidation
-    if (!getToken()) {
+    // No token available in localStorage - trigger session invalidation
+    if (!localStorage.getItem('whatsy_jwt')) {
       window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
       return;
     }

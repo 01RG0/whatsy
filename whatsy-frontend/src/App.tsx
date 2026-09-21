@@ -46,7 +46,7 @@ function Router() {
   const path = usePath()
   const jwt = localStorage.getItem('whatsy_jwt')
   const [sessionBanner, setSessionBanner] = useState(false)
-  const [validatedToken, setValidatedToken] = useState<string | null>(null)
+  const [validatedToken, setValidatedToken] = useState<string | null>(jwt)
 
   useEffect(() => {
     const handler = () => {
