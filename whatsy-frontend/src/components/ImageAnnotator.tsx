@@ -46,7 +46,7 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
     const img = new Image();
     img.onload = () => {
       const maxW = window.innerWidth;
-      const maxH = window.innerHeight - 120; // top bar + bottom toolbar
+      const maxH = window.innerHeight - 170; // top bar (~60px) + bottom toolbar (~110px)
       const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
       canvas.width = Math.round(img.naturalWidth * scale);
       canvas.height = Math.round(img.naturalHeight * scale);
@@ -220,7 +220,7 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col" style={{ touchAction: 'none' }}>
+    <div className="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden" style={{ touchAction: 'none' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-3 shrink-0 bg-black">
         <button
@@ -265,7 +265,7 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
       </div>
 
       {/* Bottom toolbar */}
-      <div className="shrink-0 bg-black pb-safe">
+      <div className="shrink-0 bg-black" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {/* Tool + undo row */}
         <div className="flex items-center justify-center gap-1 px-4 py-2">
           {toolButtons.map((tb) => (
@@ -309,8 +309,8 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
                 aria-label={c}
                 className="transition-transform active:scale-90"
                 style={{
-                  width: 22,
-                  height: 22,
+                  width: 28,
+                  height: 28,
                   borderRadius: '50%',
                   backgroundColor: c,
                   border: isSelected ? '2.5px solid white' : '2px solid rgba(255,255,255,0.25)',
