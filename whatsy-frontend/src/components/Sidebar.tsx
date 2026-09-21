@@ -80,10 +80,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [newChatSearch, setNewChatSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchLabels().catch(() => undefined);
   }, [fetchLabels]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [showMenu]);
 
   const labelCounts = React.useMemo(() => {
     const counts: Record<string, number> = {};
@@ -207,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {showMenu && (
-          <div className="absolute end-3 top-12 z-40 w-56 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl">
+          <div ref={menuRef} className="absolute end-3 top-12 z-40 w-56 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl">
             <button type="button" onClick={() => { onRefresh?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_refresh}</button>
             <button type="button" onClick={() => { onMarkAllRead?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_mark_all_read}</button>
             <button type="button" onClick={() => { window.location.assign('/settings') }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_open_settings}</button>

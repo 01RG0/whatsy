@@ -349,7 +349,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
 
       {/* Label picker popover */}
       {labelPickerOpen && (
-        <div ref={labelPickerRef}>
+        <div ref={labelPickerRef} onClick={(e) => e.stopPropagation()}>
           <ConversationLabelPicker
             conversationId={conv.id}
             assignedNames={conv.tags ?? []}

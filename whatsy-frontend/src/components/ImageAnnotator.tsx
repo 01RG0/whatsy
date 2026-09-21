@@ -19,7 +19,7 @@ function getPoint(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement): Point 
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-  const src = 'touches' in e ? e.touches[0] : e;
+  const src = 'touches' in e ? (e.changedTouches[0] ?? e.touches[0]) : e;
   return {
     x: (src.clientX - rect.left) * scaleX,
     y: (src.clientY - rect.top) * scaleY,
@@ -195,7 +195,11 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
     if (!canvas || isSending) return;
     setIsSending(true);
     canvas.toBlob((blob) => {
-      if (blob) onConfirm(blob);
+      if (blob) {
+        onConfirm(blob);
+      } else {
+        setIsSending(false);
+      }
     }, 'image/png');
   };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLabelStore } from '../store/useLabelStore';
 
 interface BulkActionBarProps {
@@ -16,6 +16,18 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
 }) => {
   const { labels } = useLabelStore();
   const [showLabels, setShowLabels] = useState(false);
+  const labelDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showLabels) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (labelDropdownRef.current && !labelDropdownRef.current.contains(e.target as Node)) {
+        setShowLabels(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [showLabels]);
 
   return (
     <div className="px-3 py-2 bg-[#005c4b] flex items-center justify-between gap-2 shrink-0">
@@ -30,7 +42,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
         </button>
       </div>
       <div className="flex items-center gap-1.5">
-        <div className="relative">
+        <div className="relative" ref={labelDropdownRef}>
           <button
             type="button"
             onClick={() => setShowLabels(v => !v)}
