@@ -235,7 +235,7 @@ func main() {
 
 		// Labels
 		r.Get("/v1/labels", labelHandler.List)
-		r.With(handler.RequireAdmin).Post("/v1/labels", labelHandler.Create)
+		r.Post("/v1/labels", labelHandler.Create)
 		r.With(handler.RequireAdmin).Patch("/v1/labels/{id}", labelHandler.Update)
 		r.With(handler.RequireAdmin).Delete("/v1/labels/{id}", labelHandler.Delete)
 		r.Get("/v1/inbox/conversations/{id}/labels", labelHandler.ListConversationLabels)
