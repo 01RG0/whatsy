@@ -8,6 +8,7 @@ const WS_URL = _apiBase
   ? _apiBase.replace(/^http/, 'ws') + '/ws'
   : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 const MAX_BACKOFF_MS = 30_000;
+const API_BASE = _apiBase || `${location.protocol}//${location.host}`;
 
 type WSAction =
   | { action: 'SUBSCRIBE_STUDENT'; studentId: string }
@@ -66,8 +67,17 @@ type ServerEvent =
   | ReactionEvent
   | MessageDeletedEvent;
 
+// Module-level state for external token and callback
+let _externalToken: string | null = null;
+let _onTokenRefresh: ((token: string) => void) | null = null;
+
 function getToken(): string {
-  return localStorage.getItem('whatsy_jwt') ?? '';
+  return _externalToken || localStorage.getItem('whatsy_jwt') || '';
+}
+
+function getAuthHeader(): HeadersInit {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function getMyAgentId(): string {
@@ -226,12 +236,57 @@ function connect() {
   ws.onclose = (event) => {
     store().setWsConnected(false);
     _ws.socket = null;
-    // Code 4001 = auth rejected; no token = nothing to auth with.
-    // In both cases stop retrying and let the session-invalidated flow handle logout.
-    if (event.code === 4001 || !getToken()) {
+    
+    // Code 4001 = auth rejected; try to refresh token before giving up
+    if (event.code === 4001) {
+      // Attempt to refresh the token via /v1/agents/me
+      fetch(`${API_BASE}/v1/agents/me`, { headers: getAuthHeader() })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.token) {
+              // Update localStorage with new token
+              localStorage.setItem('whatsy_jwt', data.token);
+              // Update external token if callback exists
+              if (_onTokenRefresh) {
+                _onTokenRefresh(data.token);
+              }
+              // Reconnect with fresh token
+              if (_ws.refCount > 0) {
+                _ws.backoff = 1000;
+                connect();
+              }
+              return;
+            }
+          }
+          // If token refresh fails, check for session invalidation
+          if (res.status === 401) {
+            const body = await res.text().catch(() => '');
+            try {
+              if (JSON.parse(body).error === 'session_invalidated') {
+                window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
+              }
+            } catch { /* ignore */ }
+          }
+        })
+        .catch(() => {
+          // On network error, retry with exponential backoff
+          if (_ws.refCount > 0) {
+            const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
+            _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
+            _ws.retryTimeout = setTimeout(connect, delay);
+          }
+        });
+      return;
+    }
+    
+    // No token available - trigger session invalidation
+    if (!getToken()) {
       window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
       return;
     }
+
+    // Normal reconnection with exponential backoff
     if (_ws.refCount > 0) {
       const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
       _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
@@ -244,7 +299,20 @@ function connect() {
   };
 }
 
-export function useWebSocket() {
+interface UseWebSocketOptions {
+  token?: string | null;
+  onTokenRefresh?: (token: string) => void;
+}
+
+export function useWebSocket(options: UseWebSocketOptions = {}) {
+  const { token, onTokenRefresh } = options;
+  
+  // Update module-level state when options change
+  useEffect(() => {
+    _externalToken = token || null;
+    _onTokenRefresh = onTokenRefresh || null;
+  }, [token, onTokenRefresh]);
+
   const sendAction = useCallback((action: WSAction) => {
     _ws.sendFn(action);
   }, []);
