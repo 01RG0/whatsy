@@ -340,6 +340,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       )) return false;
     }
     if (filter === 'unread') return (c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread;
+    if (filter === 'unanswered') return !c.lastMessage?.direction || c.lastMessage.direction === 'inbound';
     return true;
   });
 
