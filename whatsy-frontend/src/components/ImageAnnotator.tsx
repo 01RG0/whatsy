@@ -34,6 +34,13 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
 
   const undoStackRef = useRef<ImageData[]>([]);
   const isDrawingRef = useRef(false);
+
+  // Lock body scroll while annotator is open (prevents Android pull-to-refresh)
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
   const lastPointRef = useRef<Point | null>(null);
   const prevPointRef = useRef<Point | null>(null);
 
@@ -48,9 +55,15 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
       const maxW = window.innerWidth;
       const maxH = window.innerHeight - 170; // top bar (~60px) + bottom toolbar (~110px)
       const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
-      canvas.width = Math.round(img.naturalWidth * scale);
-      canvas.height = Math.round(img.naturalHeight * scale);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = Math.round(img.naturalWidth * scale);
+      const cssH = Math.round(img.naturalHeight * scale);
+      canvas.width = cssW * dpr;
+      canvas.height = cssH * dpr;
+      canvas.style.width = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
+      ctx.scale(dpr, dpr);
+      ctx.drawImage(img, 0, 0, cssW, cssH);
       URL.revokeObjectURL(url);
     };
     img.src = url;
@@ -220,7 +233,7 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden" style={{ touchAction: 'none' }}>
+    <div className="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden" style={{ touchAction: 'none', overscrollBehavior: 'none' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-3 shrink-0 bg-black">
         <button
