@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
@@ -559,37 +559,50 @@ export default function AnalysisPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-[#222e35]">
-              {agents.map((agent) => (
-                <>
+              {agents.map((agent) => {
+                const isWhatsAppApp = agent.id === 'whatsapp-app'
+                return (
+                <React.Fragment key={agent.id}>
                   <tr
-                    key={agent.id}
-                    onClick={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
-                    className="hover:bg-gray-50 dark:hover:bg-[#182229] transition-colors cursor-pointer"
+                    onClick={() => !isWhatsAppApp && setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
+                    className={`transition-colors ${isWhatsAppApp ? 'cursor-default' : 'hover:bg-gray-50 dark:hover:bg-[#182229] cursor-pointer'}`}
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        {agent.avatar
-                          ? <img src={agent.avatar} alt={agent.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
-                          : <AgentInitials name={agent.name} />
-                        }
-                        <span className="font-medium text-gray-900 dark:text-[#e9edef]">{agent.name}</span>
+                        {isWhatsAppApp ? (
+                          <div className="w-8 h-8 rounded-full bg-[#25d366]/10 flex items-center justify-center shrink-0 text-base">📱</div>
+                        ) : agent.avatar ? (
+                          <img src={agent.avatar} alt={agent.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <AgentInitials name={agent.name} />
+                        )}
+                        <div>
+                          <span className={`font-medium ${isWhatsAppApp ? 'italic text-gray-500 dark:text-[#8696a0]' : 'text-gray-900 dark:text-[#e9edef]'}`}>
+                            {agent.name}
+                          </span>
+                          {isWhatsAppApp && (
+                            <p className="text-xs text-gray-400 dark:text-[#8696a0]">Sent from WhatsApp app</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.messagesSent.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.conversationsHandled.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{formatResponseTime(agent.avgResponseSeconds)}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : agent.conversationsHandled.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatResponseTime(agent.avgResponseSeconds)}</td>
                     <td className="px-4 py-3 text-right">
-                      <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
-                        <svg
-                          className={`w-4 h-4 transition-transform ${expandedAgent === agent.id ? 'rotate-180' : ''}`}
-                          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                        >
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
+                      {!isWhatsAppApp && (
+                        <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
+                          <svg
+                            className={`w-4 h-4 transition-transform ${expandedAgent === agent.id ? 'rotate-180' : ''}`}
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      )}
                     </td>
                   </tr>
-                  {expandedAgent === agent.id && (
+                  {!isWhatsAppApp && expandedAgent === agent.id && (
                     <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
                       <td colSpan={5} className="px-5 py-3">
                         <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">Hourly activity</p>
@@ -597,8 +610,9 @@ export default function AnalysisPage() {
                       </td>
                     </tr>
                   )}
-                </>
-              ))}
+                </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -494,5 +494,25 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		result = append(result, *statsMap[id])
 	}
 
+	// Q4: unattributed outbound messages (sent from WhatsApp app, not via Whatsy)
+	var unattributed int
+	h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM messages
+		 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
+		   AND timestamp >= $1 AND timestamp < $2`,
+		from, to,
+	).Scan(&unattributed) //nolint:errcheck — zero is a safe default
+	if unattributed > 0 {
+		result = append(result, agentStatRow{
+			ID:                   "whatsapp-app",
+			Name:                 "WhatsApp App",
+			Avatar:               "",
+			MessagesSent:         unattributed,
+			ConversationsHandled: 0,
+			AvgResponseSeconds:   nil,
+			ActiveHours:          []activeHour{},
+		})
+	}
+
 	writeJSON(w, http.StatusOK, result)
 }
