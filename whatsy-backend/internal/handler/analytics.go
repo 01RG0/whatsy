@@ -183,14 +183,13 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		mu.Unlock()
 	}()
 
-	// Q4: unassigned conversations
+	// Q4: unassigned conversations — live snapshot, no time filter
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		var cnt int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM conversations WHERE assigned_agent_id IS NULL AND last_message_at >= $1 AND last_message_at < $2`,
-			from, to,
+			`SELECT COUNT(*) FROM conversations WHERE assigned_agent_id IS NULL`,
 		).Scan(&cnt)
 		if err != nil {
 			setErr(err)
@@ -271,7 +270,7 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		mu.Unlock()
 	}()
 
-	// Q7: avg first-response time
+	// Q7: avg first-response time — only count replies that arrived within 24h
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -283,6 +282,7 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 			   SELECT timestamp FROM messages
 			   WHERE conversation_id = i.conversation_id
 			     AND direction = 'outbound' AND timestamp > i.timestamp
+			     AND timestamp <= i.timestamp + INTERVAL '24 hours'
 			   ORDER BY timestamp ASC LIMIT 1
 			 ) o ON true
 			 WHERE i.direction = 'inbound' AND i.timestamp >= $1 AND i.timestamp < $2`,
@@ -391,10 +391,11 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		   GROUP BY sent_by_agent_id
 		 ) m ON m.sent_by_agent_id = a.id
 		 LEFT JOIN (
-		   SELECT assigned_agent_id, COUNT(DISTINCT id) AS convs FROM conversations
-		   WHERE updated_at >= $1 AND updated_at < $2 AND assigned_agent_id IS NOT NULL
-		   GROUP BY assigned_agent_id
-		 ) c ON c.assigned_agent_id = a.id
+		   SELECT sent_by_agent_id, COUNT(DISTINCT conversation_id) AS convs FROM messages
+		   WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
+		     AND timestamp >= $1 AND timestamp < $2
+		   GROUP BY sent_by_agent_id
+		 ) c ON c.sent_by_agent_id = a.id
 		 ORDER BY a.name`,
 		from, to,
 	)
@@ -419,7 +420,7 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Q2: avg response time per agent
+	// Q2: avg response time per agent — only replies within 24h of last inbound
 	rows2, err := h.db.QueryContext(r.Context(),
 		`SELECT o.sent_by_agent_id::text,
 		        AVG(EXTRACT(EPOCH FROM (o.timestamp - prev.timestamp))) AS avg_secs
@@ -428,6 +429,7 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		   SELECT timestamp FROM messages i
 		   WHERE i.conversation_id = o.conversation_id
 		     AND i.direction = 'inbound' AND i.timestamp < o.timestamp
+		     AND i.timestamp >= o.timestamp - INTERVAL '24 hours'
 		   ORDER BY i.timestamp DESC LIMIT 1
 		 ) prev ON true
 		 WHERE o.direction = 'outbound' AND o.sent_by_agent_id IS NOT NULL
