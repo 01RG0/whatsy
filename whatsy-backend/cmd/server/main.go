@@ -31,6 +31,7 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
 	if err := godotenv.Load(); err != nil {
 		log.Printf(".env not loaded: %v", err)
 	}
