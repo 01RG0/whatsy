@@ -42,7 +42,7 @@ func (s *AutoReplyService) CheckAndReply(ctx context.Context, message domain.Mes
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT trigger, trigger_type FROM auto_reply_rules
+		`SELECT trigger, trigger_type, response FROM auto_reply_rules
 		 WHERE is_active = TRUE
 		 ORDER BY priority ASC, created_at ASC
 		 LIMIT 100`)
@@ -53,8 +53,8 @@ func (s *AutoReplyService) CheckAndReply(ctx context.Context, message domain.Mes
 
 	content := strings.ToLower(message.Content)
 	for rows.Next() {
-		var trigger, triggerType string
-		if err := rows.Scan(&trigger, &triggerType); err != nil {
+		var trigger, triggerType, response string
+		if err := rows.Scan(&trigger, &triggerType, &response); err != nil {
 			return false, fmt.Errorf("scan auto-reply rule: %w", err)
 		}
 
@@ -71,13 +71,6 @@ func (s *AutoReplyService) CheckAndReply(ctx context.Context, message domain.Mes
 			continue
 		}
 
-		var response string
-		if err := s.db.QueryRowContext(ctx,
-			`SELECT response FROM auto_reply_rules WHERE trigger = $1 AND is_active = TRUE LIMIT 1`,
-			trigger,
-		).Scan(&response); err != nil {
-			continue
-		}
 		if response == "" {
 			continue
 		}
