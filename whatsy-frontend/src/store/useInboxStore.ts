@@ -25,6 +25,7 @@ interface InboxState {
   viewers: Record<string, ViewerInfo[]>;
   typingLock: Record<string, TypingLock | null>;
   wsConnected: boolean;
+  lastWsEventAt: number;
   currentFilter: ConversationFilter;
   currentSearch: string;
   isMobileChatOpen: boolean;
@@ -47,6 +48,7 @@ interface InboxState {
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   replaceMessage: (conversationId: string, tempId: string, real: ZernioMessage) => void;
+  touchWsEvent: () => void;
 }
 
 const isUnread = (c: ZernioConversation | Partial<ZernioConversation>) =>
@@ -60,6 +62,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   viewers: {},
   typingLock: {},
   wsConnected: false,
+  lastWsEventAt: 0,
   currentFilter: 'all',
   currentSearch: '',
   isMobileChatOpen: false,
@@ -200,6 +203,7 @@ export const useInboxStore = create<InboxState>((set) => ({
     })),
 
   setWsConnected: (connected) => set({ wsConnected: connected }),
+  touchWsEvent: () => set({ lastWsEventAt: Date.now() }),
 
   setCurrentFilter: (currentFilter) => set({ currentFilter }),
   setCurrentSearch: (currentSearch) => set({ currentSearch }),

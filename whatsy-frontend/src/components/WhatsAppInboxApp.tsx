@@ -151,17 +151,21 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     const handleActiveFocus = () => {
       if (document.visibilityState !== 'visible') return;
-      import('../api/inbox').then(({ getConversations }) => {
-        getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
-          .then(setConversations)
-          .catch(() => undefined);
-      });
+      if (!wsConnected) {
+        import('../api/inbox').then(({ getConversations }) => {
+          getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
+            .then(setConversations)
+            .catch(() => undefined);
+        });
+      }
       if (activeConversationId) {
         updateConversation({ id: activeConversationId, unreadCount: 0 });
         markRead(activeConversationId).catch(() => undefined);
-        getMessages(activeConversationId)
-          .then((msgs) => mergeMessages(activeConversationId, [...msgs].reverse()))
-          .catch(() => undefined);
+        if (!wsConnected) {
+          getMessages(activeConversationId)
+            .then((msgs) => mergeMessages(activeConversationId, [...msgs].reverse()))
+            .catch(() => undefined);
+        }
       }
     };
 
@@ -207,6 +211,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (Date.now() - useInboxStore.getState().lastWsEventAt < 55_000) return;
       import('../api/inbox').then(({ getConversations }) => {
         getConversations(filter, searchQuery)
           .then((convs) => {
@@ -227,7 +232,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           })
           .catch(() => undefined);
       });
-    }, 30_000);
+    }, 60_000);
     return () => clearInterval(interval);
   }, [filter, searchQuery]);
 

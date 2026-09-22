@@ -132,6 +132,8 @@ function connect() {
       return;
     }
 
+    store().touchWsEvent();
+
     switch (data.event) {
       case 'NEW_MESSAGE': {
         const msg = data.message;
