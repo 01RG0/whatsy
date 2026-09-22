@@ -147,6 +147,7 @@ func main() {
 	broadcastHandler := handler.NewBroadcastHandler(cfg.ZernioAPIKey, db)
 	waConnHandler := handler.NewWhatsAppConnectionHandler(db, cfg.ZernioAPIKey)
 	syncHandler := handler.NewSyncHandler(db, cfg.ZernioAPIKey)
+	analyticsHandler := handler.NewAnalyticsHandler(db)
 
 	// Background incremental sync every 10 minutes — heals +unknown- contacts and
 	// keeps conversation list current even when webhooks are missed.
@@ -245,6 +246,10 @@ func main() {
 		r.Get("/v1/students/{id}/labels", labelHandler.ListStudentLabels)
 		r.With(handler.RequireNotViewer).Post("/v1/students/{id}/labels", labelHandler.AddStudentLabel)
 		r.With(handler.RequireNotViewer).Delete("/v1/students/{id}/labels/{labelId}", labelHandler.RemoveStudentLabel)
+
+		// Analytics
+		r.With(handler.RequireAdmin).Get("/v1/analytics/overview", analyticsHandler.Overview)
+		r.With(handler.RequireAdmin).Get("/v1/analytics/agents", analyticsHandler.AgentStats)
 	})
 
 	// Serve React SPA from ./public if it exists (production Docker image).

@@ -6,6 +6,7 @@ type Translations = {
   nav_students: string
   nav_broadcasts: string
   nav_team: string
+  nav_analysis: string
   nav_connection: string
   nav_settings: string
   nav_theme: string
@@ -131,6 +132,7 @@ export const en: Translations = {
   nav_students: 'Students',
   nav_broadcasts: 'Broadcasts',
   nav_team: 'Team',
+  nav_analysis: 'Analysis',
   nav_connection: 'Connection',
   nav_settings: 'Settings',
   nav_theme: 'Theme',
@@ -247,6 +249,7 @@ export const ar: Translations = {
   nav_students: 'الطلاب',
   nav_broadcasts: 'الإذاعة',
   nav_team: 'الفريق',
+  nav_analysis: 'التحليلات',
   nav_connection: 'الاتصال',
   nav_settings: 'الإعدادات',
   nav_theme: 'المظهر',

@@ -6,6 +6,7 @@ import StudentsPage from './pages/StudentsPage'
 import SettingsPage from './pages/SettingsPage'
 import WhatsAppConnectionPage from './pages/WhatsAppConnectionPage'
 import TeamPage from './pages/TeamPage'
+import AnalysisPage from './pages/AnalysisPage'
 import { isAdmin } from './lib/auth'
 import { API_BASE, getAuthHeader } from './api/inbox'
 import { useT } from './i18n/translations'
@@ -118,7 +119,7 @@ function MobileAwareMain({ path }: { path: string }) {
 
 function AppContent({ path }: { path: string }) {
   const t = useT()
-  const adminRoutes = ['/team', '/settings', '/connection']
+  const adminRoutes = ['/team', '/analysis', '/settings', '/connection']
   if (adminRoutes.includes(path) && !isAdmin()) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
@@ -145,6 +146,7 @@ function AppContent({ path }: { path: string }) {
   if (path === '/settings') return <SettingsPage />
   if (path === '/connection') return <WhatsAppConnectionPage />
   if (path === '/team') return <TeamPage />
+  if (path === '/analysis') return <AnalysisPage />
   return <InboxApp />
 }
 
