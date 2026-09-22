@@ -213,13 +213,11 @@ export const WhatsAppInboxApp: React.FC = () => {
             const store = useInboxStore.getState();
             const existingIds = new Set(store.conversations.map((c) => c.id));
             convs.forEach((conv) => {
-              if (existingIds.has(conv.id) && conv.id !== store.activeConversationId) {
-                if (conv.id === store.activeConversationId) {
-                  // Actively viewing — always keep it marked as read.
-                  store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
-                } else {
-                  store.updateConversation(conv);
-                }
+              if (!existingIds.has(conv.id)) return;
+              if (conv.id === store.activeConversationId) {
+                store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
+              } else {
+                store.updateConversation(conv);
               }
             });
             const newConvs = convs.filter((c) => !existingIds.has(c.id));
