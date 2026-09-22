@@ -151,7 +151,8 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     const handleActiveFocus = () => {
       if (document.visibilityState !== 'visible') return;
-      if (!wsConnected) {
+      const connected = useInboxStore.getState().wsConnected;
+      if (!connected) {
         import('../api/inbox').then(({ getConversations }) => {
           getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
             .then(setConversations)
@@ -161,7 +162,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       if (activeConversationId) {
         updateConversation({ id: activeConversationId, unreadCount: 0 });
         markRead(activeConversationId).catch(() => undefined);
-        if (!wsConnected) {
+        if (!connected) {
           getMessages(activeConversationId)
             .then((msgs) => mergeMessages(activeConversationId, [...msgs].reverse()))
             .catch(() => undefined);
@@ -207,7 +208,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     prevWsConnected.current = wsConnected;
   }, [wsConnected, activeConversationId, mergeMessages, filter, searchQuery, setConversations]);
 
-  // 30-second background sync — silently merges any conversations missed while WS was lagging.
+  // 60-second background sync — silently merges any conversations missed while WS was lagging.
   useEffect(() => {
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
