@@ -262,14 +262,11 @@ function connect() {
               return;
             }
           }
-          // If token refresh fails, check for session invalidation
-          if (res.status === 401) {
-            const body = await res.text().catch(() => '');
-            try {
-              if (JSON.parse(body).error === 'session_invalidated') {
-                window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
-              }
-            } catch { /* ignore */ }
+          // Token refresh failed — retry with exponential backoff
+          if (_ws.refCount > 0) {
+            const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
+            _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
+            _ws.retryTimeout = setTimeout(connect, delay);
           }
         })
         .catch(() => {
@@ -282,10 +279,14 @@ function connect() {
         });
       return;
     }
-    
-    // No token available in localStorage - trigger session invalidation
+
+    // No token available — retry with backoff until one appears
     if (!localStorage.getItem('whatsy_jwt')) {
-      window.dispatchEvent(new CustomEvent('whatsy:session_invalidated'));
+      if (_ws.refCount > 0) {
+        const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
+        _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
+        _ws.retryTimeout = setTimeout(connect, delay);
+      }
       return;
     }
 
