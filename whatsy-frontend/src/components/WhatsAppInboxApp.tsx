@@ -214,12 +214,6 @@ export const WhatsAppInboxApp: React.FC = () => {
             const existingIds = new Set(store.conversations.map((c) => c.id));
             convs.forEach((conv) => {
               if (existingIds.has(conv.id) && conv.id !== store.activeConversationId) {
-                // Last message is agent's own reply — unread MUST be 0; fix the DB too.
-                if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
-                  markRead(conv.id).catch(() => undefined);
-                  store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
-                  return;
-                }
                 if (conv.id === store.activeConversationId) {
                   // Actively viewing — always keep it marked as read.
                   store.updateConversation({ ...conv, unreadCount: 0, isMarkedUnread: false });
