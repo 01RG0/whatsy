@@ -197,11 +197,8 @@ func (r *ConversationRepo) AssignAgent(ctx context.Context, conversationID, agen
 	return updated > 0, nil
 }
 
-// UpdateLastMessage updates the denormalized conversation preview. Message type
-// belongs to the messages table in the current schema, so msgType is accepted
-// for API consistency but does not have a conversation column to persist to.
-func (r *ConversationRepo) UpdateLastMessage(ctx context.Context, conversationID, content, msgType string) error {
-	_ = msgType
+// UpdateLastMessage updates the denormalized conversation preview.
+func (r *ConversationRepo) UpdateLastMessage(ctx context.Context, conversationID, content string) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET last_message = $2, last_message_at = NOW(), updated_at = NOW() WHERE id = $1", conversationID, content)
 	if err != nil {
 		return fmt.Errorf("update last message: %w", err)

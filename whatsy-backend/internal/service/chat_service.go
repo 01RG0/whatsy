@@ -158,7 +158,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 			return fmt.Errorf("increment conversation unread count: %w", err)
 		}
 	}
-	if err := s.convRepo.UpdateLastMessage(ctx, message.ConversationID, message.Content, string(message.Type)); err != nil {
+	if err := s.convRepo.UpdateLastMessage(ctx, message.ConversationID, message.Content); err != nil {
 		return fmt.Errorf("update conversation last message: %w", err)
 	}
 
@@ -332,7 +332,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	// Update conversation + broadcast in background so the POST returns fast.
 	go func() {
 		bgCtx := context.Background()
-		_ = s.convRepo.UpdateLastMessage(bgCtx, conversationID, message.Content, string(message.Type))
+		_ = s.convRepo.UpdateLastMessage(bgCtx, conversationID, message.Content)
 		_ = s.convRepo.ResetUnread(bgCtx, conversationID)
 		conversation, err := s.convRepo.GetByID(bgCtx, conversationID)
 		if err == nil && conversation != nil {
