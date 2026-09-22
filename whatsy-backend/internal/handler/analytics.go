@@ -23,7 +23,6 @@ type overviewResponse struct {
 	NewContacts             int           `json:"newContacts"`
 	ActiveConversations     int           `json:"activeConversations"`
 	UnassignedConversations int           `json:"unassignedConversations"`
-	AvgResponseSeconds      *float64      `json:"avgResponseSeconds"`
 	MessageTypes            []msgTypeStat `json:"messageTypes"`
 	VolumeTrend             []trendPoint  `json:"volumeTrend"`
 	PrevInboundMessages     *int          `json:"prevInboundMessages,omitempty"`
@@ -48,7 +47,7 @@ type agentStatRow struct {
 	Avatar               string       `json:"avatar"`
 	MessagesSent         int          `json:"messagesSent"`
 	ConversationsHandled int          `json:"conversationsHandled"`
-	AvgResponseSeconds   *float64     `json:"avgResponseSeconds"`
+	ActiveTimeSeconds    *float64     `json:"activeTimeSeconds"`
 	ActiveHours          []activeHour `json:"activeHours"`
 }
 
@@ -270,36 +269,6 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		mu.Unlock()
 	}()
 
-	// Q7: avg first-response time — only count replies that arrived within 24h
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var avg sql.NullFloat64
-		err := h.db.QueryRowContext(r.Context(),
-			`SELECT AVG(EXTRACT(EPOCH FROM (o.timestamp - i.timestamp)))
-			 FROM messages i
-			 JOIN LATERAL (
-			   SELECT timestamp FROM messages
-			   WHERE conversation_id = i.conversation_id
-			     AND direction = 'outbound' AND timestamp > i.timestamp
-			     AND timestamp <= i.timestamp + INTERVAL '24 hours'
-			   ORDER BY timestamp ASC LIMIT 1
-			 ) o ON true
-			 WHERE i.direction = 'inbound' AND i.timestamp >= $1 AND i.timestamp < $2`,
-			from, to,
-		).Scan(&avg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		if avg.Valid {
-			v := avg.Float64
-			resp.AvgResponseSeconds = &v
-		}
-		mu.Unlock()
-	}()
-
 	wg.Wait()
 
 	if firstErr != nil {
@@ -420,21 +389,37 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Q2: avg response time per agent — only replies within 24h of last inbound
+	// Q2: session-based active time per agent
+	// A session = consecutive messages with gap ≤ 2h; active time = sum of session durations.
 	rows2, err := h.db.QueryContext(r.Context(),
-		`SELECT o.sent_by_agent_id::text,
-		        AVG(EXTRACT(EPOCH FROM (o.timestamp - prev.timestamp))) AS avg_secs
-		 FROM messages o
-		 JOIN LATERAL (
-		   SELECT timestamp FROM messages i
-		   WHERE i.conversation_id = o.conversation_id
-		     AND i.direction = 'inbound' AND i.timestamp < o.timestamp
-		     AND i.timestamp >= o.timestamp - INTERVAL '24 hours'
-		   ORDER BY i.timestamp DESC LIMIT 1
-		 ) prev ON true
-		 WHERE o.direction = 'outbound' AND o.sent_by_agent_id IS NOT NULL
-		   AND o.timestamp >= $1 AND o.timestamp < $2
-		 GROUP BY o.sent_by_agent_id`,
+		`WITH agent_messages AS (
+		   SELECT
+		     sent_by_agent_id,
+		     timestamp,
+		     LAG(timestamp) OVER (PARTITION BY sent_by_agent_id ORDER BY timestamp) AS prev_ts
+		   FROM messages
+		   WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
+		     AND timestamp >= $1 AND timestamp < $2
+		 ),
+		 session_labeled AS (
+		   SELECT
+		     sent_by_agent_id,
+		     timestamp,
+		     SUM(CASE WHEN prev_ts IS NULL OR timestamp - prev_ts > INTERVAL '2 hours' THEN 1 ELSE 0 END)
+		       OVER (PARTITION BY sent_by_agent_id ORDER BY timestamp) AS session_id
+		   FROM agent_messages
+		 ),
+		 session_durations AS (
+		   SELECT
+		     sent_by_agent_id,
+		     session_id,
+		     EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) AS duration_secs
+		   FROM session_labeled
+		   GROUP BY sent_by_agent_id, session_id
+		 )
+		 SELECT sent_by_agent_id::text, COALESCE(SUM(duration_secs), 0) AS total_seconds
+		 FROM session_durations
+		 GROUP BY sent_by_agent_id`,
 		from, to,
 	)
 	if err != nil {
@@ -444,14 +429,14 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 	defer rows2.Close()
 	for rows2.Next() {
 		var agentID string
-		var avg sql.NullFloat64
-		if err := rows2.Scan(&agentID, &avg); err != nil {
+		var totalSecs float64
+		if err := rows2.Scan(&agentID, &totalSecs); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
 			return
 		}
-		if s, ok := statsMap[agentID]; ok && avg.Valid {
-			v := avg.Float64
-			s.AvgResponseSeconds = &v
+		if s, ok := statsMap[agentID]; ok {
+			v := totalSecs
+			s.ActiveTimeSeconds = &v
 		}
 	}
 	if err := rows2.Err(); err != nil {
@@ -511,7 +496,7 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 			Avatar:               "",
 			MessagesSent:         unattributed,
 			ConversationsHandled: 0,
-			AvgResponseSeconds:   nil,
+			ActiveTimeSeconds:    nil,
 			ActiveHours:          []activeHour{},
 		})
 	}

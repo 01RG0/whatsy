@@ -17,7 +17,6 @@ interface OverviewData {
   newContacts: number
   activeConversations: number
   unassignedConversations: number
-  avgResponseSeconds: number | null
   messageTypes: MsgTypeStat[]
   volumeTrend: TrendPoint[]
   prevInboundMessages?: number
@@ -33,17 +32,19 @@ interface AgentStat {
   avatar: string
   messagesSent: number
   conversationsHandled: number
-  avgResponseSeconds: number | null
+  activeTimeSeconds: number | null
   activeHours: ActiveHour[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatResponseTime(s: number | null): string {
-  if (s === null || s === undefined) return '—'
-  if (s < 60) return `${Math.round(s)}s`
-  if (s < 3600) return `${Math.round(s / 60)}m ${Math.round(s % 60)}s`
-  return `${(s / 3600).toFixed(1)}h`
+function formatActiveTime(s: number | null): string {
+  if (!s || s < 60) return '< 1m'
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
 }
 
 function trendPct(current: number, prev?: number): number | null {
@@ -66,9 +67,9 @@ function exportCSV(overview: OverviewData, agents: AgentStat[]) {
 
   const lines: string[] = [
     'Agent Name,Messages Sent,Chats Handled,Avg Reply Time,Busiest Hour',
-    `Totals,${overview.outboundMessages},${overview.activeConversations},${formatResponseTime(overview.avgResponseSeconds)},—`,
+    `Totals,${overview.outboundMessages},${overview.activeConversations},—,—`,
     ...agents.map((a) =>
-      `${a.name},${a.messagesSent},${a.conversationsHandled},${formatResponseTime(a.avgResponseSeconds)},${busiestHour(a.activeHours)}`
+      `${a.name},${a.messagesSent},${a.conversationsHandled},${formatActiveTime(a.activeTimeSeconds)},${busiestHour(a.activeHours)}`
     ),
   ]
   const csv = lines.join('\n')
@@ -333,15 +334,6 @@ export default function AnalysisPage() {
     overview.activeConversations > 0
   )
 
-  // Avg response time highlight
-  const respHighlight: 'green' | 'amber' | 'red' | null = overview?.avgResponseSeconds == null
-    ? null
-    : overview.avgResponseSeconds < 300
-    ? 'green'
-    : overview.avgResponseSeconds < 1800
-    ? 'amber'
-    : 'red'
-
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0b141a] p-6">
 
@@ -484,17 +476,6 @@ export default function AnalysisPage() {
               })()}
             />
             <StatCard
-              label="Avg. Reply Time"
-              value={formatResponseTime(overview.avgResponseSeconds)}
-              icon={
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-              }
-              highlight={respHighlight}
-            />
-            <StatCard
               label="Unassigned Chats"
               value={overview.unassignedConversations.toLocaleString()}
               icon={
@@ -554,7 +535,7 @@ export default function AnalysisPage() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Agent</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Msgs Sent</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Chats Handled</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Avg. Reply</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Active Time</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -588,7 +569,7 @@ export default function AnalysisPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.messagesSent.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : agent.conversationsHandled.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatResponseTime(agent.avgResponseSeconds)}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatActiveTime(agent.activeTimeSeconds)}</td>
                     <td className="px-4 py-3 text-right">
                       {!isWhatsAppApp && (
                         <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
