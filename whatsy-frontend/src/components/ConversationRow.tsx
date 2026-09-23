@@ -180,9 +180,16 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
       {/* Details */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
-          <h3 className="font-medium text-sm text-gray-900 dark:text-[#e9edef] truncate">
-            {displayName}
-          </h3>
+          <div className="flex flex-col min-w-0 flex-1">
+            <h3 className="font-medium text-sm text-gray-900 dark:text-[#e9edef] truncate">
+              {conv.participant.phoneNumber || displayName}
+            </h3>
+            {conv.participant.phoneNumber && (
+              <span className="text-[11px] text-gray-500 dark:text-[#8696a0] opacity-70 truncate">
+                {displayName}
+              </span>
+            )}
+          </div>
           <span
             className={`text-[11px] shrink-0 ms-2 ${
               isManuallyUnread
