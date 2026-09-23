@@ -24,7 +24,7 @@ export type MessageType =
 export interface Attachment {
   id?: string;
   url: string;
-  type: 'image' | 'audio' | 'video' | 'file' | 'document';
+  type: 'image' | 'audio' | 'video' | 'file' | 'document' | 'sticker';
   name?: string;
   sizeBytes?: number;
   mimeType?: string;
