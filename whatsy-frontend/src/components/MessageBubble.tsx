@@ -347,6 +347,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </div>
                 );
               }
+              if (att.type === 'sticker') {
+                if (failedImages[idx]) {
+                  return (
+                    <div key={idx} className="flex items-center gap-2 p-2 m-1 rounded bg-black/5 dark:bg-black/15 text-sm text-gray-500 dark:text-[#8696a0]">
+                      <span className="text-lg">🎨</span>
+                      <span className="text-xs italic">{t.sticker}</span>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={idx} className="p-1 cursor-zoom-in" onClick={() => onImageClick?.(mediaUrl)}>
+                    <img
+                      src={mediaUrl}
+                      alt="Sticker"
+                      className="max-w-[160px] max-h-[160px] w-auto h-auto object-contain"
+                      loading="lazy"
+                      onError={() => setFailedImages((prev) => ({ ...prev, [idx]: true }))}
+                    />
+                  </div>
+                );
+              }
               if (att.type === 'video') {
                 return (
                   <div key={idx} className="relative overflow-hidden max-h-80 bg-black/10 rounded">

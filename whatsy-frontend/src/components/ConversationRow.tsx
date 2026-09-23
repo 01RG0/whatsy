@@ -238,6 +238,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
                   : conv.lastMessage.type === 'video' ? t.video
                   : conv.lastMessage.type === 'audio' ? t.audio
                   : conv.lastMessage.type === 'voice_note' ? t.voice_message
+                  : conv.lastMessage.type === 'sticker' ? t.sticker
                   : conv.lastMessage.type === 'document' ? t.document
                   : conv.lastMessage.type === 'location' ? t.location
                   : conv.lastMessage.type === 'contacts' ? t.contact
