@@ -156,7 +156,7 @@ export interface SendMessagePayload {
   message: string;
   category?: 'utility' | 'marketing' | 'authentication';
   attachmentUrl?: string;
-  attachmentType?: 'image' | 'audio' | 'video' | 'file' | 'document';
+  attachmentType?: 'image' | 'audio' | 'video' | 'file' | 'document' | 'sticker';
   attachmentName?: string;
   voiceNote?: boolean;
   replyTo?: string;

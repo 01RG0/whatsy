@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"io"
 	"log"
 	"net/http"
@@ -24,6 +26,23 @@ func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 	if err != nil || parsed.Scheme != "https" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url must be a valid https URL"})
 		return
+	}
+
+	// Check sticker cache before proxying upstream.
+	if h.db != nil {
+		hh := sha256.Sum256([]byte(rawURL))
+		hash := hex.EncodeToString(hh[:])
+		var data []byte
+		var mimeType string
+		if err := h.db.QueryRowContext(r.Context(),
+			`SELECT data, mime_type FROM sticker_cache WHERE url_hash=$1`, hash,
+		).Scan(&data, &mimeType); err == nil {
+			w.Header().Set("Content-Type", mimeType)
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(data)
+			return
+		}
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)

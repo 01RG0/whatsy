@@ -3,9 +3,13 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/whatsy/backend/internal/domain"
@@ -40,15 +44,17 @@ type ChatService struct {
 	zernioClient  ZernioSender
 	hub           WSBroadcaster
 	autoReplier   AutoReplier
+	zernioAPIKey  string
 }
 
-func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, zernioClient ZernioSender, hub WSBroadcaster) *ChatService {
+func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, zernioClient ZernioSender, hub WSBroadcaster, zernioAPIKey string) *ChatService {
 	return &ChatService{
 		db:           db,
 		convRepo:     convRepo,
 		msgRepo:      msgRepo,
 		zernioClient: zernioClient,
 		hub:          hub,
+		zernioAPIKey: zernioAPIKey,
 	}
 }
 
@@ -147,6 +153,15 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		return fmt.Errorf("create inbound message: %w", err)
 	}
 	eventlog.TraceStep2MessageSaved(message.Direction, message.ID, message.ConversationID)
+
+	if message.Type == domain.ContentTypeSticker && len(message.Attachments) > 0 {
+		for _, att := range message.Attachments {
+			if att.URL != "" {
+				go s.cacheSticker(att.URL)
+			}
+		}
+	}
+
 	if message.Direction == "outbound" {
 		// Message sent from WA Business app (outbound echo) — agent already saw and
 		// replied, so clear unread rather than increment it.
@@ -506,8 +521,7 @@ func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
 	return domain.ContentTypeText
 }
 
-// attachmentKind maps Zernio content/attachment types to the four attachment
-// kinds the frontend understands: image, audio, video, document.
+// attachmentKind maps Zernio content/attachment types to attachment kinds the frontend understands.
 func attachmentKind(t domain.ContentType) string {
 	switch t {
 	case domain.ContentTypeImage:
@@ -516,8 +530,57 @@ func attachmentKind(t domain.ContentType) string {
 		return "audio"
 	case domain.ContentTypeVideo:
 		return "video"
+	case domain.ContentTypeSticker:
+		return "sticker"
 	default:
 		return "document"
+	}
+}
+
+func (s *ChatService) cacheSticker(rawURL string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	h := sha256.Sum256([]byte(rawURL))
+	hash := hex.EncodeToString(h[:])
+
+	var exists bool
+	_ = s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sticker_cache WHERE url_hash=$1)`, hash).Scan(&exists)
+	if exists {
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		log.Printf("[sticker-cache] build request for %s: %v", rawURL, err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+s.zernioAPIKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("[sticker-cache] fetch %s: %v", rawURL, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[sticker-cache] upstream %d for %s", resp.StatusCode, rawURL)
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		log.Printf("[sticker-cache] read body %s: %v", rawURL, err)
+		return
+	}
+	mimeType := resp.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "image/webp"
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO sticker_cache (url_hash, original_url, data, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+		hash, rawURL, data, mimeType,
+	)
+	if err != nil {
+		log.Printf("[sticker-cache] store %s: %v", rawURL, err)
 	}
 }
 

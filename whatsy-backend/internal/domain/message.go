@@ -17,6 +17,7 @@ const (
 	ContentTypeInteractive ContentType = "interactive"
 	ContentTypeTemplate    ContentType = "template"
 	ContentTypeSystem      ContentType = "system"
+	ContentTypeSticker     ContentType = "sticker"
 )
 
 type DeliveryStatus string
