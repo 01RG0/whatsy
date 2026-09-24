@@ -182,7 +182,7 @@ export const en: Translations = {
   document: 'Document',
   interactive_template: 'Interactive Template',
   emoji: 'Emoji',
-  attach_file: 'Attach File',
+  attach_file: 'Attach Document',
   send_message: 'Send Message',
   record_voice_note: 'Record Voice Note',
   cancel: 'Cancel',

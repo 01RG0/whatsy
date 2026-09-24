@@ -411,7 +411,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Hidden file inputs for Photos & Videos and Documents */}
       <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" onChange={handleFileUpload} className="hidden" />
-      <input ref={docFileInputRef} type="file" accept="*/*" onChange={handleFileUpload} className="hidden" />
+      <input ref={docFileInputRef} type="file" accept="application/*,audio/*,text/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.zip,.rar,.7z" onChange={handleFileUpload} className="hidden" />
 
       {/* Input Row */}
       <div className="flex items-end gap-2">
