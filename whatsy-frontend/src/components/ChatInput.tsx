@@ -480,9 +480,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               />
 
               {!text.trim() && (
-                <div className="flex items-center gap-3 shrink-0 pb-0.5">
+                <div className="flex items-end gap-3 shrink-0 pb-0.5">
                   {/* Paperclip + its popover — co-located so popover anchors to the button */}
-                  <div className="relative" ref={attachMenuRef}>
+                  <div className="relative mb-1" ref={attachMenuRef}>
                     <button
                       type="button"
                       onClick={() => setShowAttachMenu((p) => !p)}
