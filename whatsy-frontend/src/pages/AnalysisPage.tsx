@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { API_BASE, getAuthHeader } from '../api/inbox'
+import { useT } from '../i18n/translations'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -140,11 +141,12 @@ function SkeletonCard() {
 }
 
 function EmptyState() {
+  const t = useT()
   return (
     <div className="text-center py-16 text-gray-400 dark:text-[#8696a0]">
       <div className="text-5xl mb-4">📊</div>
-      <p className="text-lg font-medium">No activity yet for this period</p>
-      <p className="text-sm mt-1">Try selecting a different time range</p>
+      <p className="text-lg font-medium">{t.analysis_no_activity}</p>
+      <p className="text-sm mt-1">{t.analysis_try_range}</p>
     </div>
   )
 }
@@ -274,6 +276,7 @@ function AgentInitials({ name }: { name: string }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AnalysisPage() {
+  const t = useT()
   const [range, setRange] = useState<RangeOption>('today')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -310,7 +313,7 @@ export default function AnalysisPage() {
       .then(async ([ovRes, agRes]) => {
         if (cancelled) return
         if (ovRes.status === 403 || agRes.status === 403) {
-          throw new Error('You need admin access to view analytics.')
+          throw new Error(t.analysis_admin_only)
         }
         if (!ovRes.ok) throw new Error(`Overview fetch failed [${ovRes.status}]`)
         if (!agRes.ok) throw new Error(`Agents fetch failed [${agRes.status}]`)
@@ -330,10 +333,10 @@ export default function AnalysisPage() {
   }, [range, customFrom, customTo])
 
   const rangeLabels: Record<RangeOption, string> = {
-    today: 'Today',
-    week: 'This Week',
-    month: 'This Month',
-    custom: 'Custom',
+    today: t.analysis_today,
+    week: t.analysis_week,
+    month: t.analysis_month,
+    custom: t.analysis_custom,
   }
 
   const hasData = overview && (
@@ -347,7 +350,7 @@ export default function AnalysisPage() {
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-[#e9edef]">Analysis</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-[#e9edef]">{t.analysis_title}</h1>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Range pills */}
@@ -376,7 +379,7 @@ export default function AnalysisPage() {
                 onChange={(e) => setCustomFrom(e.target.value)}
                 className="bg-white dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-[#00a884]"
               />
-              <span className="text-gray-400 dark:text-[#8696a0] text-xs">to</span>
+              <span className="text-gray-400 dark:text-[#8696a0] text-xs">{t.analysis_date_to}</span>
               <input
                 type="date"
                 value={customTo}
@@ -397,7 +400,7 @@ export default function AnalysisPage() {
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Export CSV
+              {t.analysis_export_csv}
             </button>
           )}
         </div>
@@ -421,7 +424,7 @@ export default function AnalysisPage() {
         ) : overview ? (
           <>
             <StatCard
-              label="Messages Received"
+              label={t.analysis_messages_received}
               value={overview.inboundMessages.toLocaleString()}
               icon={
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -435,7 +438,7 @@ export default function AnalysisPage() {
               })()}
             />
             <StatCard
-              label="Messages Sent"
+              label={t.analysis_messages_sent}
               value={overview.outboundMessages.toLocaleString()}
               icon={
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -450,7 +453,7 @@ export default function AnalysisPage() {
               })()}
             />
             <StatCard
-              label="New People"
+              label={t.analysis_new_people}
               value={overview.newContacts.toLocaleString()}
               icon={
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -467,7 +470,7 @@ export default function AnalysisPage() {
               })()}
             />
             <StatCard
-              label="Open Chats"
+              label={t.analysis_open_chats}
               value={overview.activeConversations.toLocaleString()}
               icon={
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -484,7 +487,7 @@ export default function AnalysisPage() {
               })()}
             />
             <StatCard
-              label="Unassigned Chats"
+              label={t.analysis_unassigned_chats}
               value={overview.unassignedConversations.toLocaleString()}
               icon={
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -505,7 +508,7 @@ export default function AnalysisPage() {
       {/* Volume trend chart (hidden for today) */}
       {!loading && overview && range !== 'today' && (overview.volumeTrend?.length ?? 0) > 0 && (
         <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] p-5 mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef] mb-4">Message Volume</h2>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef] mb-4">{t.analysis_msg_volume}</h2>
           <VolumeTrendChart data={overview.volumeTrend} />
         </div>
       )}
@@ -516,7 +519,7 @@ export default function AnalysisPage() {
           {/* Message types */}
           {(overview.messageTypes?.length ?? 0) > 0 && (
             <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] p-5">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef] mb-4">Message Types</h2>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef] mb-4">{t.analysis_msg_types}</h2>
               <MessageTypeChart data={overview.messageTypes} />
             </div>
           )}
@@ -524,7 +527,7 @@ export default function AnalysisPage() {
           {/* Team workload */}
           {agents.length > 0 && (
             <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] p-5">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef] mb-4">Team Workload</h2>
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef] mb-4">{t.analysis_team_workload}</h2>
               <WorkloadChart agents={agents} />
             </div>
           )}
@@ -535,15 +538,15 @@ export default function AnalysisPage() {
       {!loading && agents.length > 0 && (
         <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] overflow-hidden mb-6">
           <div className="px-5 py-4 border-b border-gray-100 dark:border-[#222e35]">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef]">Team Performance</h2>
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef]">{t.analysis_team_performance}</h2>
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-[#222e35]">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Agent</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Msgs Sent</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Chats Handled</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Active Time</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_agent}</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_msgs_sent}</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_chats}</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_active_time}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -570,7 +573,7 @@ export default function AnalysisPage() {
                             {agent.name}
                           </span>
                           {isWhatsAppApp && (
-                            <p className="text-xs text-gray-400 dark:text-[#8696a0]">Sent from WhatsApp app</p>
+                            <p className="text-xs text-gray-400 dark:text-[#8696a0]">{t.analysis_sent_from_app}</p>
                           )}
                         </div>
                       </div>
@@ -594,7 +597,7 @@ export default function AnalysisPage() {
                   {!isWhatsAppApp && expandedAgent === agent.id && (
                     <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
                       <td colSpan={5} className="px-5 py-3">
-                        <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">Hourly activity</p>
+                        <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">{t.analysis_hourly_activity}</p>
                         <HourlyChart activeHours={agent.activeHours ?? []} />
                       </td>
                     </tr>

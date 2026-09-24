@@ -125,6 +125,32 @@ type Translations = {
   role_admin: string
   role_agent: string
   role_viewer: string
+  // Analysis
+  analysis_title: string
+  analysis_today: string
+  analysis_week: string
+  analysis_month: string
+  analysis_custom: string
+  analysis_date_to: string
+  analysis_export_csv: string
+  analysis_no_activity: string
+  analysis_try_range: string
+  analysis_msg_volume: string
+  analysis_msg_types: string
+  analysis_team_workload: string
+  analysis_team_performance: string
+  analysis_col_agent: string
+  analysis_col_msgs_sent: string
+  analysis_col_chats: string
+  analysis_col_active_time: string
+  analysis_sent_from_app: string
+  analysis_hourly_activity: string
+  analysis_messages_received: string
+  analysis_messages_sent: string
+  analysis_new_people: string
+  analysis_open_chats: string
+  analysis_unassigned_chats: string
+  analysis_admin_only: string
 }
 
 export const en: Translations = {
@@ -242,6 +268,31 @@ export const en: Translations = {
   role_admin: 'Admin',
   role_agent: 'Agent',
   role_viewer: 'Viewer',
+  analysis_title: 'Analysis',
+  analysis_today: 'Today',
+  analysis_week: 'This Week',
+  analysis_month: 'This Month',
+  analysis_custom: 'Custom',
+  analysis_date_to: 'to',
+  analysis_export_csv: 'Export CSV',
+  analysis_no_activity: 'No activity yet for this period',
+  analysis_try_range: 'Try selecting a different time range',
+  analysis_msg_volume: 'Message Volume',
+  analysis_msg_types: 'Message Types',
+  analysis_team_workload: 'Team Workload',
+  analysis_team_performance: 'Team Performance',
+  analysis_col_agent: 'Agent',
+  analysis_col_msgs_sent: 'Msgs Sent',
+  analysis_col_chats: 'Chats Handled',
+  analysis_col_active_time: 'Active Time',
+  analysis_sent_from_app: 'Sent from WhatsApp app',
+  analysis_hourly_activity: 'Hourly activity',
+  analysis_messages_received: 'Messages Received',
+  analysis_messages_sent: 'Messages Sent',
+  analysis_new_people: 'New People',
+  analysis_open_chats: 'Open Chats',
+  analysis_unassigned_chats: 'Unassigned Chats',
+  analysis_admin_only: 'You need admin access to view analytics.',
 }
 
 export const ar: Translations = {
@@ -359,6 +410,31 @@ export const ar: Translations = {
   role_admin: 'مسؤول',
   role_agent: 'وكيل',
   role_viewer: 'مشاهد',
+  analysis_title: 'التحليلات',
+  analysis_today: 'اليوم',
+  analysis_week: 'هذا الأسبوع',
+  analysis_month: 'هذا الشهر',
+  analysis_custom: 'مخصص',
+  analysis_date_to: 'إلى',
+  analysis_export_csv: 'تصدير CSV',
+  analysis_no_activity: 'لا يوجد نشاط في هذه الفترة',
+  analysis_try_range: 'جرّب تحديد نطاق زمني مختلف',
+  analysis_msg_volume: 'حجم الرسائل',
+  analysis_msg_types: 'أنواع الرسائل',
+  analysis_team_workload: 'عبء الفريق',
+  analysis_team_performance: 'أداء الفريق',
+  analysis_col_agent: 'الوكيل',
+  analysis_col_msgs_sent: 'الرسائل المُرسلة',
+  analysis_col_chats: 'المحادثات المُعالجة',
+  analysis_col_active_time: 'وقت النشاط',
+  analysis_sent_from_app: 'أُرسل من تطبيق واتساب',
+  analysis_hourly_activity: 'النشاط بالساعة',
+  analysis_messages_received: 'الرسائل المستلمة',
+  analysis_messages_sent: 'الرسائل المُرسلة',
+  analysis_new_people: 'أشخاص جدد',
+  analysis_open_chats: 'المحادثات المفتوحة',
+  analysis_unassigned_chats: 'المحادثات غير المعيّنة',
+  analysis_admin_only: 'تحتاج إلى صلاحيات المشرف لعرض التحليلات.',
 }
 
 export function useT(): Translations {
