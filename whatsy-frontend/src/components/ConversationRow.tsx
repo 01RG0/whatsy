@@ -190,24 +190,17 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0 ms-2">
-            {conv.isPinned && (
-              <svg className="w-3 h-3 text-gray-400 dark:text-[#8696a0]" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-              </svg>
-            )}
-            <span
-              className={`text-[11px] ${
-                isManuallyUnread
-                  ? 'text-[#027eb5] dark:text-[#53bdeb] font-semibold'
-                  : isUnread
-                  ? 'text-[#00a884] font-semibold'
-                  : 'text-gray-400 dark:text-[#8696a0]'
-              }`}
-            >
-              {formatLastMessageTime(conv.lastMessage?.createdAt || conv.updatedAt)}
-            </span>
-          </div>
+          <span
+            className={`text-[11px] shrink-0 ms-2 ${
+              isManuallyUnread
+                ? 'text-[#027eb5] dark:text-[#53bdeb] font-semibold'
+                : isUnread
+                ? 'text-[#00a884] font-semibold'
+                : 'text-gray-400 dark:text-[#8696a0]'
+            }`}
+          >
+            {formatLastMessageTime(conv.lastMessage?.createdAt || conv.updatedAt)}
+          </span>
         </div>
 
         {/* Label pills */}
@@ -259,6 +252,11 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
           </p>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {conv.isPinned && (
+              <svg className="w-3.5 h-3.5 text-gray-400 dark:text-[#8696a0]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+              </svg>
+            )}
             {/* Unread badge / indicator: Blue circle for marked unread, green for standard unread */}
             {isManuallyUnread ? (
               <span
