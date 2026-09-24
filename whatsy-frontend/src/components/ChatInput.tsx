@@ -503,10 +503,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     </button>
                     {showAttachMenu && (
                       <div className="absolute bottom-full end-0 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-75">
-                        <button type="button" onClick={() => { setShowAttachMenu(false); mediaFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
-                          <span className="w-8 h-8 rounded-full bg-[#bf59cf] flex items-center justify-center text-white">🖼️</span>
-                          <span>{t.photos_and_videos}</span>
-                        </button>
                         <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
                           <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
                           <span>{t.document}</span>
