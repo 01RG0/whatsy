@@ -295,7 +295,7 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
 				eventlog.WebhookError(event.Type, err)
 			} else {
-				zernioMsgID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
+				zernioMsgID := firstNonEmpty(payload.MessageID, payload.PlatformMessageID)
 				eventlog.Webhook(event.Type, zernioMsgID)
 				if err := h.chatService.HandleMessageStatus(r.Context(), payload); err != nil {
 					eventlog.WebhookError(event.Type, err)
