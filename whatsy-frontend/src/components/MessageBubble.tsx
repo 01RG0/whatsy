@@ -111,7 +111,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (!row || !bubble || !onReply) return;
 
     const THRESHOLD = 56;
-    let startX = 0, startY = 0, horizontal = false, triggered = false;
+    let startX = 0, startY = 0, horizontal = false, vertical = false, triggered = false;
 
     const applyX = (x: number) => {
       bubble.style.transform = `translateX(${x}px)`;
@@ -136,6 +136,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       horizontal = false;
+      vertical = false;
       triggered = false;
       bubble.style.transition = 'none';
       if (icon) icon.style.transition = 'none';
@@ -144,11 +145,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const onMove = (e: TouchEvent) => {
       const dx = e.touches[0].clientX - startX;
       const dy = Math.abs(e.touches[0].clientY - startY);
-      if (!horizontal) {
-        if (Math.abs(dx) < 6 && dy < 6) return;
-        if (Math.abs(dx) > dy) horizontal = true;
-        else { startX = 0; return; }
+      if (!horizontal && !vertical) {
+        // Wait for at least 10px of movement before classifying direction
+        if (Math.abs(dx) < 10 && dy < 10) return;
+        // Require horizontal to be at least 2× the vertical to avoid
+        // misclassifying diagonal scrolls as swipe-to-reply
+        if (Math.abs(dx) > dy * 2) horizontal = true;
+        else { vertical = true; return; }
       }
+      if (vertical) return;
       if (dx > 0) {
         e.preventDefault();
         // sqrt curve: fast to start, slows naturally — matches WhatsApp feel
@@ -162,11 +167,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     };
 
     const onEnd = () => {
-      if (!horizontal && !startX) return;
+      if (!horizontal) { vertical = false; return; }
       const currentX = parseFloat(bubble.style.transform.replace(/[^0-9.-]/g, '') || '0');
       if (currentX >= THRESHOLD) onReply(message);
       snapBack();
       horizontal = false;
+      vertical = false;
       startX = 0;
     };
 
