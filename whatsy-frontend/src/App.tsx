@@ -51,7 +51,14 @@ function Router() {
     if (!jwt) return
     fetch(`${API_BASE}/v1/agents/me`, { headers: getAuthHeader() })
       .then(async (res) => {
-        if (!res.ok) return
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('whatsy_jwt')
+            localStorage.removeItem('whatsy_agent')
+            window.location.href = '/login'
+          }
+          return
+        }
         const data = await res.json()
         if (data && data.id) {
           if (data.token) {
