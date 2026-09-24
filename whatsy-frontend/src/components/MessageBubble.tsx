@@ -494,7 +494,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                : message.type === 'voice_note' ? t.voice_message
                : message.type === 'document' ? t.document
                : message.type === 'location' ? t.location
-               : message.type === 'contacts' ? t.contact
                : message.type === 'sticker' ? t.sticker
                : t.unsupported_message}
             </span>
