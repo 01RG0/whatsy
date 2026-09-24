@@ -284,7 +284,12 @@ export default function AnalysisPage() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
 
   useEffect(() => {
-    if (range === 'custom' && (!customFrom || !customTo)) return
+    if (range === 'custom' && (!customFrom || !customTo)) {
+      setOverview(null)
+      setAgents([])
+      setLoading(false)
+      return
+    }
 
     let cancelled = false
     setLoading(true)
@@ -304,6 +309,9 @@ export default function AnalysisPage() {
     ])
       .then(async ([ovRes, agRes]) => {
         if (cancelled) return
+        if (ovRes.status === 403 || agRes.status === 403) {
+          throw new Error('You need admin access to view analytics.')
+        }
         if (!ovRes.ok) throw new Error(`Overview fetch failed [${ovRes.status}]`)
         if (!agRes.ok) throw new Error(`Agents fetch failed [${agRes.status}]`)
         const [ovData, agData] = await Promise.all([ovRes.json(), agRes.json()])
@@ -409,7 +417,7 @@ export default function AnalysisPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {loading ? (
-          Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+          Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
         ) : overview ? (
           <>
             <StatCard
