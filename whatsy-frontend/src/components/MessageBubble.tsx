@@ -82,6 +82,8 @@ interface MessageBubbleProps {
   onButtonClick?: (buttonId: string, buttonText: string) => void;
   onReply?: (message: ZernioMessage) => void;
   onRetry?: (message: ZernioMessage) => void;
+  isConsecutive?: boolean;
+  isNew?: boolean;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -90,6 +92,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onButtonClick,
   onReply,
   onRetry,
+  isConsecutive,
+  isNew = false,
 }) => {
   const t = useT();
   const isOutbound = message.direction === 'outbound';
@@ -255,7 +259,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div
       ref={rowRef}
-      className={`group relative flex w-full my-1 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+      className={`group relative flex w-full ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
     >
       {/* Swipe-to-reply indicator — always in DOM, driven by native touch handler */}
       <div
@@ -269,10 +273,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       </div>
       <div
         ref={bubbleRef}
-        className={`relative max-w-[85%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
+        className={`${isNew ? 'msg-in' : ''} relative max-w-[75%] sm:max-w-[65%] md:max-w-[62%] lg:max-w-[62%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
           isOutbound
-            ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ltr:rounded-tr-none rtl:rounded-tl-none'
-            : 'bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db] ltr:rounded-tl-none rtl:rounded-tr-none'
+            ? `bg-[#e7ffdb] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef]${!isConsecutive ? ' ltr:rounded-tr-none rtl:rounded-tl-none' : ''}`
+            : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db]${!isConsecutive ? ' ltr:rounded-tl-none rtl:rounded-tr-none' : ''}`
         }`}
       >
         {/* Reply Quote Banner */}
@@ -280,7 +284,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div
             className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-s-4 cursor-pointer select-none ${
               isOutbound
-                ? 'bg-[#c5ecc0] dark:bg-[#025144] border-[#00a884]'
+                ? 'bg-[#cff5c3] dark:bg-[#025144] border-[#00a884]'
                 : 'bg-[#f0f2f5] dark:bg-[#182229] border-[#00a884]'
             }`}
           >
@@ -432,6 +436,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )
         }
 
+        {message.type === 'contacts' && (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3 px-3 pt-3 pb-2">
+              <div className="w-10 h-10 rounded-full bg-[#00a884]/20 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-[#00a884]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                </svg>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate">
+                  {message.content && message.content !== '[Unsupported message]' ? message.content : 'Contact'}
+                </span>
+                <span className="text-xs text-[#9da3a7]">Contact</span>
+              </div>
+            </div>
+            <div className="border-t border-black/10 dark:border-white/10 py-2 text-center">
+              <span className="text-sm font-medium text-[#00a884]">View Contact</span>
+            </div>
+          </div>
+        )}
+
         {/* Text Content */}
         {message.content && message.content !== '[Unsupported message]' && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
@@ -447,8 +472,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             )}
           </div>
         )}
+        {(message as any).footer && (
+          <div className="px-3 pb-1.5 text-[13px]" style={{ color: '#9da3a7' }}>
+            {(message as any).footer}
+          </div>
+        )}
+
         {message.content === '[Unsupported message]' && (!message.attachments || message.attachments.length === 0) &&
-          !(( message.type === 'voice_note' || message.type === 'audio') && (message.mediaUrl || message.url)) && (
+          !(( message.type === 'voice_note' || message.type === 'audio') && (message.mediaUrl || message.url)) &&
+          message.type !== 'contacts' && (
           <div className="flex items-center gap-2 px-3 pt-2 pb-1.5 text-gray-400 dark:text-[#8696a0] italic text-sm">
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
@@ -534,11 +566,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Timestamp + Status */}
-        <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right opacity-60 ms-2 mt-[-4px]">
+        <div className="flex items-center justify-end gap-1 px-2.5 pb-1 text-[11px] select-none float-right ms-2 mt-[-4px]">
           {isOutbound && message.senderName && (
-            <span className="opacity-80 me-1">{message.senderName}</span>
+            <span className="opacity-60 me-1">{message.senderName}</span>
           )}
-          <span>{formattedTime}</span>
+          <span className="opacity-60">{formattedTime}</span>
           {isOutbound && renderStatusTicks(message.status)}
         </div>
 

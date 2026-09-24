@@ -273,12 +273,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
     )}
     <div
-      className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] px-4 pt-2 pb-2 relative flex flex-col"
+      className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] px-3 pt-2 pb-2 relative flex flex-col"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
       {/* Reply Preview */}
       {replyingTo && (
-        <div className="flex items-center justify-between bg-white dark:bg-[#182229] border-s-4 border-[#00a884] p-2.5 mb-2 rounded text-xs shadow-sm">
+        <div className="animate-in slide-in-from-top-1 fade-in duration-75 flex items-center justify-between bg-white dark:bg-[#182229] border-s-4 border-[#00a884] p-2.5 mb-2 rounded text-xs shadow-sm">
           <div className="flex flex-col min-w-0 pe-2">
             <span className="text-[#00a884] font-semibold">{replyingTo.senderName}</span>
             <span className="text-gray-500 dark:text-[#8696a0] truncate">{replyingTo.content}</span>
@@ -408,29 +408,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
-      {/* Attachment Popover */}
-      {showAttachMenu && (
-        <div ref={attachMenuRef} className="absolute bottom-full start-4 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <button type="button" onClick={() => { setShowAttachMenu(false); mediaFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
-            <span className="w-8 h-8 rounded-full bg-[#bf59cf] flex items-center justify-center text-white">🖼️</span>
-            <span>{t.photos_and_videos}</span>
-          </button>
-          <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
-            <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
-            <span>{t.document}</span>
-          </button>
-          {interactiveEnabled && (
-            <button
-              type="button"
-              onClick={() => { setShowAttachMenu(false); setShowInteractiveComposer(true); }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
-            >
-              <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>
-              <span>{t.interactive_template}</span>
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Hidden file inputs for Photos & Videos and Documents */}
       <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" onChange={handleFileUpload} className="hidden" />
@@ -470,43 +447,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         ) : (
           <>
-            {/* Emoji */}
-            <button
-              type="button"
-              disabled={disabled || isUploading}
-              className={`text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] p-2 rounded-full transition shrink-0 ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
-              title={disabled && disabledTooltip ? disabledTooltip : t.emoji}
+            {/* Pill: emoji + textarea + attach + camera */}
+            <div
+              className={`flex-1 bg-white dark:bg-[#2a3942] rounded-[36px] px-3 py-2 flex items-end gap-2 min-h-[44px] ${disabled ? 'opacity-80' : ''}`}
+              title={disabled ? disabledTooltip : undefined}
             >
-              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
-              </svg>
-            </button>
-
-            {/* Attach */}
-            <button
-              type="button"
-              onClick={() => setShowAttachMenu((p) => !p)}
-              disabled={disabled || isUploading}
-              className={`p-2 rounded-full transition shrink-0 ${showAttachMenu ? 'text-[#00a884] bg-gray-100 dark:bg-[#2a3942]' : 'text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'disabled:opacity-50'}`}
-              title={disabled && disabledTooltip ? disabledTooltip : t.attach_file}
-            >
-              {isUploading ? (
-                <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                  <path d="M12 2a10 10 0 0 1 10 10" />
-                </svg>
-              ) : (
+              <button
+                type="button"
+                disabled={disabled || isUploading}
+                className={`text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef] shrink-0 pb-0.5 transition ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                title={t.emoji}
+              >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line x1="9" y1="9" x2="9.01" y2="9" />
+                  <line x1="15" y1="9" x2="15.01" y2="9" />
                 </svg>
-              )}
-            </button>
+              </button>
 
-            {/* Textarea */}
-            <div className={`flex-1 bg-white dark:bg-[#2a3942] rounded-lg px-3 py-2 flex items-center min-h-[40px] max-h-[140px] border border-[#e9edef] dark:border-transparent ${disabled ? 'cursor-not-allowed opacity-80' : 'focus-within:border-[#00a884]'}`} title={disabled ? disabledTooltip : undefined}>
               <textarea
                 ref={textareaRef}
                 value={text}
@@ -517,17 +476,79 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 rows={1}
                 disabled={disabled}
                 placeholder={disabled ? (disabledTooltip || t.view_only_mode) : resolvedPlaceholder}
-                className="w-full bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-gray-400 dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto leading-relaxed select-text disabled:cursor-not-allowed scroll-smooth"
+                className="flex-1 bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-[#8696a0] dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto leading-relaxed select-text disabled:cursor-not-allowed scroll-smooth self-center"
               />
+
+              {!text.trim() && (
+                <div className="flex items-center gap-3 shrink-0 pb-0.5">
+                  {/* Paperclip + its popover — co-located so popover anchors to the button */}
+                  <div className="relative" ref={attachMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAttachMenu((p) => !p)}
+                      disabled={disabled || isUploading}
+                      className={`transition ${showAttachMenu ? 'text-[#00a884]' : 'text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef]'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      title={t.attach_file}
+                    >
+                      {isUploading ? (
+                        <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                          <path d="M12 2a10 10 0 0 1 10 10" />
+                        </svg>
+                      ) : (
+                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                      )}
+                    </button>
+                    {showAttachMenu && (
+                      <div className="absolute bottom-full end-0 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-75">
+                        <button type="button" onClick={() => { setShowAttachMenu(false); mediaFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
+                          <span className="w-8 h-8 rounded-full bg-[#bf59cf] flex items-center justify-center text-white">🖼️</span>
+                          <span>{t.photos_and_videos}</span>
+                        </button>
+                        <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
+                          <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
+                          <span>{t.document}</span>
+                        </button>
+                        {interactiveEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => { setShowAttachMenu(false); setShowInteractiveComposer(true); }}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
+                          >
+                            <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>
+                            <span>{t.interactive_template}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { mediaFileInputRef.current?.click(); }}
+                    disabled={disabled || isUploading}
+                    className={`text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef] transition ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    title="Photo / Video"
+                  >
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                  </button>
+                </div>
+              )}
+
             </div>
 
-            {/* Send / Mic */}
+            {/* Mic / Send — outside pill, standalone green circle */}
             {text.trim() ? (
               <button
+                key="send"
                 type="button"
                 onClick={handleSend}
                 disabled={disabled || isUploading}
-                className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                className="animate-in zoom-in-75 duration-75 w-11 h-11 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 title={disabled && disabledTooltip ? disabledTooltip : t.send_message}
               >
                 <svg className="w-5 h-5 ltr:translate-x-0.5 rtl:-translate-x-0.5 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="currentColor">
@@ -536,13 +557,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </button>
             ) : (
               <button
+                key="mic"
                 type="button"
                 onClick={startRecording}
                 disabled={disabled || isUploading}
-                className="p-2 text-gray-400 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef] rounded-full transition shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="animate-in zoom-in-75 duration-75 w-11 h-11 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 title={disabled && disabledTooltip ? disabledTooltip : t.record_voice_note}
               >
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                   <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                 </svg>

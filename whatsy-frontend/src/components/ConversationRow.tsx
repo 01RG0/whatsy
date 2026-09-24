@@ -147,10 +147,10 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
             `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e5e7eb&color=374151`
           }
           alt={displayName}
-          className="w-12 h-12 rounded-full object-cover"
+          className="w-10 h-10 rounded-full object-cover"
         />
         {conv.participant.isOnline && viewers.length === 0 && (
-          <span className="absolute bottom-0 end-0 w-3 h-3 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#111b21]" />
+          <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#111b21]" />
         )}
         {/* Stacked agent avatars — team members viewing this chat */}
         {viewers.length > 0 && (
@@ -266,7 +266,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
                 className="w-3 h-3 rounded-full bg-[#027eb5] dark:bg-[#53bdeb] shrink-0"
               />
             ) : conv.unreadCount > 0 ? (
-              <span className="bg-[#00a884] text-white font-bold text-[11px] min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
+              <span key={conv.unreadCount} className="animate-in zoom-in-75 duration-75 bg-[#00a884] text-white font-bold text-[11px] min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
                 {conv.unreadCount}
               </span>
             ) : null}

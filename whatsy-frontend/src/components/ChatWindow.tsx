@@ -100,6 +100,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const prevMessageCountRef = useRef(0);
   const prevConvIdRef = useRef<string | null>(null);
+  const initialMessageIdsRef = useRef<Set<string>>(new Set());
+
+  // Reset the initial-IDs snapshot when the conversation changes.
+  useEffect(() => {
+    initialMessageIdsRef.current = new Set();
+  }, [conversation?.id]);
+
+  // Populate the snapshot once the first load completes.
+  useEffect(() => {
+    if (!isLoadingMessages && messages.length > 0 && initialMessageIdsRef.current.size === 0) {
+      initialMessageIdsRef.current = new Set(messages.map((m) => m.id));
+    }
+  }, [isLoadingMessages, messages]);
 
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
@@ -177,7 +190,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[#efeae2] dark:bg-[#0b141a] relative overflow-hidden">
+    <div className="flex-1 h-full flex flex-col bg-[#f6efe6] dark:bg-[#0b141a] relative overflow-hidden">
       {/* Header */}
       <header className="h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between z-10 select-none border-b border-[#e9edef] dark:border-[#222e35]">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => onViewContactInfo?.(conversation.participant.id)}>
@@ -208,8 +221,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
 
           <div className="flex flex-col">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-[#e9edef] leading-tight">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-[#e9edef] leading-tight flex items-center gap-1">
               {conversation.participant.displayName}
+              {(conversation.participant as any).isVerified && (
+                <svg className="w-3.5 h-3.5 text-[#027eb5] shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                </svg>
+              )}
             </h2>
             {typingLock ? (
               <span className="flex items-center gap-1 text-[12px] text-[#00a884] leading-tight mt-0.5">
@@ -388,43 +406,81 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </header>
 
       {/* Message Stream */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-4 relative">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-4 relative" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cg fill='none' stroke='%23000' stroke-width='0.5' opacity='0.06'%3E%3Cpath d='M30 10 Q40 0 50 10 Q60 20 50 30 Q40 40 30 30 Q20 20 30 10Z'/%3E%3Cpath d='M70 50 Q80 40 90 50 Q100 60 90 70 Q80 80 70 70 Q60 60 70 50Z'/%3E%3Cpath d='M10 60 Q20 50 30 60 Q40 70 30 80 Q20 90 10 80 Q0 70 10 60Z'/%3E%3C/g%3E%3C/svg%3E")` }}>
         {isLoadingMoreMessages && (
           <div className="flex justify-center py-2">
             <div className="w-5 h-5 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-        {isLoadingMessages && (
-          <div className="flex justify-center p-4">
-            <div className="w-6 h-6 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
+        {isLoadingMessages && messages.length === 0 && (
+          <div className="flex flex-col gap-3 px-2 py-4 animate-in fade-in duration-75">
+            {([
+              { dir: 'inbound', w: '62%' },
+              { dir: 'outbound', w: '44%' },
+              { dir: 'inbound', w: '71%' },
+              { dir: 'outbound', w: '33%' },
+              { dir: 'inbound', w: '55%' },
+            ] as const).map((s, i) => (
+              <div key={i} className={`flex px-4 ${s.dir === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`h-9 rounded-lg animate-pulse ${s.dir === 'outbound' ? 'bg-[#e7ffdb] dark:bg-[#005c4b]' : 'bg-white dark:bg-[#202c33]'}`}
+                  style={{ width: s.w }}
+                />
+              </div>
+            ))}
           </div>
         )}
 
-        {groupedMessages.map((group, groupIdx) => (
-          <React.Fragment key={groupIdx}>
-            {/* Date separator */}
-            <div className="flex justify-center my-3 select-none">
-              <span className="bg-white/80 dark:bg-[#182229]/80 text-gray-500 dark:text-[#8696a0] text-[11px] font-semibold uppercase px-3 py-1 rounded-lg shadow-sm border border-gray-200/60 dark:border-[#222e35]/50 backdrop-blur-sm">
-                {group.dateLabel}
-              </span>
-            </div>
+        {(() => {
+          const unreadCount = conversation.unreadCount ?? 0;
+          const unreadStartIndex = unreadCount > 0 ? messages.length - unreadCount : -1;
+          let flatIndex = 0;
+          return groupedMessages.map((group, groupIdx) => (
+            <React.Fragment key={groupIdx}>
+              {/* Date separator */}
+              <div className="flex justify-center my-3 select-none">
+                <span className="bg-white/85 dark:bg-[#182229]/85 text-[#54656f] dark:text-[#8696a0] text-[12.5px] px-3 py-1 rounded-full shadow-sm backdrop-blur-sm">
+                  {group.dateLabel}
+                </span>
+              </div>
 
-            {group.items.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                onImageClick={(url) => setLightboxUrl(url)}
-                onReply={(m) => setReplyingTo({
-                  id: m.id,
-                  senderName: m.direction === 'outbound' ? t.reply_you : conversation.participant.displayName,
-                  content: m.content || 'Attachment',
-                })}
-                onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
-                onRetry={isViewerMode ? undefined : onRetryMessage}
-              />
-            ))}
-          </React.Fragment>
-        ))}
+              {group.items.map((msg, msgIdx) => {
+                const prev = msgIdx > 0 ? group.items[msgIdx - 1] : null;
+                const isConsecutive = Boolean(
+                  prev &&
+                  prev.direction === msg.direction &&
+                  new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() < 3 * 60 * 1000
+                );
+                const showUnreadDivider = flatIndex === unreadStartIndex && unreadStartIndex > 0;
+                flatIndex++;
+                return (
+                  <React.Fragment key={msg.id}>
+                    {showUnreadDivider && (
+                      <div className="flex justify-center my-2 select-none pointer-events-none">
+                        <span className="bg-[#00a884] text-white text-[12px] px-4 py-1 rounded-full shadow-sm">
+                          {unreadCount} unread message{unreadCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
+                    <MessageBubble
+                      message={msg}
+                      isConsecutive={isConsecutive}
+                      isNew={!initialMessageIdsRef.current.has(msg.id)}
+                      onImageClick={(url) => setLightboxUrl(url)}
+                      onReply={(m) => setReplyingTo({
+                        id: m.id,
+                        senderName: m.direction === 'outbound' ? t.reply_you : conversation.participant.displayName,
+                        content: m.content || 'Attachment',
+                      })}
+                      onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
+                      onRetry={isViewerMode ? undefined : onRetryMessage}
+                    />
+                  </React.Fragment>
+                );
+              })}
+            </React.Fragment>
+          ));
+        })()}
 
         <div ref={messagesEndRef} />
       </div>

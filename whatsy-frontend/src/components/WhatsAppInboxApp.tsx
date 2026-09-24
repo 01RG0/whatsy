@@ -113,14 +113,19 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     if (!activeConversationId) return;
     const id = activeConversationId;
-    setIsLoadingMessages(true);
+    const hasCached = (useInboxStore.getState().messages[id]?.length ?? 0) > 0;
+    if (!hasCached) setIsLoadingMessages(true);
     getMessages(id, 100)
       .then((msgs) => {
         mergeMessages(id, [...msgs].reverse());
         setHasMoreMessages((prev) => ({ ...prev, [id]: msgs.length >= 100 }));
       })
       .catch((err) => console.error('[WhatsAppInboxApp] getMessages:', err))
-      .finally(() => setIsLoadingMessages(false));
+      .finally(() => {
+        if (id === useInboxStore.getState().activeConversationId) {
+          setIsLoadingMessages(false);
+        }
+      });
   }, [activeConversationId, mergeMessages]);
 
   // Silently prefetch messages for the top 5 conversations after list loads.
