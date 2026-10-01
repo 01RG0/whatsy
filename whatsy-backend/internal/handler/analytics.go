@@ -93,6 +93,7 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	from, to := parseAnalyticsRange(r)
 	rangeParam := r.URL.Query().Get("range")
 	wantPrev := rangeParam == "week" || rangeParam == "month"
+	tenantID := tenantIDFromRequest(r)
 
 	var (
 		mu       sync.Mutex
@@ -117,8 +118,11 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT direction, COUNT(*) FROM messages WHERE timestamp >= $1 AND timestamp < $2 GROUP BY direction`,
-			from, to,
+			`SELECT direction, COUNT(*) FROM messages
+			 WHERE timestamp >= $1 AND timestamp < $2
+			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+			 GROUP BY direction`,
+			from, to, tenantID,
 		)
 		if err != nil {
 			setErr(err)
@@ -152,8 +156,8 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		var cnt int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM students WHERE created_at >= $1 AND created_at < $2`,
-			from, to,
+			`SELECT COUNT(*) FROM students WHERE created_at >= $1 AND created_at < $2 AND tenant_id = $3::uuid`,
+			from, to, tenantID,
 		).Scan(&cnt)
 		if err != nil {
 			setErr(err)
@@ -170,8 +174,10 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		var cnt int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(DISTINCT conversation_id) FROM messages WHERE timestamp >= $1 AND timestamp < $2`,
-			from, to,
+			`SELECT COUNT(DISTINCT conversation_id) FROM messages
+			 WHERE timestamp >= $1 AND timestamp < $2
+			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+			from, to, tenantID,
 		).Scan(&cnt)
 		if err != nil {
 			setErr(err)
@@ -188,7 +194,8 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		var cnt int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM conversations WHERE assigned_agent_id IS NULL`,
+			`SELECT COUNT(*) FROM conversations WHERE assigned_agent_id IS NULL AND tenant_id = $1::uuid`,
+			tenantID,
 		).Scan(&cnt)
 		if err != nil {
 			setErr(err)
@@ -204,8 +211,11 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT content_type, COUNT(*) FROM messages WHERE timestamp >= $1 AND timestamp < $2 GROUP BY content_type ORDER BY COUNT(*) DESC`,
-			from, to,
+			`SELECT content_type, COUNT(*) FROM messages
+			 WHERE timestamp >= $1 AND timestamp < $2
+			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+			 GROUP BY content_type ORDER BY COUNT(*) DESC`,
+			from, to, tenantID,
 		)
 		if err != nil {
 			setErr(err)
@@ -238,9 +248,11 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		rows, err := h.db.QueryContext(r.Context(),
 			`SELECT DATE_TRUNC('day', timestamp) AS day, COUNT(*) AS cnt
-			 FROM messages WHERE timestamp >= $1 AND timestamp < $2
+			 FROM messages
+			 WHERE timestamp >= $1 AND timestamp < $2
+			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
 			 GROUP BY day ORDER BY day`,
-			from, to,
+			from, to, tenantID,
 		)
 		if err != nil {
 			setErr(err)
@@ -289,8 +301,11 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer prevWg.Done()
 			rows, err := h.db.QueryContext(r.Context(),
-				`SELECT direction, COUNT(*) FROM messages WHERE timestamp >= $1 AND timestamp < $2 GROUP BY direction`,
-				prevFrom, prevTo,
+				`SELECT direction, COUNT(*) FROM messages
+				 WHERE timestamp >= $1 AND timestamp < $2
+				   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+				 GROUP BY direction`,
+				prevFrom, prevTo, tenantID,
 			)
 			if err != nil {
 				return
@@ -315,8 +330,8 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer prevWg.Done()
 			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM students WHERE created_at >= $1 AND created_at < $2`,
-				prevFrom, prevTo,
+				`SELECT COUNT(*) FROM students WHERE created_at >= $1 AND created_at < $2 AND tenant_id = $3::uuid`,
+				prevFrom, prevTo, tenantID,
 			).Scan(&prevContacts) //nolint:errcheck — zero is a safe default
 		}()
 
@@ -324,8 +339,10 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer prevWg.Done()
 			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(DISTINCT conversation_id) FROM messages WHERE timestamp >= $1 AND timestamp < $2`,
-				prevFrom, prevTo,
+				`SELECT COUNT(DISTINCT conversation_id) FROM messages
+				 WHERE timestamp >= $1 AND timestamp < $2
+				   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+				prevFrom, prevTo, tenantID,
 			).Scan(&prevActive) //nolint:errcheck — zero is a safe default
 		}()
 
@@ -343,6 +360,7 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 // AgentStats handles GET /v1/analytics/agents
 func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 	from, to := parseAnalyticsRange(r)
+	tenantID := tenantIDFromRequest(r)
 
 	type agentKey = string
 	statsMap := make(map[agentKey]*agentStatRow)
@@ -357,16 +375,19 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		   SELECT sent_by_agent_id, COUNT(*) AS cnt FROM messages
 		   WHERE direction='outbound' AND sent_by_agent_id IS NOT NULL
 		     AND timestamp >= $1 AND timestamp < $2
+		     AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
 		   GROUP BY sent_by_agent_id
 		 ) m ON m.sent_by_agent_id = a.id
 		 LEFT JOIN (
 		   SELECT sent_by_agent_id, COUNT(DISTINCT conversation_id) AS convs FROM messages
 		   WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
 		     AND timestamp >= $1 AND timestamp < $2
+		     AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
 		   GROUP BY sent_by_agent_id
 		 ) c ON c.sent_by_agent_id = a.id
+		 WHERE a.tenant_id = $3::uuid
 		 ORDER BY a.name`,
-		from, to,
+		from, to, tenantID,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
@@ -400,6 +421,7 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		   FROM messages
 		   WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
 		     AND timestamp >= $1 AND timestamp < $2
+		     AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
 		 ),
 		 session_labeled AS (
 		   SELECT
@@ -420,7 +442,7 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		 SELECT sent_by_agent_id::text, COALESCE(SUM(duration_secs), 0) AS total_seconds
 		 FROM session_durations
 		 GROUP BY sent_by_agent_id`,
-		from, to,
+		from, to, tenantID,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
@@ -450,9 +472,10 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		 FROM messages
 		 WHERE direction='outbound' AND sent_by_agent_id IS NOT NULL
 		   AND timestamp >= $1 AND timestamp < $2
+		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
 		 GROUP BY sent_by_agent_id, hour
 		 ORDER BY sent_by_agent_id, hour`,
-		from, to,
+		from, to, tenantID,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
@@ -486,8 +509,9 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 	h.db.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM messages
 		 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
-		   AND timestamp >= $1 AND timestamp < $2`,
-		from, to,
+		   AND timestamp >= $1 AND timestamp < $2
+		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+		from, to, tenantID,
 	).Scan(&unattributed) //nolint:errcheck — zero is a safe default
 	if unattributed > 0 {
 		result = append(result, agentStatRow{
