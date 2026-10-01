@@ -30,7 +30,8 @@ type createCannedResponseRequest struct {
 
 // List returns canned responses ordered by shortcut.
 func (h *CannedResponseHandler) List(w http.ResponseWriter, r *http.Request) {
-	responses, err := h.query(r, `SELECT id, shortcut, content FROM canned_responses ORDER BY shortcut`)
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
+	responses, err := h.query(r, `SELECT id, shortcut, content FROM canned_responses WHERE tenant_id = $1::uuid ORDER BY shortcut`, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list canned responses"})
 		return
@@ -40,7 +41,8 @@ func (h *CannedResponseHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Search returns canned responses whose shortcut contains q.
 func (h *CannedResponseHandler) Search(w http.ResponseWriter, r *http.Request) {
-	responses, err := h.query(r, `SELECT id, shortcut, content FROM canned_responses WHERE shortcut ILIKE '%' || $1 || '%' ORDER BY shortcut`, r.URL.Query().Get("q"))
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
+	responses, err := h.query(r, `SELECT id, shortcut, content FROM canned_responses WHERE tenant_id = $1::uuid AND shortcut ILIKE '%' || $2 || '%' ORDER BY shortcut`, tenantID, r.URL.Query().Get("q"))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search canned responses"})
 		return
@@ -50,6 +52,7 @@ func (h *CannedResponseHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 // Create stores a new canned response.
 func (h *CannedResponseHandler) Create(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
 	defer r.Body.Close()
 
 	var request createCannedResponseRequest
@@ -58,7 +61,7 @@ func (h *CannedResponseHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.db.ExecContext(r.Context(), `INSERT INTO canned_responses (id, shortcut, content) VALUES (gen_random_uuid(), $1, $2)`, request.Shortcut, request.Content); err != nil {
+	if _, err := h.db.ExecContext(r.Context(), `INSERT INTO canned_responses (id, shortcut, content, tenant_id) VALUES (gen_random_uuid(), $1, $2, $3::uuid)`, request.Shortcut, request.Content, tenantID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create canned response"})
 		return
 	}

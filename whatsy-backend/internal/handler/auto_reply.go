@@ -49,7 +49,8 @@ type patchAutoReplyRuleRequest struct {
 
 // List handles GET /v1/auto-reply-rules.
 func (h *AutoReplyHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.QueryContext(r.Context(), `SELECT id, trigger, trigger_type, response, is_active, priority, created_at FROM auto_reply_rules ORDER BY priority ASC`)
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
+	rows, err := h.db.QueryContext(r.Context(), `SELECT id, trigger, trigger_type, response, is_active, priority, created_at FROM auto_reply_rules WHERE tenant_id = $1::uuid ORDER BY priority ASC`, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list auto-reply rules"})
 		return
@@ -76,6 +77,7 @@ func (h *AutoReplyHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /v1/auto-reply-rules.
 func (h *AutoReplyHandler) Create(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
 	defer r.Body.Close()
 
 	var req createAutoReplyRuleRequest
@@ -91,10 +93,10 @@ func (h *AutoReplyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var rule autoReplyRule
 	var createdAt string
 	err := h.db.QueryRow(
-		`INSERT INTO auto_reply_rules (trigger, trigger_type, response, is_active, priority)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO auto_reply_rules (trigger, trigger_type, response, is_active, priority, tenant_id)
+		 VALUES ($1, $2, $3, $4, $5, $6::uuid)
 		 RETURNING id, trigger, trigger_type, response, is_active, priority, created_at`,
-		req.Trigger, req.TriggerType, req.Response, isActive, req.Priority,
+		req.Trigger, req.TriggerType, req.Response, isActive, req.Priority, tenantID,
 	).Scan(&rule.ID, &rule.Trigger, &rule.TriggerType, &rule.Response, &rule.IsActive, &rule.Priority, &createdAt)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
@@ -112,6 +114,7 @@ func (h *AutoReplyHandler) Create(w http.ResponseWriter, r *http.Request) {
 // only fields present in the body are changed (a toggle sending only
 // {"is_active": false} must not wipe the response text).
 func (h *AutoReplyHandler) Update(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
 	defer r.Body.Close()
 
 	var req patchAutoReplyRuleRequest
@@ -139,9 +142,9 @@ func (h *AutoReplyHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Priority != nil {
 		addSet("priority", *req.Priority)
 	}
-	query += fmt.Sprintf(" WHERE id = $%d", len(args)+1)
+	query += fmt.Sprintf(" WHERE id = $%d AND tenant_id = $%d::uuid", len(args)+1, len(args)+2)
 	query += ` RETURNING id, trigger, trigger_type, response, is_active, priority, created_at`
-	args = append(args, id)
+	args = append(args, id, tenantID)
 
 	var rule autoReplyRule
 	var createdAt string
@@ -158,7 +161,8 @@ func (h *AutoReplyHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /v1/auto-reply-rules/{id}.
 func (h *AutoReplyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	res, err := h.db.ExecContext(r.Context(), `DELETE FROM auto_reply_rules WHERE id = $1`, id)
+	tenantID, ok := TenantIDFromContext(r.Context()); if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error":"workspace missing"}); return }
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM auto_reply_rules WHERE id = $1 AND tenant_id = $2::uuid`, id, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete auto-reply rule"})
 		return

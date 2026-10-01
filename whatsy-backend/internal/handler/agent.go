@@ -48,21 +48,25 @@ const agentColumns = "id::text, name, email, role, avatar, created_at"
 
 // List returns all agents ordered by name, with real-time online status and today's message count.
 func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	const q = `
 		SELECT a.id::text, a.name, a.email, a.role, a.avatar, a.created_at,
 		       COALESCE(m.cnt, 0) AS messages_today
 		FROM agents a
 		LEFT JOIN (
 			SELECT sent_by_agent_id, COUNT(*) AS cnt
-			FROM messages
-			WHERE direction = 'outbound'
+			FROM messages m
+			JOIN agents sender ON sender.id = m.sent_by_agent_id
+			WHERE m.direction = 'outbound' AND sender.tenant_id = $1::uuid
 			  AND timestamp >= NOW() - INTERVAL '24 hours'
 			  AND sent_by_agent_id IS NOT NULL
 			GROUP BY sent_by_agent_id
 		) m ON m.sent_by_agent_id = a.id
+		WHERE a.tenant_id = $1::uuid
 		ORDER BY a.name`
 
-	rows, err := h.db.QueryContext(r.Context(), q)
+	rows, err := h.db.QueryContext(r.Context(), q, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list agents"})
 		return
@@ -171,6 +175,8 @@ func (h *AgentHandler) TeamStats(w http.ResponseWriter, r *http.Request) {
 
 // InviteAgent creates a new agent account directly with the provided (or auto-generated) password.
 func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	defer r.Body.Close()
 	var req struct {
 		Email    string `json:"email"`
@@ -205,10 +211,10 @@ func (h *AgentHandler) InviteAgent(w http.ResponseWriter, r *http.Request) {
 
 	var a agent
 	err = h.db.QueryRowContext(r.Context(),
-		`INSERT INTO agents (name, email, password_hash, role)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO agents (name, email, password_hash, role, tenant_id)
+		 VALUES ($1, $2, $3, $4, $5::uuid)
 		 RETURNING id::text, name, email, role, avatar, created_at`,
-		req.Name, req.Email, string(hash), req.Role,
+		req.Name, req.Email, string(hash), req.Role, tenantID,
 	).Scan(&a.ID, &a.Name, &a.Email, &a.Role, &a.Avatar, &a.CreatedAt)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
@@ -275,6 +281,8 @@ func (h *AgentHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 // UpdateAgent updates any agent's role/name/avatar/password (admin operation).
 func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	defer r.Body.Close()
 	var req struct {
 		Name     *string `json:"name"`
@@ -308,8 +316,8 @@ func (h *AgentHandler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 			role          = COALESCE($3, role),
 			password_hash = COALESCE($4, password_hash),
 			updated_at    = NOW()
-		 WHERE id = $5`,
-		req.Name, req.Avatar, req.Role, passwordHash, id,
+		 WHERE id = $5 AND tenant_id = $6::uuid`,
+		req.Name, req.Avatar, req.Role, passwordHash, id, tenantID,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "update agent"})
@@ -330,7 +338,9 @@ func (h *AgentHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cannot delete yourself"})
 		return
 	}
-	res, err := h.db.ExecContext(r.Context(), "DELETE FROM agents WHERE id = $1", id)
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
+	res, err := h.db.ExecContext(r.Context(), "DELETE FROM agents WHERE id = $1 AND tenant_id = $2::uuid", id, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete agent"})
 		return
@@ -354,8 +364,10 @@ func randomPassword(n int) string {
 }
 
 func (h *AgentHandler) getByID(w http.ResponseWriter, r *http.Request, id string) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	var a agent
-	err := h.db.QueryRowContext(r.Context(), "SELECT "+agentColumns+" FROM agents WHERE id = $1", id).
+	err := h.db.QueryRowContext(r.Context(), "SELECT "+agentColumns+" FROM agents WHERE id = $1 AND tenant_id = $2::uuid", id, tenantID).
 		Scan(&a.ID, &a.Name, &a.Email, &a.Role, &a.Avatar, &a.CreatedAt)
 	if err == sql.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent not found"})

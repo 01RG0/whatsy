@@ -81,6 +81,14 @@ func ClaimsFromContext(ctx context.Context) (*utils.JWTClaims, bool) {
 	return claims, ok
 }
 
+// TenantIDFromContext returns the authenticated workspace ID. All tenant-scoped
+// handlers must use it in their database predicates; never trust an ID supplied
+// by the client for isolation.
+func TenantIDFromContext(ctx context.Context) (string, bool) {
+	claims, ok := ClaimsFromContext(ctx)
+	return claims.TenantID, ok && claims.TenantID != ""
+}
+
 // RequireAdmin rejects requests from non-admin agents with 403.
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -104,4 +112,3 @@ func RequireNotViewer(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-

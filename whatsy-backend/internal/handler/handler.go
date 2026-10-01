@@ -39,6 +39,8 @@ func New(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.
 func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=10")
 	claims, _ := ClaimsFromContext(r.Context())
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	accountID := ""
 	if claims != nil {
 		accountID = claims.AgentID
@@ -47,7 +49,7 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	// an agent id; it must not overwrite the assigned_to_me filter key.
 	_ = r.URL.Query().Get("platform")
 
-	conversations, err := h.convRepo.List(r.Context(), accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), r.URL.Query().Get("label"), queryLimit(r, 100), r.URL.Query().Get("before"))
+	conversations, err := h.convRepo.ListForTenant(r.Context(), tenantID, accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), r.URL.Query().Get("label"), queryLimit(r, 100), r.URL.Query().Get("before"))
 	if err != nil {
 		log.Printf("[error] list conversations: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list conversations"})
@@ -58,7 +60,9 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	messages, err := h.msgRepo.ListByConversation(r.Context(), chi.URLParam(r, "id"), queryLimit(r, 100), r.URL.Query().Get("before"))
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
+	messages, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, chi.URLParam(r, "id"), queryLimit(r, 100), r.URL.Query().Get("before"))
 	if err != nil {
 		log.Printf("list messages for conversation %s: %v", chi.URLParam(r, "id"), err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list messages"})
@@ -70,6 +74,8 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 // SearchMessages returns messages matching q, newest first, together with
 // the participant information for each message's conversation.
 func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	query := r.URL.Query().Get("q")
 	if len([]rune(query)) < 2 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "q must be at least 2 characters"})
@@ -81,10 +87,10 @@ func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 		FROM messages m
 		JOIN conversations c ON c.id = m.conversation_id
 		JOIN students s ON s.id = c.student_id
-		WHERE m.content ILIKE '%' || $1 || '%'
+		WHERE c.tenant_id = $1::uuid AND m.content ILIKE '%' || $2 || '%'
 		ORDER BY m.timestamp DESC
-		LIMIT $2`
-	rows, err := h.db.QueryContext(r.Context(), searchQuery, query, queryLimit(r, 20))
+		LIMIT $3`
+	rows, err := h.db.QueryContext(r.Context(), searchQuery, tenantID, query, queryLimit(r, 20))
 	if err != nil {
 		log.Printf("[error] search messages: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search messages"})

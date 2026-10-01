@@ -51,6 +51,8 @@ type updateStudentRequest struct {
 
 // List handles GET /v1/students.
 func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	grade := r.URL.Query().Get("grade")
 	course := r.URL.Query().Get("course")
 	paymentStatus := r.URL.Query().Get("payment_status")
@@ -58,8 +60,8 @@ func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := queryLimit(r, 50)
 	offset := queryOffset(r, 0)
 
-	query := `SELECT id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at FROM students WHERE 1=1`
-	args := []any{}
+	query := `SELECT id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at FROM students WHERE tenant_id = $1::uuid`
+	args := []any{tenantID}
 
 	if grade != "" {
 		args = append(args, grade)
@@ -106,6 +108,8 @@ func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /v1/students.
 func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	defer r.Body.Close()
 
 	var req createStudentRequest
@@ -121,10 +125,10 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var s studentResponse
 	var cfRaw []byte
 	err := h.db.QueryRow(
-		`INSERT INTO students (name, phone, grade, enrolled_course, payment_status)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO students (name, phone, grade, enrolled_course, payment_status, tenant_id)
+		 VALUES ($1, $2, $3, $4, $5, $6::uuid)
 		 RETURNING id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at`,
-		req.Name, req.Phone, req.Grade, req.EnrolledCourse, req.PaymentStatus,
+		req.Name, req.Phone, req.Grade, req.EnrolledCourse, req.PaymentStatus, tenantID,
 	).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus,
 		pq.Array(&s.Tags), &cfRaw, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
@@ -147,11 +151,13 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 // GetByID handles GET /v1/students/{id}.
 func (h *StudentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	var s studentResponse
 	var cfRaw []byte
 	err := h.db.QueryRow(
-		`SELECT id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at FROM students WHERE id = $1`,
-		id,
+		`SELECT id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at FROM students WHERE id = $1 AND tenant_id = $2::uuid`,
+		id, tenantID,
 	).Scan(&s.ID, &s.Name, &s.Phone, &s.Grade, &s.EnrolledCourse, &s.PaymentStatus,
 		pq.Array(&s.Tags), &cfRaw, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
@@ -169,6 +175,8 @@ func (h *StudentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PATCH /v1/students/{id}.
 func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	defer r.Body.Close()
 
 	var req updateStudentRequest
@@ -198,8 +206,8 @@ func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		query += ", custom_fields = $" + strconv.Itoa(len(args))
 	}
 
-	query += " WHERE id = $" + strconv.Itoa(len(args)+1) + " RETURNING id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at"
-	args = append(args, id)
+	query += " WHERE id = $" + strconv.Itoa(len(args)+1) + " AND tenant_id = $" + strconv.Itoa(len(args)+2) + "::uuid RETURNING id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at"
+	args = append(args, id, tenantID)
 
 	var s studentResponse
 	var cfRaw []byte
@@ -221,7 +229,9 @@ func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /v1/students/{id}.
 func (h *StudentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	res, err := h.db.ExecContext(r.Context(), `DELETE FROM students WHERE id = $1`, id)
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM students WHERE id = $1 AND tenant_id = $2::uuid`, id, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete student"})
 		return

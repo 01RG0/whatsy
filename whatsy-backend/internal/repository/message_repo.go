@@ -105,6 +105,26 @@ func (r *MessageRepo) ListByConversation(ctx context.Context, conversationID str
 	return messages, nil
 }
 
+// ListByConversationForTenant returns messages only when the parent conversation
+// belongs to the authenticated workspace.
+func (r *MessageRepo) ListByConversationForTenant(ctx context.Context, tenantID, conversationID string, limit int, beforeID string) ([]domain.Message, error) {
+	if limit <= 0 { limit = 50 }
+	where := []string{"m.conversation_id = $1", "EXISTS (SELECT 1 FROM conversations c WHERE c.id = m.conversation_id AND c.tenant_id = $2::uuid)"}
+	args := []any{conversationID, tenantID}
+	if beforeID != "" {
+		args = append(args, beforeID)
+		where = append(where, fmt.Sprintf("m.timestamp < (SELECT timestamp FROM messages WHERE id = $%d)", len(args)))
+	}
+	args = append(args, limit)
+	query := "SELECT " + messageColumns + messageFrom + "WHERE " + strings.Join(where, " AND ") + fmt.Sprintf(" ORDER BY m.timestamp DESC, m.id DESC LIMIT $%d", len(args))
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil { return nil, fmt.Errorf("list tenant messages: %w", err) }
+	defer rows.Close()
+	messages := make([]domain.Message, 0)
+	for rows.Next() { msg, err := scanMessage(rows); if err != nil { return nil, err }; messages = append(messages, msg) }
+	return messages, rows.Err()
+}
+
 func (r *MessageRepo) UpdateStatus(ctx context.Context, messageID string, status domain.DeliveryStatus) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE messages SET status = $2 WHERE id = $1", messageID, status)
 	if err != nil {
