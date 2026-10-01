@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ZernioConversation } from './types';
+import { avatarDataUri } from '../utils/avatar';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { useT } from '../i18n/translations';
 import { useLabelStore } from '../store/useLabelStore';
@@ -142,12 +143,10 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
       {/* Avatar + team presence overlay */}
       <div className="relative shrink-0">
         <img
-          src={
-            conv.participant.avatarUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=e5e7eb&color=374151`
-          }
+          src={conv.participant.avatarUrl || avatarDataUri(displayName)}
           alt={displayName}
           className="w-10 h-10 rounded-full object-cover"
+          onError={e => { (e.target as HTMLImageElement).src = avatarDataUri(displayName); }}
         />
         {conv.participant.isOnline && viewers.length === 0 && (
           <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#111b21]" />

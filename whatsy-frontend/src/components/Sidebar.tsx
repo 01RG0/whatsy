@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, ReactNode } from 'react';
 import { ZernioConversation, ConversationFilter } from './types';
+import { avatarDataUri } from '../utils/avatar';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
 import { BulkActionBar } from './BulkActionBar';
@@ -297,9 +298,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
                     >
                       <img
-                        src={conversation.participant.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(conversation.participant.displayName)}&background=e5e7eb&color=374151`}
+                        src={conversation.participant.avatarUrl || avatarDataUri(conversation.participant.displayName)}
                         alt=""
                         className="h-9 w-9 rounded-full shrink-0"
+                        onError={e => { (e.target as HTMLImageElement).src = avatarDataUri(conversation.participant.displayName); }}
                       />
                       <span className="min-w-0">
                         <span className="block text-sm font-medium text-gray-900 dark:text-[#e9edef] truncate">

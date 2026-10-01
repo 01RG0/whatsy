@@ -27,7 +27,9 @@ var mediaCacheSem = make(chan struct{}, 3)
 // ZernioSender is the subset of the Zernio client used by ChatService.
 type ZernioSender interface {
 	SendMessage(ctx context.Context, conversationID string, payload zernio.SendMessagePayload) (*zernio.SentMessage, error)
+	SendMessageWithKey(ctx context.Context, conversationID string, payload zernio.SendMessagePayload, apiKey string) (*zernio.SentMessage, error)
 	MarkRead(ctx context.Context, conversationID, accountID string) error
+	MarkReadWithKey(ctx context.Context, conversationID, accountID, apiKey string) error
 }
 
 // AutoReplier evaluates auto-reply rules for inbound messages.
@@ -68,15 +70,41 @@ func (s *ChatService) SetAutoReplier(ar AutoReplier) {
 	s.autoReplier = ar
 }
 
-// zernioAccountID resolves the connected WhatsApp account id. Webhook and
-// send flows need it: /read and /typing require accountId in the body, and
-// outbound sends must carry the accountId of the connected account.
-func (s *ChatService) zernioAccountID(ctx context.Context) string {
+// zernioAccountID resolves the connected WhatsApp account id for the given
+// tenant. When tenantID is non-empty the query is scoped to that tenant;
+// otherwise it falls back to the first connected account across all tenants
+// (used by startup recovery paths that have no tenant context).
+func (s *ChatService) zernioAccountID(ctx context.Context, tenantID string) string {
 	var accountID string
-	_ = s.db.QueryRowContext(ctx,
-		`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND COALESCE(account_id, '') <> '' ORDER BY id DESC LIMIT 1`,
-	).Scan(&accountID)
+	if tenantID != "" {
+		_ = s.db.QueryRowContext(ctx,
+			`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND tenant_id=$1 AND COALESCE(account_id,'') <> '' ORDER BY id DESC LIMIT 1`,
+			tenantID,
+		).Scan(&accountID)
+	} else {
+		_ = s.db.QueryRowContext(ctx,
+			`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND COALESCE(account_id, '') <> '' ORDER BY id DESC LIMIT 1`,
+		).Scan(&accountID)
+	}
 	return accountID
+}
+
+// getZernioKey returns the Zernio API key configured for the given tenant.
+// When tenantID is empty or the tenant has no key in workspace_settings, it
+// falls back to the global key from the environment.
+func (s *ChatService) getZernioKey(ctx context.Context, tenantID string) string {
+	if tenantID == "" {
+		return s.zernioAPIKey
+	}
+	var key string
+	_ = s.db.QueryRowContext(ctx,
+		`SELECT value FROM workspace_settings WHERE tenant_id=$1 AND key='zernio_api_key' LIMIT 1`,
+		tenantID,
+	).Scan(&key)
+	if key == "" {
+		return s.zernioAPIKey
+	}
+	return key
 }
 
 // HandleInboundMessage persists a Zernio message and notifies active clients.
@@ -251,9 +279,9 @@ func (s *ChatService) HandleMessageStatus(ctx context.Context, payload zernio.Me
 // caller, then delivers it to Zernio asynchronously. This makes the send feel
 // instant in the UI — the message appears right away with status "pending" and
 // flips to "sent" (or "failed") once Zernio responds.
-func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID string, payload zernio.SendMessagePayload, agentID string) (*domain.Message, error) {
+func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID string, payload zernio.SendMessagePayload, agentID string, tenantID string) (*domain.Message, error) {
 	if payload.AccountID == "" {
-		payload.AccountID = s.zernioAccountID(ctx)
+		payload.AccountID = s.zernioAccountID(ctx, tenantID)
 	}
 	if payload.AccountID == "" {
 		return nil, fmt.Errorf("send message: no connected WhatsApp account; connect a number first")
@@ -388,9 +416,10 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 	})
 
 	// Deliver to Zernio in background, then push status update to frontend.
+	tenantKey := s.getZernioKey(ctx, tenantID)
 	go func() {
 		start := time.Now()
-		sent, err := s.zernioClient.SendMessage(context.Background(), zernioConvID, payload)
+		sent, err := s.zernioClient.SendMessageWithKey(context.Background(), zernioConvID, payload, tenantKey)
 		dur := time.Since(start).Milliseconds()
 		eventlog.ZernioSend(message.ID, conversationID, dur, err)
 		if err != nil {
@@ -416,15 +445,16 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 // MarkConversationRead clears local unread state, updates Zernio (blue ticks;
 // no-op on coexistence numbers where the phone owns read state), and notifies
 // connected clients of the new conversation state.
-func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID string) error {
+func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID string, tenantID string) error {
 	if err := s.convRepo.ResetUnread(ctx, conversationID); err != nil {
 		return fmt.Errorf("reset conversation unread count: %w", err)
 	}
-	if accountID := s.zernioAccountID(ctx); accountID != "" {
+	if accountID := s.zernioAccountID(ctx, tenantID); accountID != "" {
 		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, conversationID)
 		if err == nil && zernioConvID != "" {
+			tenantKey := s.getZernioKey(ctx, tenantID)
 			go func() {
-				if err := s.zernioClient.MarkRead(context.Background(), zernioConvID, accountID); err != nil {
+				if err := s.zernioClient.MarkReadWithKey(context.Background(), zernioConvID, accountID, tenantKey); err != nil {
 					log.Printf("mark Zernio conversation read: %v", err)
 				}
 			}()
@@ -480,7 +510,7 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 	}
 	log.Printf("[startup] retrying %d stuck pending messages", len(msgs))
 
-	accountID := s.zernioAccountID(ctx)
+	accountID := s.zernioAccountID(ctx, "")
 	for _, msg := range msgs {
 		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, msg.ConversationID)
 		if err != nil || zernioConvID == "" {

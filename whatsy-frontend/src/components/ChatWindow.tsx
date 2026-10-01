@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { ZernioConversation, ZernioMessage, SendMessagePayload } from './types';
+import { avatarDataUri } from '../utils/avatar';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { ImageLightbox } from './ImageLightbox';
@@ -247,9 +248,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           <div className="relative">
             <img
-              src={conversation.participant.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(conversation.participant.displayName)}&background=e5e7eb&color=374151`}
+              src={conversation.participant.avatarUrl || avatarDataUri(conversation.participant.displayName)}
               alt={conversation.participant.displayName}
               className="w-10 h-10 rounded-full object-cover"
+              onError={e => { (e.target as HTMLImageElement).src = avatarDataUri(conversation.participant.displayName); }}
             />
             {conversation.participant.isOnline && (
               <span className="absolute bottom-0 end-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-[#202c33]" />

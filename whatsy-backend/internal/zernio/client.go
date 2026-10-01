@@ -127,6 +127,29 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("zernio: http %d", e.StatusCode)
 }
 
+// SendMessageWithKey posts a message using the provided API key instead of the
+// client's configured key. If apiKey is empty the client's own key is used.
+// This allows per-tenant key override without creating a new Client per call.
+func (c *Client) SendMessageWithKey(ctx context.Context, conversationID string, payload SendMessagePayload, apiKey string) (*SentMessage, error) {
+	if apiKey == "" || apiKey == c.apiKey {
+		return c.SendMessage(ctx, conversationID, payload)
+	}
+	clone := *c
+	clone.apiKey = apiKey
+	return clone.SendMessage(ctx, conversationID, payload)
+}
+
+// MarkReadWithKey marks messages read using the provided API key instead of
+// the client's configured key. If apiKey is empty the client's own key is used.
+func (c *Client) MarkReadWithKey(ctx context.Context, conversationID, accountID, apiKey string) error {
+	if apiKey == "" || apiKey == c.apiKey {
+		return c.MarkRead(ctx, conversationID, accountID)
+	}
+	clone := *c
+	clone.apiKey = apiKey
+	return clone.MarkRead(ctx, conversationID, accountID)
+}
+
 // SendMessage posts a message to an inbox conversation.
 func (c *Client) SendMessage(ctx context.Context, conversationID string, payload SendMessagePayload) (*SentMessage, error) {
 	if conversationID == "" {

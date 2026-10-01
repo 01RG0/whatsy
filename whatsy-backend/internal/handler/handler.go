@@ -136,8 +136,9 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	if claims, ok := ClaimsFromContext(r.Context()); ok {
 		agentID = claims.AgentID
 	}
+	tenantID, _ := TenantIDFromContext(r.Context())
 
-	message, err := h.chatService.SendOutboundMessage(r.Context(), chi.URLParam(r, "id"), payload, agentID)
+	message, err := h.chatService.SendOutboundMessage(r.Context(), chi.URLParam(r, "id"), payload, agentID, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "send message"})
 		return
@@ -147,7 +148,8 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
-	if err := h.chatService.MarkConversationRead(r.Context(), chi.URLParam(r, "id")); err != nil {
+	tenantID, _ := TenantIDFromContext(r.Context())
+	if err := h.chatService.MarkConversationRead(r.Context(), chi.URLParam(r, "id"), tenantID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark conversation read"})
 		return
 	}
