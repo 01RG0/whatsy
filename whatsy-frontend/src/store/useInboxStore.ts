@@ -126,18 +126,6 @@ export const useInboxStore = create<InboxState>((set) => ({
     set((state) => {
       const existing = state.messages[conversationId] ?? [];
       if (existing.some((m) => m.id === message.id)) return state;
-      // If this is an outbound message from the server and we have a temp
-      // optimistic message with matching content, replace it instead of adding.
-      if (message.direction === 'outbound' && !message.id.startsWith('temp-')) {
-        const tempIdx = existing.findIndex(
-          (m) => m.id.startsWith('temp-') && m.direction === 'outbound'
-        );
-        if (tempIdx !== -1) {
-          const replaced = [...existing];
-          replaced[tempIdx] = message;
-          return { messages: { ...state.messages, [conversationId]: replaced } };
-        }
-      }
       return {
         messages: { ...state.messages, [conversationId]: [...existing, message] },
       };

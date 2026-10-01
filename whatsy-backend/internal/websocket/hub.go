@@ -5,10 +5,25 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/whatsy/backend/internal/domain"
 	"github.com/whatsy/backend/internal/eventlog"
 )
+
+const (
+	// catchUpWindow is how far back we replay messages for a reconnecting client.
+	catchUpWindow = 5 * time.Minute
+
+	// catchUpMaxEntries is the maximum number of entries kept in the ring buffer.
+	catchUpMaxEntries = 50
+)
+
+// catchUpEntry is one entry in the in-memory replay ring buffer.
+type catchUpEntry struct {
+	data []byte
+	ts   time.Time
+}
 
 type roomMessage struct {
 	studentID string
@@ -53,6 +68,10 @@ type Hub struct {
 
 	// Optional Redis relay for multi-instance
 	redis RedisPublisher
+
+	// In-memory replay buffer: last catchUpMaxEntries messages broadcast to all
+	// clients, used to catch up reconnecting clients without a DB round-trip.
+	catchUpBuf []catchUpEntry
 }
 
 // NewHub creates a new Hub instance.
@@ -137,6 +156,45 @@ func (h *Hub) BroadcastToRoom(studentID string, event interface{}) {
 	}
 }
 
+// appendToCatchUpBuf appends a broadcast entry to the ring buffer.
+// Entries older than catchUpWindow are pruned first, then the slice is capped
+// at catchUpMaxEntries. Must be called with h.mu held for writing.
+func (h *Hub) appendToCatchUpBuf(data []byte) {
+	now := time.Now()
+	cutoff := now.Add(-catchUpWindow)
+
+	// Drop expired entries from the front.
+	start := 0
+	for start < len(h.catchUpBuf) && h.catchUpBuf[start].ts.Before(cutoff) {
+		start++
+	}
+	h.catchUpBuf = h.catchUpBuf[start:]
+
+	h.catchUpBuf = append(h.catchUpBuf, catchUpEntry{data: data, ts: now})
+
+	// Hard-cap at catchUpMaxEntries by dropping the oldest.
+	if len(h.catchUpBuf) > catchUpMaxEntries {
+		excess := len(h.catchUpBuf) - catchUpMaxEntries
+		h.catchUpBuf = h.catchUpBuf[excess:]
+	}
+}
+
+// recentCatchUpEntries returns a snapshot of entries newer than catchUpWindow.
+// The returned slice is a copy so it is safe to iterate outside the lock.
+func (h *Hub) recentCatchUpEntries() []catchUpEntry {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	cutoff := time.Now().Add(-catchUpWindow)
+	var result []catchUpEntry
+	for _, e := range h.catchUpBuf {
+		if !e.ts.Before(cutoff) {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
 // SetRedis wires an optional Redis publisher for cross-instance broadcast.
 func (h *Hub) SetRedis(r RedisPublisher) {
 	h.redis = r
@@ -144,6 +202,8 @@ func (h *Hub) SetRedis(r RedisPublisher) {
 
 // BroadcastToAll marshals the event to JSON and sends it to all connected clients.
 // If Redis is wired, also publishes so other instances relay the event.
+// NEW_MESSAGE events are additionally stored in the catch-up ring buffer so
+// reconnecting clients can replay messages they missed during a disconnect.
 func (h *Hub) BroadcastToAll(event interface{}) {
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -153,6 +213,10 @@ func (h *Hub) BroadcastToAll(event interface{}) {
 
 	if ev, ok := event.(NewMessageEvent); ok {
 		eventlog.TraceStep3BroadcastQueued("NEW_MESSAGE", ev.Message.ID, ev.StudentID)
+		// Store in ring buffer so reconnecting clients can catch up.
+		h.mu.Lock()
+		h.appendToCatchUpBuf(data)
+		h.mu.Unlock()
 	}
 
 	h.broadcastAll <- data
@@ -276,6 +340,25 @@ func (h *Hub) Run() {
 			count := len(h.clients)
 			h.mu.Unlock()
 			eventlog.WSClientCount(count)
+
+			// Replay any NEW_MESSAGE events from the last 5 minutes so the
+			// client catches up on messages it missed while disconnected.
+			// Run in a goroutine so hub registration is never blocked.
+			go func(c *Client) {
+				entries := h.recentCatchUpEntries()
+				for _, e := range entries {
+					select {
+					case c.send <- e.data:
+					default:
+						// Client send buffer full; skip remaining catch-up entries.
+						log.Printf("websocket hub: catch-up buffer full for agent %s, skipping remaining entries", c.agentID)
+						return
+					}
+				}
+				if len(entries) > 0 {
+					log.Printf("websocket hub: replayed %d catch-up message(s) to agent %s", len(entries), c.agentID)
+				}
+			}(client)
 
 		case client := <-h.unregister:
 			h.mu.Lock()

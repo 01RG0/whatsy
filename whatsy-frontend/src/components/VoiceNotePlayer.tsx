@@ -39,6 +39,7 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [speedIndex, setSpeedIndex] = useState(0);
+  const [playError, setPlayError] = useState(false);
 
   const BAR_COUNT = 36;
   const bars = useMemo(() => generateWaveformBars(messageId, BAR_COUNT), [messageId]);
@@ -76,12 +77,17 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
     const onEnded = () => { setIsPlaying(false); setCurrentTime(0); };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
+    const onError = () => {
+      setIsPlaying(false);
+      setPlayError(true);
+    };
 
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
+    audio.addEventListener('error', onError);
 
     // If metadata already loaded
     if (audio.duration) setDuration(audio.duration);
@@ -92,20 +98,25 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('error', onError);
     };
   }, []);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || playError) return;
     if (audio.paused) {
       // Notify other players to pause
       window.dispatchEvent(new CustomEvent(VOICE_NOTE_PLAY_EVENT, { detail: messageId }));
-      audio.play().catch(() => {});
+      audio.play().catch((err: Error) => {
+        console.error('[VoiceNotePlayer] playback failed:', err);
+        setPlayError(true);
+        setIsPlaying(false);
+      });
     } else {
       audio.pause();
     }
-  }, [messageId]);
+  }, [messageId, playError]);
 
   const handleWaveformClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
@@ -126,6 +137,40 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
   }, [speedIndex]);
 
   const displayTime = (isPlaying || currentTime > 0) ? formatTime(currentTime) : formatTime(duration);
+
+  // Render an expired/broken state when the media could not be loaded or played.
+  if (playError) {
+    return (
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {/* Disabled play button */}
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 opacity-40"
+          style={{ backgroundColor: accentColor }}
+          aria-hidden="true"
+        >
+          <svg className="w-3.5 h-3.5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+
+        {/* Expired message */}
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          <div className="flex items-end gap-[1.5px] h-6">
+            {bars.map((height, i) => (
+              <div
+                key={i}
+                className={`rounded-full ${unplayedBarClass} opacity-40`}
+                style={{ width: '2.5px', height: `${height * 100}%`, minHeight: '3px' }}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] leading-none opacity-60 select-none">
+            Voice message expired
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0">

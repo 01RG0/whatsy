@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/whatsy/backend/internal/domain"
@@ -18,6 +19,10 @@ import (
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
+
+// mediaCacheSem caps concurrent cacheMedia goroutines at 3 to prevent them
+// from exhausting the DB connection pool during bursts of inbound media.
+var mediaCacheSem = make(chan struct{}, 3)
 
 // ZernioSender is the subset of the Zernio client used by ChatService.
 type ZernioSender interface {
@@ -154,10 +159,32 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	}
 	eventlog.TraceStep2MessageSaved(message.Direction, message.ID, message.ConversationID)
 
+	// Broadcast the new message immediately after it is persisted so agents'
+	// browsers display it without waiting for the remaining DB operations below.
+	s.hub.BroadcastToAll(websocket.NewMessageEvent{
+		Event:     websocket.EventNewMessage,
+		StudentID: message.ConversationID,
+		Message:   message,
+	})
+
 	if message.Type == domain.ContentTypeSticker && len(message.Attachments) > 0 {
 		for _, att := range message.Attachments {
 			if att.URL != "" {
 				go s.cacheSticker(att.URL)
+			}
+		}
+	}
+
+	// Cache inbound media immediately so it survives Meta CDN expiry.
+	// We cache audio (voice notes), images, and video — the types that commonly expire.
+	switch message.Type {
+	case domain.ContentTypeAudio, domain.ContentTypeVoiceNote,
+		domain.ContentTypeImage, domain.ContentTypeVideo:
+		for _, att := range message.Attachments {
+			if att.URL != "" {
+				attURL := att.URL
+				ct := message.Type
+				go s.cacheMedia(attURL, ct)
 			}
 		}
 	}
@@ -185,12 +212,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		return fmt.Errorf("get updated conversation: conversation %q not found", message.ConversationID)
 	}
 
-	s.hub.BroadcastToAll(websocket.NewMessageEvent{
-		Event:     websocket.EventNewMessage,
-		StudentID: message.ConversationID,
-		Message:   message,
-	})
-	// Also push the updated conversation to every connected client so all
+	// Push the updated conversation to every connected client so all
 	// agents' sidebars reorder and show the new unread count without refresh.
 	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
 		Event:        websocket.EventConversationUpdated,
@@ -582,6 +604,103 @@ func (s *ChatService) cacheSticker(rawURL string) {
 	if err != nil {
 		log.Printf("[sticker-cache] store %s: %v", rawURL, err)
 	}
+}
+
+// cacheMedia downloads inbound media from Zernio and stores it in the
+// media_cache table so it can be served even after Meta's CDN expires the URL.
+// The cache key is SHA-256 of the raw attachment URL, matching what GetProxy uses.
+func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType) {
+	// Acquire a semaphore slot; skip if 3 operations are already in flight so we
+	// don't exhaust the DB connection pool during media bursts.
+	select {
+	case mediaCacheSem <- struct{}{}:
+		defer func() { <-mediaCacheSem }()
+	default:
+		return // 3 already in flight, skip this one
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	h := sha256.Sum256([]byte(rawURL))
+	hash := hex.EncodeToString(h[:])
+
+	var exists bool
+	_ = s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM media_cache WHERE url_hash=$1)`, hash).Scan(&exists)
+	if exists {
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		log.Printf("[media-cache] build request for %s: %v", rawURL, err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+s.zernioAPIKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("[media-cache] fetch %s: %v", rawURL, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[media-cache] upstream %d for %s", resp.StatusCode, rawURL)
+		return
+	}
+	const maxMediaSize = 16 << 20 // 16 MB cap — voice notes are typically <2 MB
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMediaSize))
+	if err != nil {
+		log.Printf("[media-cache] read body %s: %v", rawURL, err)
+		return
+	}
+	mimeType := resp.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = defaultMimeType(rawURL, contentType)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO media_cache (url_hash, original_url, data, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+		hash, rawURL, data, mimeType,
+	)
+	if err != nil {
+		log.Printf("[media-cache] store %s: %v", rawURL, err)
+		return
+	}
+	log.Printf("[media-cache] cached %s (%d bytes, %s)", rawURL, len(data), mimeType)
+}
+
+// defaultMimeType infers a MIME type from URL extension or domain content type
+// for use when the upstream server omits a Content-Type header.
+func defaultMimeType(rawURL string, contentType domain.ContentType) string {
+	lower := strings.ToLower(rawURL)
+	switch {
+	case strings.HasSuffix(lower, ".ogg"), strings.HasSuffix(lower, ".opus"):
+		return "audio/ogg"
+	case strings.HasSuffix(lower, ".webm"):
+		return "audio/webm"
+	case strings.HasSuffix(lower, ".mp3"):
+		return "audio/mpeg"
+	case strings.HasSuffix(lower, ".mp4"):
+		return "video/mp4"
+	case strings.HasSuffix(lower, ".aac"):
+		return "audio/aac"
+	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lower, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lower, ".gif"):
+		return "image/gif"
+	case strings.HasSuffix(lower, ".webp"):
+		return "image/webp"
+	}
+	switch contentType {
+	case domain.ContentTypeAudio, domain.ContentTypeVoiceNote:
+		return "audio/ogg"
+	case domain.ContentTypeImage:
+		return "image/jpeg"
+	case domain.ContentTypeVideo:
+		return "video/mp4"
+	}
+	return "application/octet-stream"
 }
 
 // autoCreateConversation creates a student + conversation row from a webhook
