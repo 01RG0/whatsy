@@ -142,6 +142,37 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		}
 	}
 
+	// Outbound race-condition guard: SendOutboundMessage saves the message with
+	// StatusPending and no zernio_message_id, then sets the ID asynchronously.
+	// The message.sent webhook can arrive before that update completes, causing
+	// a duplicate row. Claim the most-recent pending outbound message for this
+	// conversation instead of creating a new one.
+	if payload.Direction == "outgoing" && dedupeID != "" {
+		var claimedID string
+		_ = s.db.QueryRowContext(ctx,
+			`UPDATE messages SET zernio_message_id = $1, status = 'sent'
+			 WHERE id = (
+			     SELECT id FROM messages
+			     WHERE conversation_id = $2
+			       AND direction = 'outbound'
+			       AND status = 'pending'
+			       AND (zernio_message_id IS NULL OR zernio_message_id = '')
+			     ORDER BY created_at DESC
+			     LIMIT 1
+			 )
+			 RETURNING id`,
+			dedupeID, localConvID,
+		).Scan(&claimedID)
+		if claimedID != "" {
+			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+				Event:     websocket.EventMessageStatus,
+				MessageID: claimedID,
+				Status:    string(domain.StatusSent),
+			})
+			return nil
+		}
+	}
+
 	message := domain.Message{
 		ConversationID:  localConvID,
 		Direction:       payload.Direction,
