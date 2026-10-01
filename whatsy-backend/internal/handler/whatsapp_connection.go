@@ -85,6 +85,10 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 				DisplayName string `json:"displayName"`
 				IsActive    bool   `json:"isActive"`
 				CreatedAt   string `json:"createdAt"`
+				Metadata    struct {
+					NameStatus    string `json:"nameStatus"`
+					QualityRating string `json:"qualityRating"`
+				} `json:"metadata"`
 			} `json:"accounts"`
 		}
 		if decErr := json.NewDecoder(resp.Body).Decode(&zResp); decErr == nil && len(zResp.Accounts) > 0 {
@@ -112,6 +116,51 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 				}
 			}
 
+			// Best-effort: fetch callingEnabled from /v1/phone-numbers
+			callingEnabled := false
+			if pnResp, pnErr := h.zernioGet(r, key, "/v1/phone-numbers"); pnErr == nil {
+				defer pnResp.Body.Close()
+				var pnResult struct {
+					Connected []struct {
+						AccountID      string `json:"accountId"`
+						CallingEnabled bool   `json:"callingEnabled"`
+					} `json:"connected"`
+				}
+				if json.NewDecoder(pnResp.Body).Decode(&pnResult) == nil {
+					for _, pn := range pnResult.Connected {
+						if pn.AccountID == a.ID {
+							callingEnabled = pn.CallingEnabled
+							break
+						}
+					}
+				}
+			}
+
+			// Best-effort: fetch businessVerification from /v1/accounts/{id}/health
+			businessVerification := ""
+			healthPath := fmt.Sprintf("/v1/accounts/%s/health", a.ID)
+			if hResp, hErr := h.zernioGet(r, key, healthPath); hErr == nil {
+				defer hResp.Body.Close()
+				var healthRaw map[string]json.RawMessage
+				if json.NewDecoder(hResp.Body).Decode(&healthRaw) == nil {
+					// Try known field names in order of likelihood
+					for _, fieldName := range []string{
+						"businessVerificationStatus",
+						"verificationStatus",
+						"businessVerification",
+						"verification_status",
+					} {
+						if raw, ok := healthRaw[fieldName]; ok {
+							var s string
+							if json.Unmarshal(raw, &s) == nil {
+								businessVerification = s
+							}
+							break
+						}
+					}
+				}
+			}
+
 			// New or re-connected account — sync to DB and return connected
 			_, _ = h.db.ExecContext(r.Context(),
 				`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, account_id, connected_at, updated_at, tenant_id)
@@ -121,12 +170,15 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 				a.ID, a.Username, a.DisplayName, a.ID, tenantID,
 			)
 			writeJSON(w, http.StatusOK, map[string]any{
-				"status":         "connected",
-				"phoneNumber":    a.Username,
-				"displayName":    a.DisplayName,
-				"accountId":      a.ID,
-				"isSandbox":      false,
-				"webhookHealthy": a.IsActive,
+				"status":               "connected",
+				"phoneNumber":          a.Username,
+				"displayName":          a.DisplayName,
+				"accountId":            a.ID,
+				"isSandbox":            false,
+				"webhookHealthy":       a.IsActive,
+				"nameReview":           a.Metadata.NameStatus,
+				"callingEnabled":       callingEnabled,
+				"businessVerification": businessVerification,
 			})
 			return
 		}
