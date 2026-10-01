@@ -28,7 +28,6 @@ interface ChatWindowProps {
   onSendVoiceNote?: (audioBlob: Blob) => void;
   onBack?: () => void;
   onViewContactInfo?: (participantId: string) => void;
-  onSearchInChat?: () => void;
   viewers?: ViewerInfo[];
   typingLock?: TypingLock | null;
   onInputFocus?: () => void;
@@ -52,7 +51,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onSendVoiceNote,
   onBack,
   onViewContactInfo,
-  onSearchInChat,
   viewers = [],
   typingLock = null,
   onInputFocus,
