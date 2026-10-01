@@ -137,7 +137,9 @@ func (r *MessageRepo) UpdateStatus(ctx context.Context, messageID string, status
 // after an async send completes. Used by the fire-and-forget send path.
 func (r *MessageRepo) UpdateZernioIDAndStatus(ctx context.Context, messageID, zernioMsgID string, status domain.DeliveryStatus) error {
 	_, err := r.db.ExecContext(ctx,
-		"UPDATE messages SET status = $2, zernio_message_id = NULLIF($3, '') WHERE id = $1",
+		`UPDATE messages SET status = $2,
+		 zernio_message_id = CASE WHEN (zernio_message_id IS NULL OR zernio_message_id = '') THEN NULLIF($3, '') ELSE zernio_message_id END
+		 WHERE id = $1`,
 		messageID, status, zernioMsgID,
 	)
 	if err != nil {

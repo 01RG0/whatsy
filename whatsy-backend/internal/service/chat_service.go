@@ -149,19 +149,22 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	// conversation instead of creating a new one.
 	if payload.Direction == "outgoing" && dedupeID != "" {
 		var claimedID string
+		// $3 = Zernio ObjectID: covers the case where UpdateZernioIDAndStatus ran
+		// first and stored the ObjectID before this webhook arrived.
+		objectID := payload.MessageID
 		_ = s.db.QueryRowContext(ctx,
 			`UPDATE messages SET zernio_message_id = $1, status = 'sent'
 			 WHERE id = (
 			     SELECT id FROM messages
 			     WHERE conversation_id = $2
 			       AND direction = 'outbound'
-			       AND status = 'pending'
-			       AND (zernio_message_id IS NULL OR zernio_message_id = '')
+			       AND status IN ('pending', 'sent')
+			       AND (zernio_message_id IS NULL OR zernio_message_id = '' OR zernio_message_id = $3)
 			     ORDER BY created_at DESC
 			     LIMIT 1
 			 )
 			 RETURNING id`,
-			dedupeID, localConvID,
+			dedupeID, localConvID, objectID,
 		).Scan(&claimedID)
 		if claimedID != "" {
 			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
