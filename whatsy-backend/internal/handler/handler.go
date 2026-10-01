@@ -124,6 +124,7 @@ func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
+	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
 	defer r.Body.Close()
 	var payload zernio.SendMessagePayload
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
@@ -145,6 +146,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
 	if err := h.chatService.MarkConversationRead(r.Context(), chi.URLParam(r, "id")); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark conversation read"})
 		return
@@ -153,6 +155,7 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) MarkUnread(w http.ResponseWriter, r *http.Request) {
+	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
 	if err := h.chatService.MarkConversationUnread(r.Context(), chi.URLParam(r, "id")); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark conversation unread"})
 		return
@@ -163,6 +166,7 @@ func (h *Handler) MarkUnread(w http.ResponseWriter, r *http.Request) {
 
 // AssignConversation assigns an agent to a conversation and notifies all clients.
 func (h *Handler) AssignConversation(w http.ResponseWriter, r *http.Request) {
+	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
 	defer r.Body.Close()
 	var payload struct {
 		AgentID string `json:"agentId"`
@@ -359,6 +363,18 @@ func queryLimit(r *http.Request, defaultLimit int) int {
 		return 200
 	}
 	return limit
+}
+
+// requireConversationTenant prevents direct-ID access to another workspace's
+// messages or state-changing conversation endpoints.
+func (h *Handler) requireConversationTenant(w http.ResponseWriter, r *http.Request, conversationID string) bool {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return false }
+	var exists bool
+	err := h.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND tenant_id = $2::uuid)`, conversationID, tenantID).Scan(&exists)
+	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "verify conversation access"}); return false }
+	if !exists { writeJSON(w, http.StatusNotFound, map[string]string{"error": "conversation not found"}); return false }
+	return true
 }
 
 func firstNonEmpty(values ...string) string {
