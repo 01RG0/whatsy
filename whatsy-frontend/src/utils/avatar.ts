@@ -9,7 +9,7 @@ export function avatarDataUri(name: string | null | undefined): string {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() ?? '')
+    .map(w => ([...w][0] ?? '').toUpperCase())
     .join('') || '?';
 
   const color = COLORS[Math.abs([...safeName].reduce((a, c) => a + c.charCodeAt(0), 0)) % COLORS.length];
