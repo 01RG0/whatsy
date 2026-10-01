@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 )
+
+const defaultTenantID = "00000000-0000-0000-0000-000000000001"
 
 // WhatsAppConnectionHandler serves WhatsApp connection management endpoints.
 type WhatsAppConnectionHandler struct {
@@ -31,12 +34,40 @@ func NewWhatsAppConnectionHandler(db *sql.DB, zernioKey string) *WhatsAppConnect
 	return &WhatsAppConnectionHandler{db: db, zernioKey: zernioKey, zernioBase: base}
 }
 
+// tenantIDFromRequest extracts the tenant ID from the JWT claims in the request
+// context, falling back to the default tenant if no claims are present.
+func tenantIDFromRequest(r *http.Request) string {
+	claims, ok := ClaimsFromContext(r.Context())
+	if !ok || claims.TenantID == "" {
+		return defaultTenantID
+	}
+	return claims.TenantID
+}
+
+// getZernioKey returns the Zernio API key for the given tenant.
+// It checks workspace_settings for a per-tenant override (key = 'zernio_api_key');
+// if none is set it falls back to h.zernioKey (the environment variable).
+func (h *WhatsAppConnectionHandler) getZernioKey(ctx context.Context, tenantID string) string {
+	var value sql.NullString
+	_ = h.db.QueryRowContext(ctx,
+		`SELECT value FROM workspace_settings WHERE tenant_id = $1 AND key = 'zernio_api_key'`,
+		tenantID,
+	).Scan(&value)
+	if value.Valid && value.String != "" {
+		return value.String
+	}
+	return h.zernioKey
+}
+
 // Status returns the WhatsApp connection status.
 // Zernio is the live source of truth; DB 'disconnected' only blocks if Zernio
 // has no account connected *after* the disconnect time (i.e. no new signup).
 func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Request) {
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
 	// Always ask Zernio first — it knows about new signups the DB doesn't
-	resp, err := h.zernioGet(r, "/v1/accounts?platform=whatsapp")
+	resp, err := h.zernioGet(r, key, "/v1/accounts?platform=whatsapp")
 	if err == nil {
 		defer resp.Body.Close()
 		var zResp struct {
@@ -54,7 +85,8 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 			// Check if DB has a 'disconnected' flag set after this account was created
 			var dbUpdatedAt sql.NullTime
 			_ = h.db.QueryRowContext(r.Context(),
-				`SELECT updated_at FROM whatsapp_connections WHERE status='disconnected' ORDER BY id DESC LIMIT 1`,
+				`SELECT updated_at FROM whatsapp_connections WHERE status='disconnected' AND tenant_id=$1 ORDER BY id DESC LIMIT 1`,
+				tenantID,
 			).Scan(&dbUpdatedAt)
 
 			// If we have a disconnected flag and it was set AFTER this account was created → user chose to disconnect
@@ -74,11 +106,11 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 
 			// New or re-connected account — sync to DB and return connected
 			_, _ = h.db.ExecContext(r.Context(),
-				`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, account_id, connected_at, updated_at)
-				 VALUES ('connected', $1, $2, $3, $4, NOW(), NOW())
+				`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, account_id, connected_at, updated_at, tenant_id)
+				 VALUES ('connected', $1, $2, $3, $4, NOW(), NOW(), $5)
 				 ON CONFLICT (phone_number_id) DO UPDATE
-				 SET status='connected', phone_number=$2, display_name=$3, account_id=$4, updated_at=NOW()`,
-				a.ID, a.Username, a.DisplayName, a.ID,
+				 SET status='connected', phone_number=$2, display_name=$3, account_id=$4, updated_at=NOW(), tenant_id=$5`,
+				a.ID, a.Username, a.DisplayName, a.ID, tenantID,
 			)
 			writeJSON(w, http.StatusOK, map[string]any{
 				"status":         "connected",
@@ -96,7 +128,8 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 	var dbStatus, phone, name string
 	var accountID sql.NullString
 	dbErr := h.db.QueryRowContext(r.Context(),
-		`SELECT status, phone_number, display_name, account_id FROM whatsapp_connections ORDER BY id DESC LIMIT 1`,
+		`SELECT status, phone_number, display_name, account_id FROM whatsapp_connections WHERE tenant_id=$1 ORDER BY id DESC LIMIT 1`,
+		tenantID,
 	).Scan(&dbStatus, &phone, &name, &accountID)
 	if dbErr != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "disconnected", "phoneNumber": "", "displayName": ""})
@@ -113,7 +146,10 @@ func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Reques
 // QRCode auto-fetches the Zernio profileId and returns an Embedded Signup auth URL.
 // The browser opens this URL to go through Meta's OAuth (which includes the real QR scan).
 func (h *WhatsAppConnectionHandler) QRCode(w http.ResponseWriter, r *http.Request) {
-	profileID, err := h.fetchProfileID(r)
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
+	profileID, err := h.fetchProfileID(r, key)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not fetch profile: " + err.Error()})
 		return
@@ -129,7 +165,7 @@ func (h *WhatsAppConnectionHandler) QRCode(w http.ResponseWriter, r *http.Reques
 	}
 	path := fmt.Sprintf("/v1/connect/whatsapp?profileId=%s&redirect_url=%s&onboarding=%s&signup=hosted",
 		url.QueryEscape(profileID), url.QueryEscape(redirectURL), onboarding)
-	resp, err := h.zernioGet(r, path)
+	resp, err := h.zernioGet(r, key, path)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "zernio unreachable"})
 		return
@@ -159,7 +195,10 @@ func (h *WhatsAppConnectionHandler) Connect(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	profileID, err := h.fetchProfileID(r)
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
+	profileID, err := h.fetchProfileID(r, key)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not fetch profile: " + err.Error()})
 		return
@@ -175,7 +214,7 @@ func (h *WhatsAppConnectionHandler) Connect(w http.ResponseWriter, r *http.Reque
 		payload["pin"] = req.Pin
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := h.zernioPost(r, "/v1/connect/whatsapp/credentials", body)
+	resp, err := h.zernioPost(r, key, "/v1/connect/whatsapp/credentials", body)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "zernio unreachable"})
 		return
@@ -200,11 +239,11 @@ func (h *WhatsAppConnectionHandler) Connect(w http.ResponseWriter, r *http.Reque
 	_ = json.Unmarshal(respBody, &zResp)
 
 	_, _ = h.db.ExecContext(r.Context(),
-		`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, account_id, connected_at, updated_at)
-		 VALUES ('connected', $1, $2, $3, $4, NOW(), NOW())
+		`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, account_id, connected_at, updated_at, tenant_id)
+		 VALUES ('connected', $1, $2, $3, $4, NOW(), NOW(), $5)
 		 ON CONFLICT (phone_number_id) DO UPDATE
-		 SET status='connected', phone_number=$2, display_name=$3, account_id=$4, connected_at=NOW(), updated_at=NOW()`,
-		req.PhoneNumberID, zResp.Account.Username, zResp.Account.DisplayName, zResp.Account.AccountID,
+		 SET status='connected', phone_number=$2, display_name=$3, account_id=$4, connected_at=NOW(), updated_at=NOW(), tenant_id=$5`,
+		req.PhoneNumberID, zResp.Account.Username, zResp.Account.DisplayName, zResp.Account.AccountID, tenantID,
 	)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":      "connected",
@@ -216,10 +255,14 @@ func (h *WhatsAppConnectionHandler) Connect(w http.ResponseWriter, r *http.Reque
 
 // Disconnect removes the account from Zernio and marks it disconnected in DB.
 func (h *WhatsAppConnectionHandler) Disconnect(w http.ResponseWriter, r *http.Request) {
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
 	// Look up accountId to call Zernio delete
 	var accountID sql.NullString
 	_ = h.db.QueryRowContext(r.Context(),
-		`SELECT account_id FROM whatsapp_connections WHERE status='connected' ORDER BY id DESC LIMIT 1`,
+		`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND tenant_id=$1 ORDER BY id DESC LIMIT 1`,
+		tenantID,
 	).Scan(&accountID)
 
 	// Call Zernio DELETE /v1/accounts/{accountId} if we have one
@@ -227,7 +270,7 @@ func (h *WhatsAppConnectionHandler) Disconnect(w http.ResponseWriter, r *http.Re
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodDelete,
 			fmt.Sprintf("%s/v1/accounts/%s", h.zernioBase, accountID.String), nil)
 		if err == nil {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.zernioKey))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 			resp, _ := http.DefaultClient.Do(req)
 			if resp != nil {
 				io.Copy(io.Discard, resp.Body)
@@ -236,9 +279,11 @@ func (h *WhatsAppConnectionHandler) Disconnect(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Mark all rows disconnected in DB
+	// Mark this tenant's rows disconnected in DB
 	res, err := h.db.ExecContext(r.Context(),
-		`UPDATE whatsapp_connections SET status='disconnected', updated_at=NOW()`)
+		`UPDATE whatsapp_connections SET status='disconnected', updated_at=NOW() WHERE tenant_id=$1`,
+		tenantID,
+	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "disconnect"})
 		return
@@ -246,9 +291,11 @@ func (h *WhatsAppConnectionHandler) Disconnect(w http.ResponseWriter, r *http.Re
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		_, _ = h.db.ExecContext(r.Context(),
-			`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, connected_at, updated_at)
-			 VALUES ('disconnected', '_sentinel', '', '', NOW(), NOW())
-			 ON CONFLICT (phone_number_id) DO UPDATE SET status='disconnected', updated_at=NOW()`)
+			`INSERT INTO whatsapp_connections (status, phone_number_id, phone_number, display_name, connected_at, updated_at, tenant_id)
+			 VALUES ('disconnected', '_sentinel', '', '', NOW(), NOW(), $1)
+			 ON CONFLICT (phone_number_id) DO UPDATE SET status='disconnected', updated_at=NOW(), tenant_id=$1`,
+			tenantID,
+		)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "disconnected"})
 }
@@ -298,10 +345,14 @@ func (h *WhatsAppConnectionHandler) SendTest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
 	// Look up accountId from DB (set during Connect), fall back to sandbox
 	var accountID sql.NullString
 	_ = h.db.QueryRowContext(r.Context(),
-		`SELECT account_id FROM whatsapp_connections WHERE status='connected' ORDER BY id DESC LIMIT 1`,
+		`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND tenant_id=$1 ORDER BY id DESC LIMIT 1`,
+		tenantID,
 	).Scan(&accountID)
 	if !accountID.Valid || accountID.String == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no connected WhatsApp account; connect a number first"})
@@ -326,7 +377,7 @@ func (h *WhatsAppConnectionHandler) SendTest(w http.ResponseWriter, r *http.Requ
 	}
 
 	body, _ := json.Marshal(payload)
-	resp, err := h.zernioPost(r, "/v1/inbox/conversations", body)
+	resp, err := h.zernioPost(r, key, "/v1/inbox/conversations", body)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "zernio unreachable"})
 		return
@@ -337,9 +388,9 @@ func (h *WhatsAppConnectionHandler) SendTest(w http.ResponseWriter, r *http.Requ
 	io.Copy(w, resp.Body) //nolint:errcheck
 }
 
-// fetchProfileID auto-fetches the first Zernio profile ID for this API key.
-func (h *WhatsAppConnectionHandler) fetchProfileID(r *http.Request) (string, error) {
-	resp, err := h.zernioGet(r, "/v1/profiles")
+// fetchProfileID auto-fetches the first Zernio profile ID for the given API key.
+func (h *WhatsAppConnectionHandler) fetchProfileID(r *http.Request, key string) (string, error) {
+	resp, err := h.zernioGet(r, key, "/v1/profiles")
 	if err != nil {
 		return "", err
 	}
@@ -358,21 +409,21 @@ func (h *WhatsAppConnectionHandler) fetchProfileID(r *http.Request) (string, err
 	return result.Profiles[0].ID, nil
 }
 
-func (h *WhatsAppConnectionHandler) zernioGet(r *http.Request, path string) (*http.Response, error) {
+func (h *WhatsAppConnectionHandler) zernioGet(r *http.Request, key string, path string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, h.zernioBase+path, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.zernioKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	return http.DefaultClient.Do(req)
 }
 
-func (h *WhatsAppConnectionHandler) zernioPost(r *http.Request, path string, body []byte) (*http.Response, error) {
+func (h *WhatsAppConnectionHandler) zernioPost(r *http.Request, key string, path string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, h.zernioBase+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.zernioKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	req.Header.Set("Content-Type", "application/json")
 	return http.DefaultClient.Do(req)
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -25,6 +26,7 @@ var defaultSettings = map[string]string{
 	"canned_responses_enabled":     "true",
 	"auto_reply_enabled":           "true",
 	"typing_indicators_enabled":    "true",
+	"zernio_api_key":               "",
 }
 
 // GetSettings handles GET /v1/settings.
@@ -64,9 +66,16 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert "true"/"false" strings to actual booleans for the frontend.
+	// Sensitive keys (e.g. zernio_api_key) are masked before returning.
 	out := make(map[string]any, len(result))
 	for k, v := range result {
-		if v == "true" {
+		if k == "zernio_api_key" {
+			if len(v) > 8 {
+				out[k] = "sk_****..." + v[len(v)-4:]
+			} else {
+				out[k] = "" // don't reveal short/empty keys
+			}
+		} else if v == "true" {
 			out[k] = true
 		} else if v == "false" {
 			out[k] = false
@@ -130,6 +139,20 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 
 	// Return the full updated settings object.
 	h.GetSettings(w, r)
+}
+
+// GetTenantZernioKey returns the Zernio API key stored for tenantID,
+// or "" if none is set. Falls back to "" — callers should then use env var.
+func (h *SettingsHandler) GetTenantZernioKey(ctx context.Context, tenantID string) string {
+	var val string
+	err := h.db.QueryRowContext(ctx,
+		`SELECT value FROM workspace_settings WHERE tenant_id = $1 AND key = 'zernio_api_key'`,
+		tenantID,
+	).Scan(&val)
+	if err != nil || val == "" {
+		return ""
+	}
+	return val
 }
 
 // GetPublicSettings handles GET /v1/settings/public — no auth required.

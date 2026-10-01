@@ -153,6 +153,105 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// registerWorkspaceRequest is the body for POST /v1/auth/register-workspace.
+type registerWorkspaceRequest struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// RegisterWorkspace handles POST /v1/auth/register-workspace.
+// It always creates a brand-new isolated tenant and makes the caller its admin.
+func (h *AuthHandler) RegisterWorkspace(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var req registerWorkspaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	if req.Email == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
+		return
+	}
+	if len(req.Password) < 8 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+		return
+	}
+
+	hash, err := utils.HashPassword(req.Password)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+		return
+	}
+
+	// Always create a fresh tenant for this workspace.
+	slug := slugify(req.Name)
+	var tenantID string
+	if err := h.db.QueryRow(
+		`INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id`,
+		req.Name+"'s Workspace", slug,
+	).Scan(&tenantID); err != nil {
+		// Slug collision: append random suffix and retry.
+		if err2 := h.db.QueryRow(
+			`INSERT INTO tenants (name, slug) VALUES ($1, $2 || '-' || substr(md5(random()::text), 1, 6)) RETURNING id`,
+			req.Name+"'s Workspace", slug,
+		).Scan(&tenantID); err2 != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create workspace"})
+			return
+		}
+	}
+
+	// Insert the new admin agent.
+	var id, name, email, role string
+	err = h.db.QueryRow(
+		`INSERT INTO agents (id, name, email, password_hash, role, avatar, tenant_id)
+		 VALUES (gen_random_uuid(), $1, $2, $3, 'admin', '', $4)
+		 RETURNING id, name, email, role`,
+		req.Name, req.Email, hash, tenantID,
+	).Scan(&id, &name, &email, &role)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "email already registered in this workspace"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "register agent"})
+		return
+	}
+
+	// Set tenant owner now that the agent row exists.
+	_, _ = h.db.Exec(`UPDATE tenants SET owner_id = $1 WHERE id = $2`, id, tenantID)
+
+	// Seed default workspace settings for the new tenant.
+	_, _ = h.db.Exec(`
+		INSERT INTO workspace_settings (tenant_id, key, value)
+		VALUES
+		  ($1, 'interactive_messages_enabled', 'false'),
+		  ($1, 'canned_responses_enabled', 'true'),
+		  ($1, 'auto_reply_enabled', 'true'),
+		  ($1, 'typing_indicators_enabled', 'true')
+		ON CONFLICT (tenant_id, key) DO NOTHING`, tenantID)
+
+	// Start the first session for this new admin.
+	var sessionVersion int64
+	if err := h.db.QueryRow(
+		`UPDATE agents SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version`, id,
+	).Scan(&sessionVersion); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create session"})
+		return
+	}
+
+	token, err := utils.GenerateToken(h.jwtSecret, id, name, role, sessionVersion)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate token"})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, registerResponse{
+		ID: id, Name: name, Email: email, Role: role, TenantID: tenantID, Token: token,
+	})
+}
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

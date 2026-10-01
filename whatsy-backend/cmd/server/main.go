@@ -177,6 +177,7 @@ func main() {
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
 
 	r.With(authLimiter.Middleware).Post("/v1/auth/register", authHandler.Register)
+	r.With(authLimiter.Middleware).Post("/v1/auth/register-workspace", authHandler.RegisterWorkspace)
 	r.With(authLimiter.Middleware).Post("/v1/auth/login", authHandler.Login)
 
 	r.Group(func(r chi.Router) {

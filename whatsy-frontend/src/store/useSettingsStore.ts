@@ -6,6 +6,7 @@ export interface WorkspaceSettings {
   canned_responses_enabled: boolean
   auto_reply_enabled: boolean
   typing_indicators_enabled: boolean
+  zernio_api_key: string
   [key: string]: boolean | string
 }
 
@@ -14,6 +15,7 @@ const DEFAULTS: WorkspaceSettings = {
   canned_responses_enabled: true,
   auto_reply_enabled: true,
   typing_indicators_enabled: true,
+  zernio_api_key: '',
 }
 
 interface SettingsStore {
