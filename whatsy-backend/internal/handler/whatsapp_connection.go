@@ -45,8 +45,9 @@ func tenantIDFromRequest(r *http.Request) string {
 }
 
 // getZernioKey returns the Zernio API key for the given tenant.
-// It checks workspace_settings for a per-tenant override (key = 'zernio_api_key');
-// if none is set it falls back to h.zernioKey (the environment variable).
+// It checks workspace_settings for a per-tenant override (key = 'zernio_api_key').
+// The global environment key belongs only to the legacy default workspace; using
+// it for another tenant would expose that workspace's WhatsApp account.
 func (h *WhatsAppConnectionHandler) getZernioKey(ctx context.Context, tenantID string) string {
 	var value sql.NullString
 	_ = h.db.QueryRowContext(ctx,
@@ -56,7 +57,10 @@ func (h *WhatsAppConnectionHandler) getZernioKey(ctx context.Context, tenantID s
 	if value.Valid && value.String != "" {
 		return value.String
 	}
-	return h.zernioKey
+	if tenantID == defaultTenantID {
+		return h.zernioKey
+	}
+	return ""
 }
 
 // Status returns the WhatsApp connection status.
@@ -65,6 +69,10 @@ func (h *WhatsAppConnectionHandler) getZernioKey(ctx context.Context, tenantID s
 func (h *WhatsAppConnectionHandler) Status(w http.ResponseWriter, r *http.Request) {
 	tenantID := tenantIDFromRequest(r)
 	key := h.getZernioKey(r.Context(), tenantID)
+	if key == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "disconnected", "phoneNumber": "", "displayName": ""})
+		return
+	}
 
 	// Always ask Zernio first — it knows about new signups the DB doesn't
 	resp, err := h.zernioGet(r, key, "/v1/accounts?platform=whatsapp")
