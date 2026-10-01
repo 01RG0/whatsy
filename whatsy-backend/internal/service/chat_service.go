@@ -296,7 +296,9 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 // platformMessageId equals the wamid returned by the send call, which we
 // stored as zernio_message_id.
 func (s *ChatService) HandleMessageStatus(ctx context.Context, payload zernio.MessageStatusPayload) error {
-	dedupeID := firstNonEmpty(payload.MessageID, payload.PlatformMessageID)
+	// Prefer platformMessageId (wamid) — that is what HandleInboundMessage
+	// stores as zernio_message_id. Zernio's internal messageId is a fallback.
+	dedupeID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
 	if dedupeID == "" {
 		return nil
 	}
