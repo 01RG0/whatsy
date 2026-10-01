@@ -76,6 +76,27 @@ function getMediaUrl(rawUrl: string): string {
   return url;
 }
 
+/** Split `text` into alternating plain/mark nodes, case-insensitive on `query`. */
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query) return <span>{text}</span>;
+  const lq = query.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let rest = text;
+  let key = 0;
+  while (rest.length > 0) {
+    const idx = rest.toLowerCase().indexOf(lq);
+    if (idx === -1) { parts.push(<span key={key++}>{rest}</span>); break; }
+    if (idx > 0) parts.push(<span key={key++}>{rest.slice(0, idx)}</span>);
+    parts.push(
+      <mark key={key++} className="bg-yellow-300 dark:bg-yellow-500 text-[#111b21] rounded-[2px] px-[1px]">
+        {rest.slice(idx, idx + query.length)}
+      </mark>
+    );
+    rest = rest.slice(idx + query.length);
+  }
+  return <>{parts}</>;
+}
+
 interface MessageBubbleProps {
   message: ZernioMessage;
   onImageClick?: (url: string) => void;
@@ -84,6 +105,8 @@ interface MessageBubbleProps {
   onRetry?: (message: ZernioMessage) => void;
   isConsecutive?: boolean;
   isNew?: boolean;
+  /** When provided, matched text within the bubble is wrapped in <mark>. */
+  highlight?: string;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -94,6 +117,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onRetry,
   isConsecutive,
   isNew = false,
+  highlight,
 }) => {
   const t = useT();
   const isOutbound = message.direction === 'outbound';
@@ -466,7 +490,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Text Content */}
         {message.content && message.content !== '[Unsupported message]' && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
-            <span>{renderFormattedText(displayedContent)}</span>
+            {highlight
+              ? <span>{highlightText(displayedContent, highlight)}</span>
+              : <span>{renderFormattedText(displayedContent)}</span>
+            }
             {isLongMessage && !isExpanded && (
               <button
                 type="button"

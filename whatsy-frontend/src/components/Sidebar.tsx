@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, ReactNode } from 'react';
 import { ZernioConversation, ConversationFilter } from './types';
 import type { ViewerInfo, TypingLock } from '../store/useInboxStore';
 import { ConversationRow } from './ConversationRow';
@@ -38,6 +38,27 @@ interface SidebarProps {
   onSelectAll?: () => void;
   onClearSelection?: () => void;
   onBulkAssignLabel?: (labelId: string) => void;
+}
+
+/** Wrap matched portions of `text` in <mark> tags, case-insensitive. */
+function highlightMatch(text: string, query: string): ReactNode {
+  if (!query) return text;
+  const lq = query.toLowerCase();
+  const parts: ReactNode[] = [];
+  let rest = text;
+  let key = 0;
+  while (rest.length > 0) {
+    const idx = rest.toLowerCase().indexOf(lq);
+    if (idx === -1) { parts.push(<span key={key++}>{rest}</span>); break; }
+    if (idx > 0) parts.push(<span key={key++}>{rest.slice(0, idx)}</span>);
+    parts.push(
+      <mark key={key++} className="bg-yellow-300 dark:bg-yellow-500 text-[#111b21] rounded-[2px] px-[1px] not-italic">
+        {rest.slice(idx, idx + query.length)}
+      </mark>
+    );
+    rest = rest.slice(idx + query.length);
+  }
+  return <>{parts}</>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -233,15 +254,65 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {showNewChat && (
         <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/20 p-4 pt-20" onClick={() => setShowNewChat(false)}>
           <div className="w-full max-w-sm rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-4 shadow-2xl" onClick={event => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold text-gray-900 dark:text-[#e9edef]">{t.sidebar_new_chat_heading}</h2><button type="button" onClick={() => setShowNewChat(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">×</button></div>
-            <input autoFocus value={newChatSearch} onChange={event => setNewChatSearch(event.target.value)} placeholder={t.sidebar_search_student_placeholder} className="mb-3 w-full rounded-lg border border-gray-300 dark:border-[#374151] bg-[#f0f2f5] dark:bg-[#111b21] px-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] outline-none focus:ring-2 focus:ring-[#00a884]" />
-            <div className="max-h-72 overflow-y-auto">
-              {contactMatches.length === 0 ? <p className="py-6 text-center text-sm text-gray-500 dark:text-[#8696a0]">{t.sidebar_no_contacts}</p> : contactMatches.map(conversation => (
-                <button key={conversation.id} type="button" onClick={() => { onSelectConversation(conversation); setShowNewChat(false) }} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">
-                  <img src={conversation.participant.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(conversation.participant.displayName)}&background=e5e7eb&color=374151`} alt="" className="h-9 w-9 rounded-full" />
-                  <span><span className="block text-sm font-medium text-gray-900 dark:text-[#e9edef]">{conversation.participant.displayName}</span><span className="block text-xs text-gray-500 dark:text-[#8696a0]">{conversation.participant.phoneNumber || t.sidebar_wa_contact}</span></span>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900 dark:text-[#e9edef]">{t.sidebar_new_chat_heading}</h2>
+              <button type="button" onClick={() => setShowNewChat(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white text-lg leading-none">×</button>
+            </div>
+            <div className="relative mb-3">
+              <svg className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#54656f] dark:text-[#8696a0] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                autoFocus
+                value={newChatSearch}
+                onChange={event => setNewChatSearch(event.target.value)}
+                placeholder={t.sidebar_search_student_placeholder}
+                className="w-full rounded-lg border border-gray-300 dark:border-[#374151] bg-[#f0f2f5] dark:bg-[#111b21] ps-9 pe-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] outline-none focus:ring-2 focus:ring-[#00a884]"
+              />
+              {newChatSearch && (
+                <button type="button" onClick={() => setNewChatSearch('')} className="absolute end-3 top-1/2 -translate-y-1/2 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef]">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
-              ))}
+              )}
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {contactMatches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-400 dark:text-[#8696a0]">
+                  <svg className="w-8 h-8 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <p className="text-sm">{t.sidebar_no_contacts}</p>
+                </div>
+              ) : (
+                contactMatches.map(conversation => {
+                  const q = newChatSearch.trim();
+                  const phone = conversation.participant.phoneNumber || t.sidebar_wa_contact;
+                  return (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() => { onSelectConversation(conversation); setShowNewChat(false); }}
+                      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition"
+                    >
+                      <img
+                        src={conversation.participant.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(conversation.participant.displayName)}&background=e5e7eb&color=374151`}
+                        alt=""
+                        className="h-9 w-9 rounded-full shrink-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900 dark:text-[#e9edef] truncate">
+                          {highlightMatch(conversation.participant.displayName, q)}
+                        </span>
+                        <span className="block text-xs text-gray-500 dark:text-[#8696a0] truncate">
+                          {highlightMatch(phone, q)}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

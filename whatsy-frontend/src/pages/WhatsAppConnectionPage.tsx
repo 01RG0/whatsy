@@ -392,6 +392,9 @@ export default function WhatsAppConnectionPage() {
             displayName: data.displayName ?? (data.isSandbox ? 'Shared test number' : ''),
             type: data.isSandbox ? 'sandbox' : 'live',
             status: 'live',
+            nameReview: data.nameReview ?? undefined,
+            businessVerification: data.businessVerification ?? undefined,
+            callingEnabled: data.callingEnabled ?? undefined,
           }])
         }
       }
@@ -632,13 +635,44 @@ export default function WhatsAppConnectionPage() {
                 </span>
 
                 {/* Name review */}
-                <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
+                <span>
+                  {!sender.nameReview ? (
+                    <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
+                  ) : sender.nameReview === 'APPROVED' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">Approved</span>
+                  ) : sender.nameReview === 'PENDING' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400">Pending</span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-[#182229] text-gray-500 dark:text-[#8696a0]">
+                      {sender.nameReview === 'NON_EXISTS' ? 'Pending review' : sender.nameReview}
+                    </span>
+                  )}
+                </span>
 
                 {/* Business verification */}
-                <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
+                <span className="flex items-center gap-1 flex-wrap">
+                  {!sender.businessVerification ? (
+                    <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
+                  ) : sender.businessVerification === 'verified' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">Verified</span>
+                  ) : sender.businessVerification === 'pending' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400">Pending</span>
+                  ) : (
+                    <>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400">Not verified</span>
+                      <a href="https://business.facebook.com/settings/security" target="_blank" rel="noreferrer" className="text-xs text-[#00a884] hover:underline ml-1 whitespace-nowrap">Verify →</a>
+                    </>
+                  )}
+                </span>
 
                 {/* Calling */}
-                <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
+                <span>
+                  {sender.type !== 'sandbox' && sender.callingEnabled === false ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400">Disabled</span>
+                  ) : (
+                    <span className="text-gray-400 dark:text-[#8696a0] text-sm">—</span>
+                  )}
+                </span>
 
                 {/* Status */}
                 <span className="flex items-center gap-1.5">
@@ -658,12 +692,22 @@ export default function WhatsAppConnectionPage() {
                       Test from Phone numbers
                     </button>
                   ) : (
-                    <button
-                      onClick={() => setShowDisconnectId(sender.accountId)}
-                      className="text-xs text-red-500 hover:underline"
-                    >
-                      Disconnect
-                    </button>
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => setShowDisconnectId(sender.accountId)}
+                        className="text-xs text-red-500 hover:underline text-left"
+                      >
+                        Disconnect
+                      </button>
+                      <a
+                        href="https://business.facebook.com/billing"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-amber-600 dark:text-amber-400 hover:underline whitespace-nowrap"
+                      >
+                        Payment Settings →
+                      </a>
+                    </div>
                   )}
                 </div>
               </div>

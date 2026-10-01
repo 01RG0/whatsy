@@ -125,6 +125,10 @@ type Translations = {
   role_admin: string
   role_agent: string
   role_viewer: string
+  // Chat Search
+  chat_search_prev: string
+  chat_search_next: string
+  chat_search_no_matches: string
   // Analysis
   analysis_title: string
   analysis_today: string
@@ -293,6 +297,9 @@ export const en: Translations = {
   analysis_open_chats: 'Open Chats',
   analysis_unassigned_chats: 'Unassigned Chats',
   analysis_admin_only: 'You need admin access to view analytics.',
+  chat_search_prev: 'Previous match',
+  chat_search_next: 'Next match',
+  chat_search_no_matches: 'No matches',
 }
 
 export const ar: Translations = {
@@ -435,6 +442,9 @@ export const ar: Translations = {
   analysis_open_chats: 'المحادثات المفتوحة',
   analysis_unassigned_chats: 'المحادثات غير المعيّنة',
   analysis_admin_only: 'تحتاج إلى صلاحيات المشرف لعرض التحليلات.',
+  chat_search_prev: 'المطابقة السابقة',
+  chat_search_next: 'المطابقة التالية',
+  chat_search_no_matches: 'لا توجد نتائج',
 }
 
 export function useT(): Translations {
