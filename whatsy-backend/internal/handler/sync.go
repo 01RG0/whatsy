@@ -23,26 +23,45 @@ func NewSyncHandler(db *sql.DB, zernioKey string) *SyncHandler {
 	return &SyncHandler{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1"}
 }
 
+// getZernioKey returns the Zernio API key for the given tenant.
+// It checks workspace_settings for a per-tenant override (key = 'zernio_api_key').
+// The global environment key belongs only to the legacy default workspace; using
+// it for another tenant would expose that workspace's WhatsApp account.
+func (h *SyncHandler) getZernioKey(ctx context.Context, tenantID string) string {
+	var value sql.NullString
+	_ = h.db.QueryRowContext(ctx,
+		`SELECT value FROM workspace_settings WHERE tenant_id = $1 AND key = 'zernio_api_key'`,
+		tenantID,
+	).Scan(&value)
+	if value.Valid && value.String != "" {
+		return value.String
+	}
+	if tenantID == defaultTenantID {
+		return h.zernioKey
+	}
+	return ""
+}
+
 type zernioConversation struct {
-	ID                   string `json:"id"`
-	AccountID            string `json:"accountId"`
-	ParticipantID        string `json:"participantId"`
-	ParticipantName      string `json:"participantName"`
-	ParticipantUsername  string `json:"participantUsername"`
-	ParticipantPicture   string `json:"participantPicture"`
-	LastMessage          string `json:"lastMessage"`
-	UpdatedTime          string `json:"updatedTime"`
-	UnreadCount          int    `json:"unreadCount"`
-	Status               string `json:"status"`
+	ID                  string `json:"id"`
+	AccountID           string `json:"accountId"`
+	ParticipantID       string `json:"participantId"`
+	ParticipantName     string `json:"participantName"`
+	ParticipantUsername string `json:"participantUsername"`
+	ParticipantPicture  string `json:"participantPicture"`
+	LastMessage         string `json:"lastMessage"`
+	UpdatedTime         string `json:"updatedTime"`
+	UnreadCount         int    `json:"unreadCount"`
+	Status              string `json:"status"`
 }
 
 // SyncProgress is emitted as SSE events during sync.
 type SyncProgress struct {
-	Phase     string `json:"phase"`      // "counting" | "syncing" | "done" | "error"
-	Total     int    `json:"total"`      // estimated total conversations
-	Synced    int    `json:"synced"`     // synced so far
-	Percent   int    `json:"percent"`    // 0-100
-	Message   string `json:"message"`
+	Phase   string `json:"phase"`   // "counting" | "syncing" | "done" | "error"
+	Total   int    `json:"total"`   // estimated total conversations
+	Synced  int    `json:"synced"`  // synced so far
+	Percent int    `json:"percent"` // 0-100
+	Message string `json:"message"`
 }
 
 // Sync streams SSE progress while pulling conversations (full or incremental).
@@ -64,11 +83,14 @@ func (h *SyncHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
 	since := parseSince(r.URL.Query().Get("since"))
 	ctx := r.Context()
 	emit(SyncProgress{Phase: "counting", Message: "Counting conversations in Zernio…"})
 
-	count, err := h.syncConversations(ctx, since, emit)
+	count, err := h.syncConversations(ctx, tenantID, key, since, emit)
 	if err != nil {
 		log.Printf("sync: %v", err)
 		emit(SyncProgress{Phase: "error", Message: err.Error()})
@@ -81,8 +103,11 @@ func (h *SyncHandler) Sync(w http.ResponseWriter, r *http.Request) {
 // SyncJSON is a non-streaming version — used for background incremental syncs.
 // Pass ?since=<RFC3339> to only fetch conversations updated after that time.
 func (h *SyncHandler) SyncJSON(w http.ResponseWriter, r *http.Request) {
+	tenantID := tenantIDFromRequest(r)
+	key := h.getZernioKey(r.Context(), tenantID)
+
 	since := parseSince(r.URL.Query().Get("since"))
-	count, err := h.syncConversations(r.Context(), since, nil)
+	count, err := h.syncConversations(r.Context(), tenantID, key, since, nil)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -91,8 +116,9 @@ func (h *SyncHandler) SyncJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 // SyncSince is called by the background worker — incremental sync since a given time.
+// Uses the global key and default tenant so the worker's existing call site is unchanged.
 func (h *SyncHandler) SyncSince(ctx context.Context, since time.Time) (int, error) {
-	return h.syncConversations(ctx, since, nil)
+	return h.syncConversations(ctx, defaultTenantID, h.zernioKey, since, nil)
 }
 
 func parseSince(s string) time.Time {
@@ -106,7 +132,7 @@ func parseSince(s string) time.Time {
 	return t
 }
 
-func (h *SyncHandler) syncConversations(ctx context.Context, since time.Time, emit func(SyncProgress)) (int, error) {
+func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, key string, since time.Time, emit func(SyncProgress)) (int, error) {
 	cursor := ""
 	total := 0
 	estimated := 0
@@ -127,7 +153,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, since time.Time, em
 		if err != nil {
 			return total, err
 		}
-		req.Header.Set("Authorization", "Bearer "+h.zernioKey)
+		req.Header.Set("Authorization", "Bearer "+key)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -141,7 +167,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, since time.Time, em
 		}
 
 		var pageData struct {
-			Data []zernioConversation `json:"data"`
+			Data       []zernioConversation `json:"data"`
 			Pagination struct {
 				HasMore    bool   `json:"hasMore"`
 				NextCursor string `json:"nextCursor"`
@@ -168,7 +194,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, since time.Time, em
 					break
 				}
 			}
-			if err := h.upsertConversation(ctx, conv); err != nil {
+			if err := h.upsertConversation(ctx, tenantID, conv); err != nil {
 				log.Printf("sync conv %s: %v", conv.ID, err)
 				continue
 			}
@@ -202,7 +228,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, since time.Time, em
 	return total, nil
 }
 
-func (h *SyncHandler) upsertConversation(ctx context.Context, conv zernioConversation) error {
+func (h *SyncHandler) upsertConversation(ctx context.Context, tenantID string, conv zernioConversation) error {
 	phone := strings.ReplaceAll(conv.ParticipantUsername, " ", "")
 	if phone == "" {
 		// ParticipantID is an internal MongoDB ObjectID, not a phone — use conv.ID
@@ -222,14 +248,14 @@ func (h *SyncHandler) upsertConversation(ctx context.Context, conv zernioConvers
 
 	var studentID string
 	err := h.db.QueryRowContext(ctx,
-		`INSERT INTO students (name, phone, avatar_url, created_at, updated_at)
-		 VALUES ($1, $2, $3, NOW(), NOW())
+		`INSERT INTO students (name, phone, avatar_url, tenant_id, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4::uuid, NOW(), NOW())
 		 ON CONFLICT (phone) DO UPDATE
 		   SET name = EXCLUDED.name,
 		       avatar_url = CASE WHEN EXCLUDED.avatar_url IS NOT NULL AND EXCLUDED.avatar_url != '' THEN EXCLUDED.avatar_url ELSE students.avatar_url END,
 		       updated_at = NOW()
 		 RETURNING id`,
-		name, phone, sql.NullString{String: avatarURL, Valid: avatarURL != ""},
+		name, phone, sql.NullString{String: avatarURL, Valid: avatarURL != ""}, tenantID,
 	).Scan(&studentID)
 	if err != nil {
 		return fmt.Errorf("upsert student: %w", err)
@@ -245,15 +271,16 @@ func (h *SyncHandler) upsertConversation(ctx context.Context, conv zernioConvers
 
 	_, err = h.db.ExecContext(ctx,
 		`INSERT INTO conversations
-		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
-		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, NOW(), NOW())
+		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, tenant_id, created_at, updated_at)
+		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, $6::uuid, NOW(), NOW())
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
 		    SET student_id      = EXCLUDED.student_id,
 		        last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
 		        unread_count    = EXCLUDED.unread_count,
+		        tenant_id       = EXCLUDED.tenant_id,
 		        updated_at      = NOW()`,
-		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID,
+		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert conversation: %w", err)

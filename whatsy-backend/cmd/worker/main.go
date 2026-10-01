@@ -79,9 +79,10 @@ func main() {
 }
 
 type worker struct {
-	db         *sql.DB
-	zernioKey  string
-	zernioBase string
+	db          *sql.DB
+	zernioKey   string
+	zernioBase  string
+	rateLimiter chan struct{} // token-bucket: 40 req/min to Zernio
 }
 
 type zernioConv struct {
