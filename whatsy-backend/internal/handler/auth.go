@@ -103,12 +103,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		// Default tenant for standalone deployments (single workspace).
-		if err := h.db.QueryRow(
-			`SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1`,
-		).Scan(&tenantID); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "resolve workspace"})
-			return
+		// Use the requesting admin's tenant so new agents join the correct workspace.
+		// Fall back to the oldest tenant for unauthenticated (open) registrations.
+		tenantID = tenantIDFromRequest(r)
+		if tenantID == "" {
+			if err := h.db.QueryRow(
+				`SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1`,
+			).Scan(&tenantID); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "resolve workspace"})
+				return
+			}
 		}
 	}
 

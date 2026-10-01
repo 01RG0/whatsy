@@ -75,7 +75,16 @@ func (s *AutoReplyService) CheckAndReply(ctx context.Context, message domain.Mes
 			continue
 		}
 
-		if _, err := chatService.SendOutboundMessage(ctx, convID, zernio.SendMessagePayload{Message: response}, "", ""); err != nil {
+		// Fetch the tenant that owns this conversation so the reply is sent
+		// through the correct Zernio account instead of the global env key.
+		var convTenantID string
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT tenant_id FROM conversations WHERE id = $1`, convID,
+		).Scan(&convTenantID); err != nil {
+			return false, fmt.Errorf("resolve conversation tenant for auto-reply: %w", err)
+		}
+
+		if _, err := chatService.SendOutboundMessage(ctx, convID, zernio.SendMessagePayload{Message: response}, "", convTenantID); err != nil {
 			return false, fmt.Errorf("send auto-reply: %w", err)
 		}
 		return true, nil
