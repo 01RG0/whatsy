@@ -23,6 +23,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({ onClose }) => {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const resetForm = () => {
     setEditing(null)
@@ -67,7 +68,11 @@ export const LabelManager: React.FC<LabelManagerProps> = ({ onClose }) => {
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this label? It will be removed from all conversations.')) return
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id)
+      return
+    }
+    setConfirmDeleteId(null)
     setDeleting(id)
     try {
       await remove(id)
@@ -107,6 +112,7 @@ export const LabelManager: React.FC<LabelManagerProps> = ({ onClose }) => {
             <div
               key={label.id}
               className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] group"
+              onMouseLeave={() => setConfirmDeleteId(null)}
             >
               <LabelPill label={label} size="sm" />
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
@@ -125,14 +131,16 @@ export const LabelManager: React.FC<LabelManagerProps> = ({ onClose }) => {
                   type="button"
                   onClick={() => handleDelete(label.id)}
                   disabled={deleting === label.id}
-                  className="p-1 text-gray-400 hover:text-red-500 transition"
-                  title="Delete label"
+                  className={`p-1 transition ${confirmDeleteId === label.id ? 'text-red-500 font-semibold text-xs' : 'text-gray-400 hover:text-red-500'}`}
+                  title={confirmDeleteId === label.id ? 'Click again to confirm delete' : 'Delete label'}
                 >
                   {deleting === label.id ? (
                     <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
+                  ) : confirmDeleteId === label.id ? (
+                    <span>Confirm?</span>
                   ) : (
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <polyline points="3 6 5 6 21 6" />

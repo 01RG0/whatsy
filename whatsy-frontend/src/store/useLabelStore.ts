@@ -4,20 +4,17 @@ import { API_BASE, getAuthHeader, createLabel, updateLabel, deleteLabel } from '
 
 interface LabelState {
   labels: Label[]
-  activeLabelId: string | null
 
   fetch: () => Promise<void>
   add: (name: string, color: string) => Promise<Label>
   update: (id: string, name: string, color: string) => Promise<void>
   remove: (id: string) => Promise<void>
-  setActiveLabel: (id: string | null) => void
   getByName: (name: string) => Label | undefined
   getById: (id: string) => Label | undefined
 }
 
 export const useLabelStore = create<LabelState>((set, get) => ({
   labels: [],
-  activeLabelId: null,
 
   fetch: async () => {
     try {
@@ -49,8 +46,6 @@ export const useLabelStore = create<LabelState>((set, get) => ({
     await deleteLabel(id)
     set((s) => ({ labels: s.labels.filter((l) => l.id !== id) }))
   },
-
-  setActiveLabel: (id) => set({ activeLabelId: id }),
 
   getByName: (name) => get().labels.find((l) => l.name === name),
   getById: (id) => get().labels.find((l) => l.id === id),

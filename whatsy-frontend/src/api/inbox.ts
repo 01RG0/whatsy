@@ -153,8 +153,8 @@ export async function addConversationLabel(conversationId: string, labelId: stri
     body: JSON.stringify({ labelId }),
   })
   await throwIfError(res)
-  const json = await res.json() as { tags?: string[] }
-  return json.tags ?? []
+  const json = await res.json() as { labels?: { name: string }[]; tags?: string[] }
+  return json.tags ?? (json.labels?.map(l => l.name) ?? [])
 }
 
 export async function removeConversationLabel(conversationId: string, labelId: string): Promise<string[]> {
@@ -163,6 +163,6 @@ export async function removeConversationLabel(conversationId: string, labelId: s
     headers: getAuthHeader(),
   })
   await throwIfError(res)
-  const json = await res.json() as { tags?: string[] }
-  return json.tags ?? []
+  const json = await res.json() as { labels?: { name: string }[]; tags?: string[] }
+  return json.tags ?? (json.labels?.map(l => l.name) ?? [])
 }

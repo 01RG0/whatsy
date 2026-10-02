@@ -36,13 +36,11 @@ export const WhatsAppInboxApp: React.FC = () => {
 
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeLabelIds, setActiveLabelIds] = useState<string[]>([]);
+  const [activeLabelId, setActiveLabelId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
 
   const handleLabelFilterToggle = useCallback((labelId: string) => {
-    setActiveLabelIds(prev =>
-      prev.includes(labelId) ? prev.filter(id => id !== labelId) : [...prev, labelId]
-    );
+    setActiveLabelId(prev => prev === labelId ? null : labelId);
   }, []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
@@ -91,7 +89,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     setHasMoreConversations(true);
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
+      getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
         .then((convs) => {
           convs.forEach((conv) => {
             if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
@@ -105,7 +103,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         })
         .catch((err) => console.error('[WhatsAppInboxApp] fetch conversations:', err));
     });
-  }, [filter, searchQuery, activeLabelIds, setConversations]);
+  }, [filter, searchQuery, activeLabelId, setConversations]);
 
   // Reload message history when switching conversations.
   // Use mergeMessages (not setMessages) so any realtime messages that arrived
@@ -159,7 +157,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       const connected = useInboxStore.getState().wsConnected;
       if (!connected) {
         import('../api/inbox').then(({ getConversations }) => {
-          getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
+          getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
             .then(setConversations)
             .catch(() => undefined);
         });
@@ -181,7 +179,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       document.removeEventListener('visibilitychange', handleActiveFocus);
       window.removeEventListener('focus', handleActiveFocus);
     };
-  }, [activeConversationId, mergeMessages, filter, searchQuery, activeLabelIds, setConversations, updateConversation]);
+  }, [activeConversationId, mergeMessages, filter, searchQuery, activeLabelId, setConversations, updateConversation]);
 
   // Flash "Connected" banner for 3s when WS connects.
   useEffect(() => {
@@ -271,7 +269,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     setIsLoadingMoreConversations(true);
     const lastId = conversations[conversations.length - 1].id;
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 100, lastId, activeLabelIds[0] ?? undefined)
+      getConversations(filter, searchQuery, 100, lastId, activeLabelId ?? undefined)
         .then((convs) => {
           appendConversations(convs);
           if (convs.length < 100) setHasMoreConversations(false);
@@ -279,16 +277,16 @@ export const WhatsAppInboxApp: React.FC = () => {
         .catch((err) => console.error('[WhatsAppInboxApp] load more conversations:', err))
         .finally(() => setIsLoadingMoreConversations(false));
     });
-  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, activeLabelIds, appendConversations]);
+  }, [isLoadingMoreConversations, hasMoreConversations, conversations, filter, searchQuery, activeLabelId, appendConversations]);
 
   const handleRefreshConversations = useCallback(() => {
-    getConversations(filter, searchQuery, 100, undefined, activeLabelIds[0] ?? undefined)
+    getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
       .then((convs) => {
         setConversations(convs);
         setHasMoreConversations(convs.length >= 100);
       })
       .catch((err) => console.error('[WhatsAppInboxApp] refresh conversations:', err));
-  }, [filter, searchQuery, activeLabelIds, setConversations]);
+  }, [filter, searchQuery, activeLabelId, setConversations]);
 
   const handleTagsChange = useCallback(
     (conversationId: string, tags: string[]) => {
@@ -387,9 +385,9 @@ export const WhatsAppInboxApp: React.FC = () => {
     }
     if (filter === 'unread') return ((c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread) && (!c.lastMessage?.direction || c.lastMessage.direction === 'inbound');
     if (filter === 'unanswered') return !c.lastMessage?.direction || c.lastMessage.direction === 'inbound';
-    if (activeLabelIds.length > 0) {
-      const activeNames = activeLabelIds.map(id => allLabels.find(l => l.id === id)?.name).filter(Boolean) as string[];
-      if (activeNames.length > 0 && !activeNames.every(name => (c.tags ?? []).includes(name))) return false;
+    if (activeLabelId) {
+      const activeName = allLabels.find(l => l.id === activeLabelId)?.name;
+      if (activeName && !(c.tags ?? []).includes(activeName)) return false;
     }
     return true;
   });
@@ -405,7 +403,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       markRead(conv.id).catch(() => undefined);
       openChatOnMobile();
     },
-    [setActiveConversation, updateConversation]
+    [setActiveConversation, updateConversation, openChatOnMobile]
   );
 
   const handleSendMessage = useCallback(
@@ -551,9 +549,9 @@ export const WhatsAppInboxApp: React.FC = () => {
           onMarkUnread={handleMarkUnread}
           onMarkRead={handleMarkRead}
           onTagsChange={handleTagsChange}
-          activeLabelIds={activeLabelIds}
+          activeLabelId={activeLabelId}
           onLabelFilterChange={handleLabelFilterToggle}
-          onLabelFilterClear={() => setActiveLabelIds([])}
+          onLabelFilterClear={() => setActiveLabelId(null)}
           selectionMode={selectionMode}
           onToggleSelectionMode={() => setSelectionMode(v => !v)}
           selectedIds={selectedIds}

@@ -9,7 +9,6 @@ import { useLanguageStore } from '../store/useLanguageStore';
 import { useDarkModeStore } from '../store/useDarkModeStore';
 import { useLabelStore } from '../store/useLabelStore';
 import { LabelManager } from './LabelManager'
-import { isLightColor } from '../utils/colorUtils';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -29,7 +28,7 @@ interface SidebarProps {
   onMarkUnread?: (conversationId: string) => void;
   onMarkRead?: (conversationId: string) => void;
   onTagsChange?: (conversationId: string, tags: string[]) => void;
-  activeLabelIds?: string[];
+  activeLabelId?: string | null;
   onLabelFilterChange?: (labelId: string) => void;
   onLabelFilterClear?: () => void;
   selectionMode?: boolean;
@@ -80,9 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMarkUnread,
   onMarkRead,
   onTagsChange,
-  activeLabelIds = [],
+  activeLabelId = null,
   onLabelFilterChange,
-  onLabelFilterClear,
   selectionMode = false,
   onToggleSelectionMode,
   selectedIds = new Set(),
@@ -150,13 +148,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onLoadMore();
     }
   }, [onLoadMore, hasMore, isLoadingMore]);
-
-  const filters: { id: ConversationFilter; label: string }[] = [
-    { id: 'all', label: t.filter_all },
-    { id: 'unread', label: t.filter_unread },
-    { id: 'unanswered', label: t.filter_unanswered },
-    { id: 'assigned_to_me', label: t.filter_mine },
-  ];
 
   return (
     <>
@@ -351,60 +342,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Filter Pills */}
-      <div className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto border-b border-[#e9edef] dark:border-[#222e35] scrollbar-none bg-white dark:bg-[#111b21]">
-        {filters.map((f) => (
+      {/* Unified filter chip row — All/Unread/Mine + label chips */}
+      <div className="flex gap-1.5 overflow-x-auto px-3 pb-2 pt-1.5 scrollbar-hide shrink-0 border-b border-[#e9edef] dark:border-[#222e35] bg-white dark:bg-[#111b21]">
+        {/* Static filter chips */}
+        {(['all', 'unread', 'assigned_to_me'] as ConversationFilter[]).map((f) => (
           <button
-            key={f.id}
-            type="button"
-            onClick={() => onFilterChange(f.id)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition shrink-0 ${
-              activeFilter === f.id
-                ? 'bg-[#d9fdd3] text-[#008069] dark:bg-[#005c4b] dark:text-[#e9edef]'
-                : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942] hover:text-[#111b21] dark:hover:text-[#e9edef]'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Label Filter — shown only when labels exist */}
-      {labels.length > 0 && (
-        <div className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto border-b border-[#e9edef] dark:border-[#222e35] scrollbar-none bg-white dark:bg-[#111b21]">
-          <button
-            type="button"
-            onClick={() => onLabelFilterClear?.()}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition shrink-0 flex items-center gap-1 ${
-              activeLabelIds.length === 0
-                ? 'bg-[#d9fdd3] text-[#008069] dark:bg-[#005c4b] dark:text-[#e9edef]'
+            key={f}
+            onClick={() => onFilterChange(f)}
+            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
+              activeFilter === f && !activeLabelId
+                ? 'bg-[#00a884] text-white'
                 : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
             }`}
           >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-              <line x1="7" y1="7" x2="7.01" y2="7" />
-            </svg>
-            Labels
+            {f === 'all' ? t.filter_all : f === 'unread' ? t.filter_unread : t.filter_mine}
           </button>
-          {labels.map((label) => (
-            <button
-              key={label.id}
-              type="button"
-              onClick={() => onLabelFilterChange?.(label.id)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition shrink-0 ${
-                activeLabelIds.includes(label.id)
-                  ? 'ring-2 ring-offset-1 ring-[#00a884]'
-                  : 'opacity-80 hover:opacity-100'
-              }`}
-              style={{ backgroundColor: label.color, color: isLightColor(label.color) ? '#1a1a1a' : '#fff' }}
-              title={`${label.name}${labelCounts[label.name] ? ` (${labelCounts[label.name]})` : ''}`}
-            >
-              {label.name}{labelCounts[label.name] ? ` · ${labelCounts[label.name]}` : ''}
-            </button>
-          ))}
-        </div>
-      )}
+        ))}
+
+        {/* Label chips */}
+        {labels.map((label) => (
+          <button
+            key={label.id}
+            onClick={() => onLabelFilterChange?.(label.id)}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
+              activeLabelId === label.id
+                ? 'text-white'
+                : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
+            }`}
+            style={activeLabelId === label.id ? { backgroundColor: label.color } : {}}
+            title={`${label.name}${labelCounts[label.name] ? ` (${labelCounts[label.name]})` : ''}`}
+          >
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: activeLabelId === label.id ? 'rgba(255,255,255,0.7)' : label.color }}
+            />
+            {label.name}
+          </button>
+        ))}
+
+        {/* Manage labels gear button */}
+        {labels.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowLabelManager(true)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+            title="Manage labels"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       {/* Bulk action bar — shown when selection mode is active */}
       {selectionMode && (
@@ -423,7 +413,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <svg className="w-10 h-10 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            {t.sidebar_no_conversations}
+            {activeLabelId ? 'No conversations with this label' : t.sidebar_no_conversations}
           </div>
         ) : (
           conversations.map((conv) => (
