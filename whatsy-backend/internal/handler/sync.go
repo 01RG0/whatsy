@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -132,6 +133,61 @@ func parseSince(s string) time.Time {
 	return t
 }
 
+// fetchPage fetches a single Zernio API page with retry on 429 and 5xx.
+func (h *SyncHandler) fetchPage(ctx context.Context, url, key string) ([]byte, int, error) {
+	const max429 = 5
+	const max5xx = 3
+	retries429 := 0
+	retries5xx := 0
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, 0, err
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, 0, fmt.Errorf("zernio fetch: %w", err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == 429 {
+			retries429++
+			if retries429 > max429 {
+				return nil, resp.StatusCode, fmt.Errorf("zernio rate limit after %d retries: %s", max429, string(body))
+			}
+			delay := 5 * time.Second
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, err := strconv.Atoi(ra); err == nil && secs > 0 {
+					delay = time.Duration(secs) * time.Second
+				}
+			}
+			log.Printf("[sync] rate limited, waiting %s (retry %d/%d)", delay, retries429, max429)
+			select {
+			case <-ctx.Done():
+				return nil, 0, ctx.Err()
+			case <-time.After(delay):
+			}
+			continue
+		}
+		if resp.StatusCode >= 500 {
+			retries5xx++
+			if retries5xx > max5xx {
+				return nil, resp.StatusCode, fmt.Errorf("zernio server error %d after %d retries: %s", resp.StatusCode, max5xx, string(body))
+			}
+			log.Printf("[sync] server error %d, waiting 2s (retry %d/%d)", resp.StatusCode, retries5xx, max5xx)
+			select {
+			case <-ctx.Done():
+				return nil, 0, ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
+			continue
+		}
+		return body, resp.StatusCode, nil
+	}
+}
+
 func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, key string, since time.Time, emit func(SyncProgress)) (int, error) {
 	cursor := ""
 	total := 0
@@ -149,21 +205,12 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			url += "&cursor=" + cursor
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		body, status, err := h.fetchPage(ctx, url, key)
 		if err != nil {
 			return total, err
 		}
-		req.Header.Set("Authorization", "Bearer "+key)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return total, fmt.Errorf("zernio fetch: %w", err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			return total, fmt.Errorf("zernio error %d: %s", resp.StatusCode, string(body))
+		if status >= 400 {
+			return total, fmt.Errorf("zernio error %d: %s", status, string(body))
 		}
 
 		var pageData struct {
@@ -224,6 +271,12 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			break
 		}
 		cursor = pageData.Pagination.NextCursor
+		// Pace requests to stay within Zernio rate limits.
+		select {
+		case <-ctx.Done():
+			return total, ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
 	return total, nil
 }
