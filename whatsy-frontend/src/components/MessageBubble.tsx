@@ -528,7 +528,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )
         }
 
-        {message.type === 'contacts' && (
+        {(message.type === 'contacts' || (message.type === 'text' && message.content?.startsWith('👤'))) && (() => {
+          const isLegacy = message.type === 'text' && message.content?.startsWith('👤')
+          const contactName = isLegacy
+            ? message.content!.replace(/^👤\s*/, '').trim()
+            : (message.content && message.content !== '[Unsupported message]' ? message.content : 'Contact')
+          return (
           <div className="flex flex-col min-w-[220px]">
             <div className="flex items-center gap-3 px-3 pt-3 pb-2">
               <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 text-[#54656f] dark:text-[#aebac1]">
@@ -538,7 +543,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="font-semibold text-[15px] text-[#111b21] dark:text-[#e9edef] truncate leading-tight">
-                  {message.content && message.content !== '[Unsupported message]' ? message.content : 'Contact'}
+                  {contactName}
                 </span>
                 {message.contactPhone && (
                   <span className="text-[13px] text-[#54656f] dark:text-[#8696a0] mt-0.5 dir-ltr">{message.contactPhone}</span>
@@ -561,10 +566,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* Text Content */}
-        {message.content && message.content !== '[Unsupported message]' && message.type !== 'contacts' && (
+        {message.content && message.content !== '[Unsupported message]' && message.type !== 'contacts' && !message.content?.startsWith('👤') && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
             {highlight
               ? <span>{highlightText(displayedContent, highlight)}</span>
