@@ -534,7 +534,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             ? message.content!.replace(/^👤\s*/, '').trim()
             : (message.content && message.content !== '[Unsupported message]' ? message.content : 'Contact')
           return (
-          <div className="flex flex-col min-w-[220px]">
+          <div className="flex flex-col min-w-[220px] select-none">
             <div className="flex items-center gap-3 px-3 pt-3 pb-2">
               <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 text-[#54656f] dark:text-[#aebac1]">
                 <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
@@ -562,7 +562,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   Message
                 </a>
               ) : (
-                <div className="py-2.5 text-center text-sm font-medium text-[#00a884]">Contact</div>
+                <div className="py-2.5 text-center text-sm font-medium text-[#8696a0] cursor-default">Contact</div>
               )}
             </div>
           </div>

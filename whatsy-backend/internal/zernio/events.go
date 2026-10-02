@@ -137,12 +137,16 @@ type rawInboundMessage struct {
 			StanzaID string `json:"stanzaId"`
 		} `json:"contextInfo"`
 		// Contacts carries vCard data for contacts messages.
+		// Zernio send API uses phones[].phone; WhatsApp Business app echoes use Meta's
+		// shape with phones[].wa_id and vcard.
 		Contacts []struct {
 			Name struct {
 				FormattedName string `json:"formatted_name"`
 			} `json:"name"`
 			Phones []struct {
 				Phone string `json:"phone"`
+				WaID  string `json:"wa_id"`
+				VCard string `json:"vcard"`
 			} `json:"phones"`
 		} `json:"contacts"`
 	} `json:"message"`
@@ -250,8 +254,9 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 		if p.Content == "" && c.Name.FormattedName != "" {
 			p.Content = c.Name.FormattedName
 		}
-		if len(c.Phones) > 0 && c.Phones[0].Phone != "" {
-			p.ContactPhone = c.Phones[0].Phone
+		if len(c.Phones) > 0 {
+			// Prefer phone; fall back to wa_id (Meta's shape from WhatsApp Business app echoes)
+			p.ContactPhone = firstNonEmpty(c.Phones[0].Phone, c.Phones[0].WaID)
 		}
 	}
 

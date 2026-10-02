@@ -148,12 +148,13 @@ type zernioMessage struct {
 	SentAt         time.Time       `json:"sentAt"`
 	CreatedAt      time.Time       `json:"createdAt"`
 	Attachments    json.RawMessage `json:"attachments"`
-	Contacts       []struct {
+	Contacts []struct {
 		Name struct {
 			FormattedName string `json:"formatted_name"`
 		} `json:"name"`
 		Phones []struct {
 			Phone string `json:"phone"`
+			WaID  string `json:"wa_id"`
 		} `json:"phones"`
 	} `json:"contacts"`
 }
@@ -460,7 +461,11 @@ func (w *worker) upsertMessage(ctx context.Context, dbConvID string, msg zernioM
 			content = c.Name.FormattedName
 		}
 		if len(c.Phones) > 0 {
-			contactPhone = c.Phones[0].Phone
+			if c.Phones[0].Phone != "" {
+				contactPhone = c.Phones[0].Phone
+			} else if c.Phones[0].WaID != "" {
+				contactPhone = c.Phones[0].WaID
+			}
 		}
 	}
 
