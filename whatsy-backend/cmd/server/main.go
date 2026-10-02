@@ -104,8 +104,15 @@ func main() {
 		})
 	})
 
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := db.PingContext(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]string{"status": "db_down", "error": err.Error()})
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
@@ -313,11 +320,16 @@ func main() {
 
 	<-quit
 	log.Println("shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// 10s drain — short enough that DB connections are released quickly during
+	// rolling deploys, giving the new instance a chance to grab slots.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("forced shutdown: %v", err)
+		log.Printf("shutdown: %v", err)
 	}
+	// Explicitly close DB pool so Supabase connection slots free up immediately
+	// for the new instance rather than waiting for OS GC.
+	db.Close()
 	log.Println("server exited")
 }
 
