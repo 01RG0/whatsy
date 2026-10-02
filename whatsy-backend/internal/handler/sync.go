@@ -88,17 +88,54 @@ func (h *SyncHandler) Sync(w http.ResponseWriter, r *http.Request) {
 	key := h.getZernioKey(r.Context(), tenantID)
 
 	since := parseSince(r.URL.Query().Get("since"))
-	ctx := r.Context()
+
+	progressCh := make(chan SyncProgress, 50)
+
+	// Run sync in background — detached from HTTP request context so that a
+	// browser/proxy 30-second timeout does not kill a long full sync.
+	syncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	go func() {
+		defer cancel()
+		defer close(progressCh)
+
+		progressFn := func(p SyncProgress) {
+			select {
+			case progressCh <- p:
+			default: // channel full or client gone, skip
+			}
+		}
+
+		count, err := h.syncConversations(syncCtx, tenantID, key, since, progressFn)
+		if err != nil {
+			log.Printf("sync: %v", err)
+			select {
+			case progressCh <- SyncProgress{Phase: "error", Message: err.Error()}:
+			default:
+			}
+			return
+		}
+		select {
+		case progressCh <- SyncProgress{Phase: "done", Synced: count, Total: count, Percent: 100,
+			Message: fmt.Sprintf("Synced %d conversations", count)}:
+		default:
+		}
+	}()
+
 	emit(SyncProgress{Phase: "counting", Message: "Counting conversations in Zernio…"})
 
-	count, err := h.syncConversations(ctx, tenantID, key, since, emit)
-	if err != nil {
-		log.Printf("sync: %v", err)
-		emit(SyncProgress{Phase: "error", Message: err.Error()})
-		return
+	for {
+		select {
+		case p, ok := <-progressCh:
+			if !ok {
+				return // goroutine done
+			}
+			emit(p)
+		case <-r.Context().Done():
+			// Client disconnected — sync continues in background goroutine.
+			emit(SyncProgress{Phase: "background", Message: "Sync continues in background"})
+			return
+		}
 	}
-	emit(SyncProgress{Phase: "done", Synced: count, Total: count, Percent: 100,
-		Message: fmt.Sprintf("Synced %d conversations", count)})
 }
 
 // SyncJSON is a non-streaming version — used for background incremental syncs.

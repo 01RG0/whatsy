@@ -342,7 +342,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 interface SyncState {
-  phase: 'idle' | 'counting' | 'syncing' | 'done' | 'error'
+  phase: 'idle' | 'counting' | 'syncing' | 'done' | 'error' | 'background'
   synced: number
   total: number
   percent: number
@@ -734,6 +734,9 @@ export default function WhatsAppConnectionPage() {
                 {sync.phase === 'error' && (
                   <span className="px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-500 text-xs rounded-full font-medium">Failed</span>
                 )}
+                {sync.phase === 'background' && (
+                  <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400 text-xs rounded-full font-medium">Running in background</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {(sync.phase === 'syncing' || sync.phase === 'counting') && (
@@ -766,7 +769,7 @@ export default function WhatsAppConnectionPage() {
             )}
 
             {sync.message && sync.phase !== 'idle' && (
-              <p className={`text-xs mt-1.5 ${sync.phase === 'error' ? 'text-red-500' : 'text-gray-400 dark:text-[#8696a0]'}`}>
+              <p className={`text-xs mt-1.5 ${sync.phase === 'error' ? 'text-red-500' : sync.phase === 'background' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-[#8696a0]'}`}>
                 {sync.message}
               </p>
             )}
