@@ -174,6 +174,12 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 			})
 			return nil
 		}
+		// Claim failed — a concurrent webhook (e.g. message.created arriving at
+		// the same time as message.sent) may have already claimed the row.
+		// Re-check before falling through to INSERT to avoid a duplicate row.
+		if existing2, err2 := s.msgRepo.GetByZernioID(ctx, dedupeID); err2 == nil && existing2 != nil {
+			return nil
+		}
 	}
 
 	message := domain.Message{
