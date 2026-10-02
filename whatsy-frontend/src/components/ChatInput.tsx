@@ -449,13 +449,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <>
             {/* Pill: emoji + textarea + attach + camera */}
             <div
-              className={`flex-1 bg-white dark:bg-[#2a3942] rounded-[36px] px-3 py-2 flex items-end gap-2 min-h-[44px] ${disabled ? 'opacity-80' : ''}`}
+              className={`flex-1 bg-white dark:bg-[#2a3942] rounded-[36px] px-3 py-2 flex items-end gap-2 min-h-[44px] border border-transparent dark:border-[#3d4a54] ${disabled ? 'opacity-80' : ''}`}
               title={disabled ? disabledTooltip : undefined}
             >
               <button
                 type="button"
                 disabled={disabled || isUploading}
-                className={`text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef] shrink-0 pb-0.5 transition ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                className={`text-[#8696a0] dark:text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef] shrink-0 pb-0.5 transition ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 title={t.emoji}
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -476,7 +476,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 rows={1}
                 disabled={disabled}
                 placeholder={disabled ? (disabledTooltip || t.view_only_mode) : resolvedPlaceholder}
-                className="flex-1 bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-[#8696a0] dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto leading-relaxed select-text disabled:cursor-not-allowed scroll-smooth self-center"
+                className="flex-1 bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-[#8696a0] dark:placeholder-[#8696a0] outline-none resize-none overflow-y-auto leading-relaxed select-text disabled:cursor-not-allowed scroll-smooth self-center min-h-[24px]"
               />
 
               {!text.trim() && (
