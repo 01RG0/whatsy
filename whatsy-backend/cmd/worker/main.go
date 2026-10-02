@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -19,11 +20,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
+const defaultTenantID = "00000000-0000-0000-0000-000000000001"
+
 func main() {
 	_ = godotenv.Load()
 
-	// Prefer DIRECT_DATABASE_URL (bypasses PgBouncer, avoids prepared-statement
-	// cache collisions that occur in transaction-mode pooling).
 	dbURL := firstNonEmpty(os.Getenv("DIRECT_DATABASE_URL"), os.Getenv("DATABASE_URL"))
 	zernioKey := os.Getenv("ZERNIO_API_KEY")
 	if dbURL == "" || zernioKey == "" {
@@ -41,7 +42,20 @@ func main() {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	w := &worker{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1"}
+	// Token bucket: 1 token every 1.5s = 40 req/min, buffer of 3.
+	rl := make(chan struct{}, 3)
+	go func() {
+		tk := time.NewTicker(1500 * time.Millisecond)
+		defer tk.Stop()
+		for range tk.C {
+			select {
+			case rl <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
+	w := &worker{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1", rateLimiter: rl}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -49,11 +63,36 @@ func main() {
 	interval := 5 * time.Minute
 	log.Printf("sync worker started — interval %s", interval)
 
-	log.Println("startup: running full sync...")
-	if n, err := w.sync(context.Background(), time.Time{}); err != nil {
-		log.Printf("startup sync error: %v", err)
-	} else {
-		log.Printf("startup sync done: %d conversations", n)
+	// Startup lock: skip full sync if completed less than 2 hours ago.
+	startCursor := ""
+	skipFull := false
+	if lastStr, err := w.getSetting(defaultTenantID, "last_full_sync_at"); err == nil && lastStr != "" {
+		if last, err := time.Parse(time.RFC3339, lastStr); err == nil {
+			age := time.Since(last)
+			if age < 2*time.Hour {
+				log.Printf("startup: skipping full sync, last ran %.0f minutes ago", age.Minutes())
+				skipFull = true
+			}
+		}
+	}
+	if !skipFull {
+		// Resume from saved cursor if a previous full sync was interrupted.
+		if c, err := w.getSetting(defaultTenantID, "worker_sync_cursor"); err == nil {
+			startCursor = c
+		}
+		if startCursor != "" {
+			log.Printf("startup: resuming full sync from saved cursor")
+		} else {
+			log.Println("startup: running full sync...")
+		}
+		if n, err := w.sync(context.Background(), time.Time{}, startCursor); err != nil {
+			log.Printf("startup sync error: %v", err)
+		} else {
+			log.Printf("startup sync done: %d conversations", n)
+			// Clear cursor and record completion time.
+			_ = w.deleteSetting(defaultTenantID, "worker_sync_cursor")
+			_ = w.setSetting(defaultTenantID, "last_full_sync_at", time.Now().UTC().Format(time.RFC3339))
+		}
 	}
 
 	ticker := time.NewTicker(interval)
@@ -67,7 +106,7 @@ func main() {
 		case <-ticker.C:
 			since := time.Now().Add(-(interval + time.Minute))
 			ctx, cancel := context.WithTimeout(context.Background(), interval-30*time.Second)
-			n, err := w.sync(ctx, since)
+			n, err := w.sync(ctx, since, "")
 			cancel()
 			if err != nil {
 				log.Printf("sync error: %v", err)
@@ -102,21 +141,112 @@ type zernioMessage struct {
 	ID             string          `json:"id"`
 	ConversationID string          `json:"conversationId"`
 	Message        string          `json:"message"`
-	Type           string          `json:"type"`           // text, image, audio, video, document, etc.
-	Direction      string          `json:"direction"`      // incoming | outgoing
-	DeliveryStatus string          `json:"deliveryStatus"` // pending, sent, delivered, read, failed
+	Type           string          `json:"type"`
+	Direction      string          `json:"direction"`
+	DeliveryStatus string          `json:"deliveryStatus"`
 	SentAt         time.Time       `json:"sentAt"`
 	CreatedAt      time.Time       `json:"createdAt"`
-	Attachments    json.RawMessage `json:"attachments"` // store raw to preserve all fields
+	Attachments    json.RawMessage `json:"attachments"`
 }
 
-func (w *worker) sync(ctx context.Context, since time.Time) (int, error) {
+// acquireToken blocks until a rate-limit token is available or ctx is done.
+func (w *worker) acquireToken(ctx context.Context) error {
+	select {
+	case <-w.rateLimiter:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// doGet performs a rate-limited GET with retry on 429 and network errors.
+func (w *worker) doGet(ctx context.Context, apiURL string) ([]byte, error) {
+	const max429 = 5
+	const maxNet = 3
+	retries429 := 0
+	retriesNet := 0
+
+	for {
+		if err := w.acquireToken(ctx); err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+w.zernioKey)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			retriesNet++
+			if retriesNet > maxNet {
+				return nil, fmt.Errorf("network error after %d retries: %w", maxNet, err)
+			}
+			log.Printf("[worker] network error (retry %d/%d): %v", retriesNet, maxNet, err)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(3 * time.Second):
+			}
+			continue
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == 429 {
+			retries429++
+			if retries429 > max429 {
+				return nil, fmt.Errorf("rate limited after %d retries", max429)
+			}
+			delay := 5 * time.Second
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, err := strconv.Atoi(ra); err == nil && secs > 0 {
+					delay = time.Duration(secs) * time.Second
+				}
+			} else {
+				// Parse retryAfterSeconds from JSON body.
+				var errBody struct {
+					Details struct {
+						RetryAfterSeconds int `json:"retryAfterSeconds"`
+					} `json:"details"`
+				}
+				if json.Unmarshal(body, &errBody) == nil && errBody.Details.RetryAfterSeconds > 0 {
+					delay = time.Duration(errBody.Details.RetryAfterSeconds) * time.Second
+				}
+			}
+			log.Printf("[worker] rate limited, waiting %s (retry %d/%d)", delay, retries429, max429)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+			continue
+		}
+
+		if resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("server error %d", resp.StatusCode)
+		}
+
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("zernio %d", resp.StatusCode)
+		}
+
+		return body, nil
+	}
+}
+
+// sync fetches conversations updated since `since` (zero = all 6 months).
+// startCursor resumes a previous interrupted full sync.
+func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) (int, error) {
 	cutoff := time.Now().AddDate(0, -6, 0)
 	if !since.IsZero() {
 		cutoff = since
 	}
+	isFullSync := since.IsZero()
 
-	cursor := ""
+	cursor := startCursor
 	total := 0
 
 	for {
@@ -125,21 +255,9 @@ func (w *worker) sync(ctx context.Context, since time.Time) (int, error) {
 			apiURL += "&cursor=" + cursor
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		body, err := w.doGet(ctx, apiURL)
 		if err != nil {
-			return total, err
-		}
-		req.Header.Set("Authorization", "Bearer "+w.zernioKey)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return total, fmt.Errorf("zernio fetch: %w", err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			return total, fmt.Errorf("zernio %d: %s", resp.StatusCode, string(body))
+			return total, fmt.Errorf("fetch conversations: %w", err)
 		}
 
 		var page struct {
@@ -177,6 +295,11 @@ func (w *worker) sync(ctx context.Context, since time.Time) (int, error) {
 			break
 		}
 		cursor = page.Pagination.NextCursor
+
+		// Persist cursor after each page so restarts can resume.
+		if isFullSync {
+			_ = w.setSetting(defaultTenantID, "worker_sync_cursor", cursor)
+		}
 	}
 	return total, nil
 }
@@ -232,8 +355,7 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 	return dbConvID, err
 }
 
-// syncMessages fetches all messages for a conversation from Zernio (paginated)
-// and upserts them into the messages table.
+// syncMessages fetches all messages for a conversation using the shared rate limiter.
 func (w *worker) syncMessages(ctx context.Context, zernioConvID, accountID, dbConvID string) error {
 	if accountID == "" {
 		return nil
@@ -247,21 +369,9 @@ func (w *worker) syncMessages(ctx context.Context, zernioConvID, accountID, dbCo
 			apiURL += "&cursor=" + url.QueryEscape(cursor)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Authorization", "Bearer "+w.zernioKey)
-
-		resp, err := http.DefaultClient.Do(req)
+		body, err := w.doGet(ctx, apiURL)
 		if err != nil {
 			return fmt.Errorf("fetch messages: %w", err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("zernio messages %d: %s", resp.StatusCode, string(body))
 		}
 
 		var page struct {
@@ -308,16 +418,13 @@ func (w *worker) upsertMessage(ctx context.Context, dbConvID string, msg zernioM
 		ts = time.Now().UTC()
 	}
 
-	// Preserve all attachment fields as raw JSON from Zernio.
 	attachmentsJSON := "[]"
 	if len(msg.Attachments) > 0 && string(msg.Attachments) != "null" {
 		attachmentsJSON = string(msg.Attachments)
 	}
 
-	// Derive content type: use Zernio's type field, fall back to text.
 	contentType := msg.Type
 	if contentType == "" {
-		// If attachments present, try to infer from first attachment type.
 		var attachList []struct {
 			Type string `json:"type"`
 		}
@@ -340,13 +447,41 @@ func (w *worker) upsertMessage(ctx context.Context, dbConvID string, msg zernioM
 		msg.ID, attachmentsJSON, ts,
 	).Scan(&msgID)
 	if err == sql.ErrNoRows {
-		// Row already existed — nothing to broadcast.
 		return nil
 	}
-	if err != nil {
-		return err
+	return err
+}
+
+// --- workspace_settings helpers ---
+
+func (w *worker) getSetting(tenantID, key string) (string, error) {
+	var value string
+	err := w.db.QueryRow(
+		`SELECT value FROM workspace_settings WHERE tenant_id = $1 AND key = $2`,
+		tenantID, key,
+	).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
 	}
-	return nil
+	return value, err
+}
+
+func (w *worker) setSetting(tenantID, key, value string) error {
+	_, err := w.db.Exec(
+		`INSERT INTO workspace_settings (tenant_id, key, value)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value`,
+		tenantID, key, value,
+	)
+	return err
+}
+
+func (w *worker) deleteSetting(tenantID, key string) error {
+	_, err := w.db.Exec(
+		`DELETE FROM workspace_settings WHERE tenant_id = $1 AND key = $2`,
+		tenantID, key,
+	)
+	return err
 }
 
 func firstNonEmpty(values ...string) string {
