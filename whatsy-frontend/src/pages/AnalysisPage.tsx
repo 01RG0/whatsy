@@ -217,6 +217,7 @@ interface WorkloadChartProps { agents: AgentStat[] }
 
 // Pure-CSS horizontal bar chart — no SVG axes so RTL Arabic renders perfectly
 function WorkloadChart({ agents }: WorkloadChartProps) {
+  const t = useT()
   const data = agents
     .filter((a) => a.id !== 'whatsapp-app')
     .map((a) => ({ id: a.id, name: a.name, avatar: a.avatar, conversations: a.conversationsHandled }))
@@ -229,6 +230,13 @@ function WorkloadChart({ agents }: WorkloadChartProps) {
 
   return (
     <div className="flex flex-col gap-3 py-1">
+      {/* Column header */}
+      <div className="flex items-center gap-3 pb-1 border-b border-gray-100 dark:border-[#222e35]">
+        <div className="w-7 shrink-0" />
+        <span className="w-24 shrink-0 text-xs text-gray-400 dark:text-[#8696a0]">{t.analysis_col_agent}</span>
+        <span className="flex-1 text-xs text-gray-400 dark:text-[#8696a0]">{t.analysis_col_chats}</span>
+        <span className="w-8 text-end text-xs text-gray-400 dark:text-[#8696a0]">#</span>
+      </div>
       {data.map((item, i) => {
         const pct = Math.max((item.conversations / max) * 100, item.conversations > 0 ? 4 : 0)
         const color = barColors[i % barColors.length]
@@ -618,8 +626,8 @@ export default function AnalysisPage() {
                 return (
                 <React.Fragment key={agent.id}>
                   <tr
-                    onClick={() => !isWhatsAppApp && setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
-                    className={`transition-colors ${isWhatsAppApp ? 'cursor-default' : 'hover:bg-gray-50 dark:hover:bg-[#182229] cursor-pointer'}`}
+                    onClick={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
+                    className="transition-colors hover:bg-gray-50 dark:hover:bg-[#182229] cursor-pointer"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -641,11 +649,11 @@ export default function AnalysisPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.messagesSent.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : agent.conversationsHandled.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{agent.conversationsHandled.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatActiveTime(agent.activeTimeSeconds)}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{isWhatsAppApp ? '—' : getWorkingHours(agent.activeHours ?? [])}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{getWorkingHours(agent.activeHours ?? [])}</td>
                     <td className="px-4 py-3 text-right">
-                      {!isWhatsAppApp && (
+                      {(
                         <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
                           <svg
                             className={`w-4 h-4 transition-transform ${expandedAgent === agent.id ? 'rotate-180' : ''}`}
@@ -657,7 +665,7 @@ export default function AnalysisPage() {
                       )}
                     </td>
                   </tr>
-                  {!isWhatsAppApp && expandedAgent === agent.id && (
+                  {expandedAgent === agent.id && (
                     <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
                       <td colSpan={6} className="px-5 py-3">
                         <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">{t.analysis_hourly_activity}</p>

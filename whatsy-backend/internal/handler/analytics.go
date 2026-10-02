@@ -506,24 +506,49 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		result = append(result, *statsMap[id])
 	}
 
-	// Q4: unattributed outbound messages (sent from WhatsApp app, not via Whatsy)
-	var unattributed int
+	// Q4: unattributed outbound messages (sent from WhatsApp app, not via Whatsy inbox)
+	// Also compute distinct conversations touched and hourly distribution for full stats.
+	var unattributed, unattribConvs int
 	h.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM messages
+		`SELECT COUNT(*), COUNT(DISTINCT conversation_id) FROM messages
 		 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
 		   AND timestamp >= $1 AND timestamp < $2
 		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
 		from, to, tenantID,
-	).Scan(&unattributed) //nolint:errcheck — zero is a safe default
+	).Scan(&unattributed, &unattribConvs) //nolint:errcheck — zero is a safe default
+
 	if unattributed > 0 {
+		// Build hourly breakdown for WhatsApp App messages
+		var waHours []activeHour
+		rows2, err2 := h.db.QueryContext(r.Context(),
+			`SELECT EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS h, COUNT(*) AS cnt
+			 FROM messages
+			 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
+			   AND timestamp >= $1 AND timestamp < $2
+			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+			 GROUP BY h ORDER BY h`,
+			from, to, tenantID,
+		)
+		if err2 == nil {
+			for rows2.Next() {
+				var ah activeHour
+				if rows2.Scan(&ah.Hour, &ah.Count) == nil {
+					waHours = append(waHours, ah)
+				}
+			}
+			rows2.Close()
+		}
+		if waHours == nil {
+			waHours = []activeHour{}
+		}
 		result = append(result, agentStatRow{
 			ID:                   "whatsapp-app",
 			Name:                 "WhatsApp App",
 			Avatar:               "",
 			MessagesSent:         unattributed,
-			ConversationsHandled: 0,
+			ConversationsHandled: unattribConvs,
 			ActiveTimeSeconds:    nil,
-			ActiveHours:          []activeHour{},
+			ActiveHours:          waHours,
 		})
 	}
 
