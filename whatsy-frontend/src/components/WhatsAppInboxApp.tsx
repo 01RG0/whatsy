@@ -75,11 +75,11 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
 
-  const totalUnread = useInboxStore((s) => s.totalUnread);
+  const totalUnanswered = useInboxStore((s) => s.conversations.filter(c => c.lastMessage?.direction === 'inbound').length);
 
   useEffect(() => {
-    document.title = totalUnread > 0 ? `(${totalUnread}) Whatsy` : 'Whatsy';
-  }, [totalUnread]);
+    document.title = totalUnanswered > 0 ? `(${totalUnanswered}) Whatsy` : 'Whatsy';
+  }, [totalUnanswered]);
 
   // Keep currentFilter/currentSearch in the store so WS handler can access them.
   useEffect(() => { setCurrentFilter(filter); }, [filter, setCurrentFilter]);
