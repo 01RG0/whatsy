@@ -235,6 +235,7 @@ func main() {
 		r.With(handler.RequireAdmin).Post("/v1/whatsapp/connection/test", waConnHandler.SendTest)
 		r.Get("/v1/sync/stream", syncHandler.Sync)
 		r.Post("/v1/sync", syncHandler.SyncJSON)
+		r.Get("/v1/sync/messages/stream", syncHandler.SyncMessagesStream)
 
 		// Labels
 		r.Get("/v1/labels", labelHandler.List)

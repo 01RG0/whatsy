@@ -358,6 +358,9 @@ export default function WhatsAppConnectionPage() {
   const [sync, setSync] = useState<SyncState>({ phase: 'idle', synced: 0, total: 0, percent: 0, message: '' })
   const syncAbortRef = useRef<AbortController | null>(null)
   const syncHadProgressRef = useRef(false)
+  const [msgSync, setMsgSync] = useState<SyncState>({ phase: 'idle', synced: 0, total: 0, percent: 0, message: '' })
+  const msgSyncAbortRef = useRef<AbortController | null>(null)
+  const msgSyncHadProgressRef = useRef(false)
 
   // Webhook/test panel (shown when a sender exists)
   const [showSecret, setShowSecret] = useState(false)
@@ -471,6 +474,47 @@ export default function WhatsAppConnectionPage() {
         setSync(s => ({ ...s, phase: 'background', message: 'Sync continues in background' }))
       } else {
         setSync(s => ({ ...s, phase: 'error', message: e instanceof Error ? e.message : 'Sync failed' }))
+      }
+    }
+  }
+
+  async function startMessageSync() {
+    if (msgSync.phase === 'syncing' || msgSync.phase === 'counting') return
+    msgSyncAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    msgSyncAbortRef.current = ctrl
+    msgSyncHadProgressRef.current = false
+    setMsgSync({ phase: 'counting', synced: 0, total: 0, percent: 0, message: 'Loading conversations…' })
+    try {
+      const res = await fetch(`${API_BASE}/v1/sync/messages/stream`, {
+        headers: getAuthHeader(),
+        signal: ctrl.signal,
+      })
+      if (!res.ok || !res.body) throw new Error('Message sync failed')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const ev = JSON.parse(line.slice(6))
+            if (ev.synced > 0) msgSyncHadProgressRef.current = true
+            setMsgSync({ phase: ev.phase, synced: ev.synced ?? 0, total: ev.total ?? 0, percent: ev.percent ?? 0, message: ev.message ?? '' })
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e: unknown) {
+      if ((e as Error)?.name === 'AbortError') return
+      if (msgSyncHadProgressRef.current) {
+        setMsgSync(s => ({ ...s, phase: 'background', message: 'Sync continues in background' }))
+      } else {
+        setMsgSync(s => ({ ...s, phase: 'error', message: e instanceof Error ? e.message : 'Sync failed' }))
       }
     }
   }
@@ -780,6 +824,66 @@ export default function WhatsAppConnectionPage() {
             {sync.message && sync.phase !== 'idle' && (
               <p className={`text-xs mt-1.5 ${sync.phase === 'error' ? 'text-red-500' : sync.phase === 'background' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-[#8696a0]'}`}>
                 {sync.message}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Message History Sync bar ── */}
+      {senders.length > 0 && (
+        <div className="px-6 mt-3">
+          <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-gray-500 dark:text-[#8696a0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                <span className="text-sm font-medium text-gray-900 dark:text-[#e9edef]">Message History</span>
+                {msgSync.phase === 'done' && (
+                  <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs rounded-full font-medium">
+                    {msgSync.synced} imported
+                  </span>
+                )}
+                {msgSync.phase === 'error' && (
+                  <span className="px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-500 text-xs rounded-full font-medium">Failed</span>
+                )}
+                {msgSync.phase === 'background' && (
+                  <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400 text-xs rounded-full font-medium">Running in background</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {(msgSync.phase === 'syncing' || msgSync.phase === 'counting') && (
+                  <span className="text-xs text-gray-400 dark:text-[#8696a0] tabular-nums">
+                    {msgSync.synced} msgs — {msgSync.percent}%
+                  </span>
+                )}
+                <button
+                  onClick={startMessageSync}
+                  disabled={msgSync.phase === 'syncing' || msgSync.phase === 'counting'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-200 dark:bg-[#1d2b32] text-gray-700 dark:text-[#aebac3] hover:bg-gray-300 dark:hover:bg-[#2a3942] disabled:opacity-50 transition-colors"
+                >
+                  {(msgSync.phase === 'syncing' || msgSync.phase === 'counting') ? (
+                    <><Spinner size={3} /> Syncing…</>
+                  ) : (
+                    <><svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Sync History</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {(msgSync.phase === 'syncing' || msgSync.phase === 'counting' || msgSync.phase === 'done') && (
+              <div className="w-full bg-gray-100 dark:bg-[#2a3942] rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${msgSync.phase === 'done' ? 'bg-emerald-500' : 'bg-gray-400 dark:bg-[#8696a0]'}`}
+                  style={{ width: `${msgSync.phase === 'counting' ? 5 : msgSync.percent}%` }}
+                />
+              </div>
+            )}
+
+            {msgSync.message && msgSync.phase !== 'idle' && (
+              <p className={`text-xs mt-1.5 ${msgSync.phase === 'error' ? 'text-red-500' : msgSync.phase === 'background' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-[#8696a0]'}`}>
+                {msgSync.message}
               </p>
             )}
           </div>
