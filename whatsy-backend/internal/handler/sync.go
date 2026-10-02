@@ -201,10 +201,15 @@ func (h *SyncHandler) fetchPage(ctx context.Context, url, key string) ([]byte, i
 }
 
 func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, key string, since time.Time, emit func(SyncProgress)) (int, error) {
+	syncMode := "full"
+	if !since.IsZero() {
+		syncMode = "incremental since " + since.Format(time.RFC3339)
+	}
+	log.Printf("[sync] starting %s sync for tenant=%s", syncMode, tenantID)
+
 	cursor := ""
 	total := 0
 	estimated := 0
-	// cutoff: use 'since' for incremental, 6 months ago for full sync
 	cutoff := time.Now().AddDate(0, -6, 0)
 	if !since.IsZero() {
 		cutoff = since
@@ -216,12 +221,15 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 		if cursor != "" {
 			url += "&cursor=" + cursor
 		}
+		log.Printf("[sync] fetching page %d (tenant=%s, synced=%d so far)", page+1, tenantID, total)
 
 		body, status, err := h.fetchPage(ctx, url, key)
 		if err != nil {
+			log.Printf("[sync] FAILED at page %d after syncing %d conversations (tenant=%s): %v", page+1, total, tenantID, err)
 			return total, err
 		}
 		if status >= 400 {
+			log.Printf("[sync] FAILED at page %d — Zernio returned HTTP %d (tenant=%s): %s", page+1, status, tenantID, string(body))
 			return total, fmt.Errorf("zernio error %d: %s", status, string(body))
 		}
 
@@ -233,6 +241,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			} `json:"pagination"`
 		}
 		if err := json.Unmarshal(body, &pageData); err != nil {
+			log.Printf("[sync] FAILED — could not decode page %d response (tenant=%s): %v | raw: %s", page+1, tenantID, err, string(body))
 			return total, fmt.Errorf("decode page: %w", err)
 		}
 
@@ -290,6 +299,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
+	log.Printf("[sync] done — synced %d conversations across %d pages (tenant=%s, mode=%s)", total, page, tenantID, syncMode)
 	return total, nil
 }
 
