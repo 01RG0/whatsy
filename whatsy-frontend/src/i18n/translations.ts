@@ -15,6 +15,9 @@ type Translations = {
   nav_dark_mode: string
   nav_change_password: string
   nav_sign_out: string
+  switch_account: string
+  add_account: string
+  accounts: string
   // Sidebar
   sidebar_chats: string
   sidebar_mark_all_read_title: string
@@ -185,6 +188,9 @@ export const en: Translations = {
   nav_dark_mode: 'Dark mode',
   nav_change_password: 'Change password',
   nav_sign_out: 'Sign out',
+  switch_account: 'Switch account',
+  add_account: 'Add account',
+  accounts: 'Accounts',
   sidebar_chats: 'Chats',
   sidebar_mark_all_read_title: 'Mark all as read',
   sidebar_new_chat_title: 'New Chat',
@@ -344,6 +350,9 @@ export const ar: Translations = {
   nav_dark_mode: 'الوضع الداكن',
   nav_change_password: 'تغيير كلمة المرور',
   nav_sign_out: 'تسجيل الخروج',
+  switch_account: 'تبديل الحساب',
+  add_account: 'إضافة حساب',
+  accounts: 'الحسابات',
   sidebar_chats: 'المحادثات',
   sidebar_mark_all_read_title: 'تحديد الكل كمقروء',
   sidebar_new_chat_title: 'محادثة جديدة',

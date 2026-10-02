@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore, WorkspaceSettings } from '../store/useSettingsStore'
 import AutoReplyPage from './AutoReplyPage'
-import { isAdmin } from '../lib/auth'
+import { isAdmin, getCurrentAgent, logoutCurrentAccount } from '../lib/auth'
 import { useT } from '../i18n/translations'
 import { useLanguageStore } from '../store/useLanguageStore'
 import { useDarkModeStore } from '../store/useDarkModeStore'
 import { API_BASE, getAuthHeader } from '../api/inbox'
+import { AccountSwitcherModal } from '../components/AccountSwitcherModal'
 
 // ─── Feature definitions ────────────────────────────────────────────────────
 
@@ -344,11 +345,18 @@ function IntegrationsSection() {
 type Tab = 'features' | 'automation' | 'appearance' | 'integrations'
 
 export default function SettingsPage() {
+  const t = useT()
   const [tab, setTab] = useState<Tab>('features')
   const { fetch, loading } = useSettingsStore()
+  const [currentAgent, setCurrentAgent] = useState(() => getCurrentAgent())
+  const [showAccountSwitcher, setShowAccountSwitcher] = useState(false)
+  const agentInitials = currentAgent?.name ? currentAgent.name.slice(0, 2).toUpperCase() : '?'
 
   useEffect(() => {
     fetch()
+    const syncAgent = () => setCurrentAgent(getCurrentAgent())
+    window.addEventListener('whatsy_agent_updated', syncAgent)
+    return () => window.removeEventListener('whatsy_agent_updated', syncAgent)
   }, [fetch])
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
@@ -362,18 +370,61 @@ export default function SettingsPage() {
     <div className="flex flex-col h-full bg-[#f0f2f5] dark:bg-[#0b1014] overflow-hidden">
       {/* Header */}
       <div className="bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-6 py-4 shrink-0">
-        <h1 className="text-lg font-bold text-gray-900 dark:text-[#e9edef]">Settings</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-[#e9edef]">{t.nav_settings}</h1>
         <p className="text-sm text-gray-500 dark:text-[#8696a0] mt-0.5">Manage workspace features and preferences</p>
       </div>
 
+      {/* User Account / Profile Card */}
+      {currentAgent && (
+        <div className="bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm">
+              {agentInitials}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-900 dark:text-[#e9edef] truncate">{currentAgent.name}</span>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#2a3942] text-gray-600 dark:text-[#aebac1]">
+                  {currentAgent.role}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-[#8696a0] truncate">{currentAgent.email}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAccountSwitcher(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#00a884] hover:bg-[#008f72] text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span>{t.switch_account || 'Switch Account'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => logoutCurrentAccount()}
+              className="px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+              title="Sign out"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span className="hidden sm:inline">{t.nav_sign_out || 'Sign out'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab bar */}
-      <div className="bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-6 flex gap-1 shrink-0">
+      <div className="bg-white dark:bg-[#111b21] border-b border-gray-200 dark:border-[#222e35] px-6 flex gap-1 shrink-0 overflow-x-auto">
         {tabs.map(t => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               tab === t.id
                 ? 'border-[#00a884] text-[#00a884]'
                 : 'border-transparent text-gray-500 dark:text-[#8696a0] hover:text-gray-700 dark:hover:text-[#e9edef]'
@@ -416,6 +467,12 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Account switcher modal */}
+      <AccountSwitcherModal
+        isOpen={showAccountSwitcher}
+        onClose={() => setShowAccountSwitcher(false)}
+      />
     </div>
   )
 }

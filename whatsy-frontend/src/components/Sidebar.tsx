@@ -10,6 +10,8 @@ import { useDarkModeStore } from '../store/useDarkModeStore';
 import { useLabelStore } from '../store/useLabelStore';
 import { LabelManager } from './LabelManager';
 import { searchMessages, MessageSearchResult } from '../api/inbox';
+import { AccountSwitcherModal } from './AccountSwitcherModal';
+import { getCurrentAgent, logoutCurrentAccount } from '../lib/auth';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -104,6 +106,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showNewChat, setShowNewChat] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
+  const [currentAgent, setCurrentAgent] = useState(() => getCurrentAgent());
+  const agentInitials = currentAgent?.name ? currentAgent.name.slice(0, 2).toUpperCase() : '?';
+
+  useEffect(() => {
+    const syncAgent = () => setCurrentAgent(getCurrentAgent());
+    window.addEventListener('whatsy_agent_updated', syncAgent);
+    return () => window.removeEventListener('whatsy_agent_updated', syncAgent);
+  }, []);
   const [newChatSearch, setNewChatSearch] = useState('');
   const [localInput, setLocalInput] = useState(searchQuery);
   const [messageResults, setMessageResults] = useState<MessageSearchResult[]>([]);
@@ -228,6 +239,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               {lang === 'en' ? 'ع' : 'EN'}
             </button>
+            {/* Mobile User Profile Button */}
+            {currentAgent && (
+              <button
+                type="button"
+                onClick={() => setShowAccountSwitcher(true)}
+                title={currentAgent.name}
+                className="w-7 h-7 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold transition hover:opacity-90 active:scale-95 shadow-sm shrink-0 ms-0.5 cursor-pointer"
+              >
+                {agentInitials}
+              </button>
+            )}
           </div>
         </div>
 
@@ -275,13 +297,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {showMenu && (
-          <div ref={menuRef} className="absolute end-3 top-12 z-40 w-56 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl">
+          <div ref={menuRef} className="absolute end-3 top-12 z-40 w-64 rounded-xl border border-[#e9edef] dark:border-[#374151] bg-white dark:bg-[#202c33] p-1.5 shadow-xl animate-in fade-in">
+            {currentAgent && (
+              <div
+                onClick={() => { setShowMenu(false); setShowAccountSwitcher(true); }}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#182229] mb-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2a3942] transition"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+                  {agentInitials}
+                </div>
+                <div className="min-w-0 flex-1 text-start">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-[#e9edef] truncate leading-tight">{currentAgent.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-[#8696a0] truncate">{currentAgent.email}</p>
+                </div>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-200 dark:bg-[#2a3942] text-gray-600 dark:text-[#aebac1]">
+                  {currentAgent.role}
+                </span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => { setShowMenu(false); setShowAccountSwitcher(true); }}
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] font-medium"
+            >
+              <svg className="w-4 h-4 text-[#00a884]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span>{t.switch_account || 'Switch account'}</span>
+            </button>
+            <div className="my-1 border-t border-[#e9edef] dark:border-[#374151]" />
             <button type="button" onClick={() => { onRefresh?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_refresh}</button>
             <button type="button" onClick={() => { onMarkAllRead?.(); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_mark_all_read}</button>
             <button type="button" onClick={() => { window.location.assign('/settings') }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">{t.sidebar_open_settings}</button>
             <button type="button" onClick={() => { setShowLabelManager(true); setShowMenu(false) }} className="w-full rounded-lg px-3 py-2 text-start text-sm text-gray-700 dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942]">Manage labels</button>
             <div className="my-1 border-t border-[#e9edef] dark:border-[#374151]" />
-            <p className="px-3 py-2 text-xs text-gray-400 dark:text-[#8696a0]">{t.sidebar_export_unavailable}</p>
+            <button
+              type="button"
+              onClick={() => { setShowMenu(false); logoutCurrentAccount(); }}
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-start text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>{t.nav_sign_out || 'Sign out'}</span>
+            </button>
           </div>
         )}
       </header>
@@ -574,6 +633,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     {/* Label manager modal */}
     {showLabelManager && <LabelManager onClose={() => setShowLabelManager(false)} />}
+
+    {/* Account switcher modal */}
+    <AccountSwitcherModal
+      isOpen={showAccountSwitcher}
+      onClose={() => setShowAccountSwitcher(false)}
+    />
   </>
   );
 };

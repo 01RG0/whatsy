@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { navigate } from '../App'
-import { getCurrentAgent } from '../lib/auth'
+import { getCurrentAgent, getSavedAccounts, switchAccount, logoutCurrentAccount } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import { useInboxStore } from '../store/useInboxStore'
 import { useLanguageStore } from '../store/useLanguageStore'
@@ -182,10 +182,6 @@ export default function NavBar({ path }: { path: string }) {
   const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
 
-  type SavedAccount = { id: string; name: string; email: string; avatar: string; role: string; token: string }
-  const getSavedAccounts = (): SavedAccount[] => {
-    try { return JSON.parse(localStorage.getItem('whatsy_accounts') || '[]') } catch { return [] }
-  }
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
   const totalUnread = useInboxStore(s => s.conversations.filter(c => c.lastMessage?.direction === 'inbound').length)
   const activeConversationId = useInboxStore(s => s.activeConversationId)
@@ -207,24 +203,6 @@ export default function NavBar({ path }: { path: string }) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showAccountMenu])
-
-  const handleLogout = () => {
-    const accounts = getSavedAccounts().filter(a => a.id !== agent?.id)
-    localStorage.setItem('whatsy_accounts', JSON.stringify(accounts))
-    localStorage.removeItem('whatsy_jwt')
-    localStorage.removeItem('whatsy_agent')
-    if (accounts.length > 0) {
-      localStorage.setItem('whatsy_jwt', accounts[0].token)
-      localStorage.setItem('whatsy_agent', JSON.stringify({ id: accounts[0].id, name: accounts[0].name, email: accounts[0].email, avatar: accounts[0].avatar, role: accounts[0].role }))
-    }
-    window.location.href = accounts.length > 0 ? '/' : '/login'
-  }
-
-  const handleSwitchAccount = (acc: { id: string; name: string; email: string; avatar: string; role: string; token: string }) => {
-    localStorage.setItem('whatsy_jwt', acc.token)
-    localStorage.setItem('whatsy_agent', JSON.stringify({ id: acc.id, name: acc.name, email: acc.email, avatar: acc.avatar, role: acc.role }))
-    window.location.href = '/'
-  }
 
   return (
     <>
@@ -288,7 +266,7 @@ export default function NavBar({ path }: { path: string }) {
                       <button
                         key={acc.id}
                         type="button"
-                        onClick={() => { if (!isActive) handleSwitchAccount(acc); else setShowAccountMenu(false) }}
+                        onClick={() => { if (!isActive) switchAccount(acc); else setShowAccountMenu(false) }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
                       >
                         <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -329,7 +307,7 @@ export default function NavBar({ path }: { path: string }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowAccountMenu(false); handleLogout() }}
+                      onClick={() => { setShowAccountMenu(false); logoutCurrentAccount() }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors text-red-500"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
