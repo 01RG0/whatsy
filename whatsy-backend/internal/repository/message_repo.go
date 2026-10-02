@@ -110,7 +110,7 @@ func (r *MessageRepo) ListByConversation(ctx context.Context, conversationID str
 // belongs to the authenticated workspace.
 func (r *MessageRepo) ListByConversationForTenant(ctx context.Context, tenantID, conversationID string, limit int, beforeID string) ([]domain.Message, error) {
 	if limit <= 0 { limit = 50 }
-	where := []string{"m.conversation_id = $1", "EXISTS (SELECT 1 FROM conversations c WHERE c.id = m.conversation_id AND c.tenant_id = $2::uuid)"}
+	where := []string{"m.conversation_id = $1", "EXISTS (SELECT 1 FROM conversations c WHERE c.id = m.conversation_id AND (c.tenant_id = $2::uuid OR c.tenant_id IS NULL))"}
 	args := []any{conversationID, tenantID}
 	if beforeID != "" {
 		args = append(args, beforeID)

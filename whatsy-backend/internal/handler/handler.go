@@ -9,8 +9,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/whatsy/backend/internal/config"
@@ -63,12 +65,36 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	tenantID, ok := TenantIDFromContext(r.Context())
 	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
-	messages, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, chi.URLParam(r, "id"), queryLimit(r, 100), r.URL.Query().Get("before"))
+	convID := chi.URLParam(r, "id")
+	messages, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, convID, queryLimit(r, 100), r.URL.Query().Get("before"))
 	if err != nil {
-		log.Printf("list messages for conversation %s: %v", chi.URLParam(r, "id"), err)
+		log.Printf("list messages for conversation %s: %v", convID, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list messages"})
 		return
 	}
+
+	// If no messages exist in local DB (e.g. older conversation where worker only synced metadata),
+	// fetch message history on-demand from Zernio and reload.
+	if len(messages) == 0 && r.URL.Query().Get("before") == "" {
+		var zernioConvID, accountID string
+		_ = h.db.QueryRowContext(r.Context(),
+			`SELECT COALESCE(c.zernio_conversation_id, ''),
+			        COALESCE(wc.account_id, '')
+			 FROM conversations c
+			 LEFT JOIN whatsapp_connections wc ON (wc.tenant_id = c.tenant_id OR c.tenant_id IS NULL) AND wc.status = 'connected'
+			 WHERE c.id = $1::uuid
+			 ORDER BY wc.id DESC LIMIT 1`,
+			convID,
+		).Scan(&zernioConvID, &accountID)
+
+		if zernioConvID != "" {
+			h.syncConversationOnDemand(r.Context(), tenantID, convID, zernioConvID, accountID)
+			if reloaded, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, convID, queryLimit(r, 100), ""); err == nil && len(reloaded) > 0 {
+				messages = reloaded
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, messages)
 }
 
@@ -410,10 +436,163 @@ func (h *Handler) requireConversationTenant(w http.ResponseWriter, r *http.Reque
 	tenantID, ok := TenantIDFromContext(r.Context())
 	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return false }
 	var exists bool
-	err := h.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND tenant_id = $2::uuid)`, conversationID, tenantID).Scan(&exists)
+	err := h.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND (tenant_id = $2::uuid OR tenant_id IS NULL))`, conversationID, tenantID).Scan(&exists)
 	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "verify conversation access"}); return false }
 	if !exists { writeJSON(w, http.StatusNotFound, map[string]string{"error": "conversation not found"}); return false }
+	_, _ = h.db.ExecContext(r.Context(), `UPDATE conversations SET tenant_id = $2::uuid WHERE id = $1 AND tenant_id IS NULL`, conversationID, tenantID)
 	return true
+}
+
+func (h *Handler) getZernioKey(ctx context.Context, tenantID string) string {
+	var value sql.NullString
+	_ = h.db.QueryRowContext(ctx,
+		`SELECT value FROM workspace_settings WHERE tenant_id = $1 AND key = 'zernio_api_key'`,
+		tenantID,
+	).Scan(&value)
+	if value.Valid && value.String != "" {
+		return value.String
+	}
+	return h.cfg.ZernioAPIKey
+}
+
+func (h *Handler) syncConversationOnDemand(ctx context.Context, tenantID, dbConvID, zernioConvID, accountID string) {
+	if zernioConvID == "" {
+		return
+	}
+	key := h.getZernioKey(ctx, tenantID)
+	if key == "" {
+		return
+	}
+
+	apiURL := "https://zernio.com/api/v1/inbox/conversations/" + url.PathEscape(zernioConvID) + "/messages?limit=100"
+	if accountID != "" {
+		apiURL += "&accountId=" + url.QueryEscape(accountID)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		log.Printf("[on-demand-sync] create request failed: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("[on-demand-sync] fetch messages failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[on-demand-sync] zernio http %d: %s", resp.StatusCode, string(body))
+		return
+	}
+
+	var pageData struct {
+		Messages []struct {
+			ID             string          `json:"id"`
+			ConversationID string          `json:"conversationId"`
+			Message        string          `json:"message"`
+			Type           string          `json:"type"`
+			Direction      string          `json:"direction"`
+			DeliveryStatus string          `json:"deliveryStatus"`
+			SentAt         time.Time       `json:"sentAt"`
+			CreatedAt      time.Time       `json:"createdAt"`
+			Attachments    json.RawMessage `json:"attachments"`
+			Contacts       []struct {
+				Name struct {
+					FormattedName string `json:"formatted_name"`
+				} `json:"name"`
+				Phones []struct {
+					Phone string `json:"phone"`
+					WaID  string `json:"wa_id"`
+				} `json:"phones"`
+			} `json:"contacts"`
+			Metadata struct {
+				QuotedMessageID string `json:"quotedMessageId"`
+			} `json:"metadata"`
+		} `json:"messages"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&pageData); err != nil {
+		log.Printf("[on-demand-sync] decode messages failed: %v", err)
+		return
+	}
+
+	for _, msg := range pageData.Messages {
+		if msg.ID == "" {
+			continue
+		}
+		direction := "inbound"
+		if msg.Direction == "outgoing" {
+			direction = "outbound"
+		}
+		status := msg.DeliveryStatus
+		if status == "" {
+			status = "sent"
+		}
+		ts := msg.SentAt
+		if ts.IsZero() {
+			ts = msg.CreatedAt
+		}
+		if ts.IsZero() {
+			ts = time.Now().UTC()
+		}
+
+		contentType := msg.Type
+		if contentType == "" {
+			var attachList []struct {
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(msg.Attachments, &attachList) == nil && len(attachList) > 0 && attachList[0].Type != "" {
+				contentType = attachList[0].Type
+			}
+		}
+		if contentType == "" {
+			contentType = "text"
+		}
+
+		content := msg.Message
+		contactPhone := ""
+		if contentType == "contacts" && len(msg.Contacts) > 0 {
+			c := msg.Contacts[0]
+			if content == "" && c.Name.FormattedName != "" {
+				content = c.Name.FormattedName
+			}
+			if len(c.Phones) > 0 {
+				if c.Phones[0].Phone != "" {
+					contactPhone = c.Phones[0].Phone
+				} else if c.Phones[0].WaID != "" {
+					contactPhone = c.Phones[0].WaID
+				}
+			}
+		}
+
+		attachmentsJSON := "[]"
+		if len(msg.Attachments) > 0 && string(msg.Attachments) != "null" {
+			attachmentsJSON = string(msg.Attachments)
+		}
+
+		var replyToJSON any
+		if msg.Metadata.QuotedMessageID != "" {
+			type replyToPayload struct {
+				ID string `json:"id"`
+			}
+			if b, err := json.Marshal(replyToPayload{ID: msg.Metadata.QuotedMessageID}); err == nil {
+				replyToJSON = string(b)
+			}
+		}
+
+		_, _ = h.db.ExecContext(ctx,
+			`INSERT INTO messages
+			    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, reply_to, contact_phone)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10)
+			 ON CONFLICT (zernio_message_id) DO NOTHING`,
+			dbConvID, direction, contentType, content, status, msg.ID, attachmentsJSON, ts, replyToJSON, contactPhone,
+		)
+	}
 }
 
 func firstNonEmpty(values ...string) string {

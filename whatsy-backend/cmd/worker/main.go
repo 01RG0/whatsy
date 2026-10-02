@@ -295,11 +295,11 @@ func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) 
 				log.Printf("upsert conv %s: %v", conv.ID, err)
 				continue
 			}
-			// Only sync messages for conversations active in the last 48h.
+			// Sync messages for conversations active in the last 30 days.
 			// Older conversations have their metadata updated via upsertConversation;
 			// full message history is fetched on-demand when an agent opens the chat.
 			if conv.UpdatedTime != "" {
-				if t, err := time.Parse(time.RFC3339, conv.UpdatedTime); err == nil && time.Since(t) < 48*time.Hour {
+				if t, err := time.Parse(time.RFC3339, conv.UpdatedTime); err == nil && time.Since(t) < 30*24*time.Hour {
 					if err := w.syncMessages(ctx, conv.ID, conv.AccountID, dbConvID); err != nil {
 						log.Printf("sync messages %s: %v", conv.ID, err)
 					}
@@ -336,15 +336,17 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 
 	var studentID string
 	err := w.db.QueryRowContext(ctx,
-		`INSERT INTO students (name, phone, avatar_url, created_at, updated_at)
-		 VALUES ($1, $2, $3, NOW(), NOW())
+		`INSERT INTO students (name, phone, avatar_url, tenant_id, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4::uuid, NOW(), NOW())
 		 ON CONFLICT (phone) DO UPDATE
 		   SET name = EXCLUDED.name,
 		       avatar_url = CASE WHEN EXCLUDED.avatar_url IS NOT NULL AND EXCLUDED.avatar_url != '' THEN EXCLUDED.avatar_url ELSE students.avatar_url END,
+		       tenant_id = COALESCE(students.tenant_id, EXCLUDED.tenant_id),
 		       updated_at = NOW()
 		 RETURNING id`,
 		name, phone,
 		sql.NullString{String: conv.ParticipantPicture, Valid: conv.ParticipantPicture != ""},
+		defaultTenantID,
 	).Scan(&studentID)
 	if err != nil {
 		return "", fmt.Errorf("upsert student: %w", err)
@@ -360,14 +362,15 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 	var dbConvID string
 	err = w.db.QueryRowContext(ctx,
 		`INSERT INTO conversations
-		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
-		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, NOW(), NOW())
+		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, tenant_id, created_at, updated_at)
+		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, $6::uuid, NOW(), NOW())
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
 		    SET last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
+		        tenant_id       = COALESCE(conversations.tenant_id, EXCLUDED.tenant_id),
 		        updated_at      = NOW()
 		 RETURNING id`,
-		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID,
+		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID, defaultTenantID,
 	).Scan(&dbConvID)
 	return dbConvID, err
 }
