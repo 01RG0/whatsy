@@ -71,6 +71,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [listRows, setListRows] = useState([{ title: '', description: '' }]);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const docFileInputRef = useRef<HTMLInputElement>(null);
+  const audioFileInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -238,6 +239,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setShowAttachMenu(false);
     if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
     if (docFileInputRef.current) docFileInputRef.current.value = '';
+    if (audioFileInputRef.current) audioFileInputRef.current.value = '';
 
     if (attachmentType === 'image') {
       setAnnotatorFile(file);
@@ -411,7 +413,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Hidden file inputs for Photos & Videos and Documents */}
       <input ref={mediaFileInputRef} type="file" accept="image/*,video/*" onChange={handleFileUpload} className="hidden" />
-      <input ref={docFileInputRef} type="file" accept="application/*,audio/*,text/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.zip,.rar,.7z" onChange={handleFileUpload} className="hidden" />
+      <input ref={docFileInputRef} type="file" accept="application/*,text/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.zip,.rar,.7z" onChange={handleFileUpload} className="hidden" />
+      <input ref={audioFileInputRef} type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
 
       {/* Input Row */}
       <div className="flex items-end gap-2">
@@ -482,7 +485,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               {!text.trim() && (
                 <div className="flex items-end gap-3 shrink-0 pb-0.5">
                   {/* Paperclip + its popover — co-located so popover anchors to the button */}
-                  <div className="relative mb-1" ref={attachMenuRef}>
+                  <div className="relative" ref={attachMenuRef}>
                     <button
                       type="button"
                       onClick={() => setShowAttachMenu((p) => !p)}
@@ -506,6 +509,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
                           <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
                           <span>{t.document}</span>
+                        </button>
+                        <button type="button" onClick={() => { setShowAttachMenu(false); audioFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
+                          <span className="w-8 h-8 rounded-full bg-[#e67e22] flex items-center justify-center text-white">🎵</span>
+                          <span>Audio</span>
                         </button>
                         {interactiveEnabled && (
                           <button
