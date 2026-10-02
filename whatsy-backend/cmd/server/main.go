@@ -109,8 +109,9 @@ func main() {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		if err := db.PingContext(ctx); err != nil {
+			log.Printf("health: db ping failed: %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{"status": "db_down", "error": err.Error()})
+			json.NewEncoder(w).Encode(map[string]string{"status": "db_down"})
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
