@@ -123,6 +123,11 @@ func (h *SyncHandler) Sync(w http.ResponseWriter, r *http.Request) {
 
 	emit(SyncProgress{Phase: "counting", Message: "Counting conversations in Zernio…"})
 
+	// Proactively close the SSE stream after 25s — before Railway's 30s proxy
+	// timeout kills the TCP connection, which would leave the browser with a
+	// network error instead of a clean "background" event.
+	streamTimer := time.NewTimer(25 * time.Second)
+	defer streamTimer.Stop()
 	for {
 		select {
 		case p, ok := <-progressCh:
@@ -130,6 +135,10 @@ func (h *SyncHandler) Sync(w http.ResponseWriter, r *http.Request) {
 				return // goroutine done
 			}
 			emit(p)
+		case <-streamTimer.C:
+			// Proactively close before Railway's 30s proxy timeout.
+			emit(SyncProgress{Phase: "background", Message: "Sync continues in background"})
+			return
 		case <-r.Context().Done():
 			// Client disconnected — sync continues in background goroutine.
 			emit(SyncProgress{Phase: "background", Message: "Sync continues in background"})

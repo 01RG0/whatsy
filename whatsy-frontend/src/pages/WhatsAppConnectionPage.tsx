@@ -357,6 +357,7 @@ export default function WhatsAppConnectionPage() {
   const [disconnecting, setDisconnecting] = useState(false)
   const [sync, setSync] = useState<SyncState>({ phase: 'idle', synced: 0, total: 0, percent: 0, message: '' })
   const syncAbortRef = useRef<AbortController | null>(null)
+  const syncHadProgressRef = useRef(false)
 
   // Webhook/test panel (shown when a sender exists)
   const [showSecret, setShowSecret] = useState(false)
@@ -435,6 +436,7 @@ export default function WhatsAppConnectionPage() {
     syncAbortRef.current?.abort()
     const ctrl = new AbortController()
     syncAbortRef.current = ctrl
+    syncHadProgressRef.current = false
     setSync({ phase: 'counting', synced: 0, total: 0, percent: 0, message: 'Connecting to Zernio…' })
     try {
       const res = await fetch(`${API_BASE}/v1/sync/stream`, {
@@ -456,13 +458,20 @@ export default function WhatsAppConnectionPage() {
           try {
             const ev = JSON.parse(line.slice(6))
             if (ev.phase === 'done') localStorage.setItem(SYNC_KEY, new Date().toISOString())
+            if (ev.synced > 0) syncHadProgressRef.current = true
             setSync({ phase: ev.phase, synced: ev.synced ?? 0, total: ev.total ?? 0, percent: ev.percent ?? 0, message: ev.message ?? '' })
           } catch { /* ignore */ }
         }
       }
     } catch (e: unknown) {
       if ((e as Error)?.name === 'AbortError') return
-      setSync(s => ({ ...s, phase: 'error', message: e instanceof Error ? e.message : 'Sync failed' }))
+      if (syncHadProgressRef.current) {
+        // Network error after partial progress — Railway likely killed the TCP
+        // connection at 30s. Treat as background rather than error.
+        setSync(s => ({ ...s, phase: 'background', message: 'Sync continues in background' }))
+      } else {
+        setSync(s => ({ ...s, phase: 'error', message: e instanceof Error ? e.message : 'Sync failed' }))
+      }
     }
   }
 
