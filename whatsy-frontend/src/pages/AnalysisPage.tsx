@@ -271,13 +271,15 @@ function HourlyChart({ activeHours }: HourlyChartProps) {
   )
 }
 
-// Derive first-active and last-active hours from activeHours array, formatted in Cairo time
+// Find the peak 2-hour window (busiest stretch) from activeHours, formatted in Cairo time
 function getWorkingHours(activeHours: ActiveHour[]): string {
   const active = activeHours.filter((h) => h.count > 0)
   if (!active.length) return '—'
-  const min = Math.min(...active.map((h) => h.hour))
-  const max = Math.max(...active.map((h) => h.hour))
-  return `${utcHourToCairo(min)} – ${utcHourToCairo(max)}`
+  // Find the hour with the highest message count, then show ±1h window around it
+  const peak = active.reduce((a, b) => (a.count >= b.count ? a : b))
+  const start = Math.max(0, peak.hour - 1)
+  const end = Math.min(23, peak.hour + 1)
+  return `${utcHourToCairo(start)} – ${utcHourToCairo(end)}`
 }
 
 function AgentInitials({ name }: { name: string }) {
