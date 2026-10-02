@@ -33,6 +33,10 @@ type Translations = {
   filter_unread: string
   filter_unanswered: string
   filter_mine: string
+  filter_numbers_only: string
+  search_messages_section: string
+  search_chats_section: string
+  search_no_results: string
   sidebar_no_conversations: string
   // ChatWindow
   chatwindow_empty_heading: string
@@ -189,6 +193,10 @@ export const en: Translations = {
   filter_unread: 'Unread',
   filter_unanswered: 'Unanswered',
   filter_mine: 'Mine',
+  filter_numbers_only: 'Numbers only',
+  search_messages_section: 'Messages',
+  search_chats_section: 'Chats',
+  search_no_results: 'No results found',
   sidebar_no_conversations: 'No conversations found',
   chatwindow_empty_heading: 'WhatsApp for Web & Zernio Inbox',
   chatwindow_empty_body: 'Send and receive real-time messages across WhatsApp, multi-agent teams, and cloud channels without keeping your phone connected.',
@@ -335,6 +343,10 @@ export const ar: Translations = {
   filter_unread: 'غير مقروء',
   filter_unanswered: 'بلا رد',
   filter_mine: 'لي',
+  filter_numbers_only: 'أرقام فقط',
+  search_messages_section: 'الرسائل',
+  search_chats_section: 'المحادثات',
+  search_no_results: 'لم يتم العثور على نتائج',
   sidebar_no_conversations: 'لا توجد محادثات',
   chatwindow_empty_heading: 'واتساب للويب وZernio Inbox',
   chatwindow_empty_body: 'أرسل واستقبل الرسائل في الوقت الفعلي عبر واتساب وفرق متعددة وقنوات سحابية دون الحاجة إلى توصيل هاتفك.',

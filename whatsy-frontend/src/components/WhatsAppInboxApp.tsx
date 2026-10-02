@@ -36,6 +36,8 @@ export const WhatsAppInboxApp: React.FC = () => {
 
   const [filter, setFilter] = useState<ConversationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState<'all' | 'numbers'>('all');
+  const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
   const [activeLabelId, setActiveLabelId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
 
@@ -89,7 +91,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   useEffect(() => {
     setHasMoreConversations(true);
     import('../api/inbox').then(({ getConversations }) => {
-      getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined)
+      getConversations(filter, searchQuery, 100, undefined, activeLabelId ?? undefined, searchType)
         .then((convs) => {
           convs.forEach((conv) => {
             if (conv.lastMessage?.direction === 'outbound' && conv.unreadCount > 0) {
@@ -103,7 +105,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         })
         .catch((err) => console.error('[WhatsAppInboxApp] fetch conversations:', err));
     });
-  }, [filter, searchQuery, activeLabelId, setConversations]);
+  }, [filter, searchQuery, searchType, activeLabelId, setConversations]);
 
   // Reload message history when switching conversations.
   // Use mergeMessages (not setMessages) so any realtime messages that arrived
@@ -377,11 +379,17 @@ export const WhatsAppInboxApp: React.FC = () => {
   const filteredConversations = conversations.filter((c) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      if (!(
-        c.participant?.displayName?.toLowerCase().includes(q) ||
-        c.participant?.phoneNumber?.toLowerCase().includes(q) ||
-        c.lastMessage?.content?.toLowerCase().includes(q)
-      )) return false;
+      if (searchType === 'numbers') {
+        const cleanQuery = q.replace(/\D/g, '');
+        const phone = (c.participant?.phoneNumber || '').replace(/\D/g, '');
+        if (!phone.includes(cleanQuery)) return false;
+      } else {
+        if (!(
+          c.participant?.displayName?.toLowerCase().includes(q) ||
+          c.participant?.phoneNumber?.toLowerCase().includes(q) ||
+          c.lastMessage?.content?.toLowerCase().includes(q)
+        )) return false;
+      }
     }
     if (filter === 'unread') return ((c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread) && (!c.lastMessage?.direction || c.lastMessage.direction === 'inbound');
     if (filter === 'unanswered') return !c.lastMessage?.direction || c.lastMessage.direction === 'inbound';
@@ -404,6 +412,15 @@ export const WhatsAppInboxApp: React.FC = () => {
       openChatOnMobile();
     },
     [setActiveConversation, updateConversation, openChatOnMobile]
+  );
+
+  const handleSelectMessageResult = useCallback(
+    (convId: string, messageId: string) => {
+      setActiveConversation(convId);
+      setTargetMessageId(messageId);
+      openChatOnMobile();
+    },
+    [setActiveConversation, openChatOnMobile]
   );
 
   const handleSendMessage = useCallback(
@@ -580,6 +597,9 @@ export const WhatsAppInboxApp: React.FC = () => {
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
           onBulkAssignLabel={handleBulkAssignLabel}
+          searchType={searchType}
+          onSearchTypeChange={setSearchType}
+          onSelectMessageResult={handleSelectMessageResult}
         />
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>
@@ -588,6 +608,8 @@ export const WhatsAppInboxApp: React.FC = () => {
           conversation={activeConversation}
           messages={currentMessages}
           isLoadingMessages={isLoadingMessages}
+          initialTargetMessageId={targetMessageId}
+          onClearInitialTargetMessageId={() => setTargetMessageId(null)}
           onSendMessage={handleSendMessage}
           onRetryMessage={handleRetryMessage}
           viewers={activeViewers}

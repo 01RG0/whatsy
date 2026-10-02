@@ -8,7 +8,8 @@ import { useT } from '../i18n/translations';
 import { useLanguageStore } from '../store/useLanguageStore';
 import { useDarkModeStore } from '../store/useDarkModeStore';
 import { useLabelStore } from '../store/useLabelStore';
-import { LabelManager } from './LabelManager'
+import { LabelManager } from './LabelManager';
+import { searchMessages, MessageSearchResult } from '../api/inbox';
 
 interface SidebarProps {
   conversations: ZernioConversation[];
@@ -38,6 +39,9 @@ interface SidebarProps {
   onSelectAll?: () => void;
   onClearSelection?: () => void;
   onBulkAssignLabel?: (labelId: string) => void;
+  searchType?: 'all' | 'numbers';
+  onSearchTypeChange?: (type: 'all' | 'numbers') => void;
+  onSelectMessageResult?: (conversationId: string, messageId: string) => void;
 }
 
 /** Wrap matched portions of `text` in <mark> tags, case-insensitive. */
@@ -88,6 +92,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectAll,
   onClearSelection,
   onBulkAssignLabel,
+  searchType = 'all',
+  onSearchTypeChange,
+  onSelectMessageResult,
 }) => {
   const t = useT();
   const { lang, setLang } = useLanguageStore();
@@ -98,9 +105,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showMenu, setShowMenu] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [newChatSearch, setNewChatSearch] = useState('');
+  const [localInput, setLocalInput] = useState(searchQuery);
+  const [messageResults, setMessageResults] = useState<MessageSearchResult[]>([]);
+  const [isSearchingMessages, setIsSearchingMessages] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Sync external searchQuery changes (e.g. resets)
+  useEffect(() => {
+    setLocalInput(searchQuery);
+  }, [searchQuery]);
+
+  // Debounced search query propagation (250ms) for snappy typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localInput !== searchQuery) {
+        onSearchChange(localInput);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [localInput, searchQuery, onSearchChange]);
+
+  // Debounced deep message content search when in 'all' mode
+  useEffect(() => {
+    const q = localInput.trim();
+    if (searchType === 'numbers' || q.length < 2) {
+      setMessageResults([]);
+      setIsSearchingMessages(false);
+      return;
+    }
+    setIsSearchingMessages(true);
+    const timer = setTimeout(() => {
+      searchMessages(q, undefined, 30)
+        .then((res) => setMessageResults(res))
+        .catch(() => setMessageResults([]))
+        .finally(() => setIsSearchingMessages(false));
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [localInput, searchType]);
 
   useEffect(() => {
     fetchLabels().catch(() => undefined);
@@ -315,42 +358,104 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-2 bg-white dark:bg-[#111b21] border-b border-[#e9edef] dark:border-[#222e35]">
         <div className={`relative flex items-center bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 transition-all ${isSearchFocused ? 'ring-1 ring-[#00a884]' : ''}`}>
           <svg
-            className={`w-4 h-4 me-3 transition-colors ${isSearchFocused ? 'text-[#00a884]' : 'text-[#54656f] dark:text-[#8696a0]'}`}
+            className={`w-4 h-4 me-2 transition-colors shrink-0 ${isSearchFocused ? 'text-[#00a884]' : 'text-[#54656f] dark:text-[#8696a0]'}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           >
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
+
+          {searchType === 'numbers' && (
+            <span className="inline-flex items-center gap-1 bg-[#00a884] text-white text-[11px] font-medium px-2 py-0.5 rounded me-1.5 shrink-0 select-none">
+              <span>#</span>
+              <span>{t.filter_numbers_only}</span>
+              <button
+                type="button"
+                onClick={() => onSearchTypeChange?.('all')}
+                className="hover:opacity-75 ms-0.5 leading-none"
+                title="Clear"
+              >
+                ×
+              </button>
+            </span>
+          )}
+
           <input
             ref={searchInputRef}
             type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={localInput}
+            onChange={(e) => setLocalInput(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            placeholder={t.sidebar_search_placeholder}
+            placeholder={searchType === 'numbers' ? `${t.filter_numbers_only}...` : t.sidebar_search_placeholder}
             className="w-full bg-transparent text-[#111b21] dark:text-[#e9edef] text-sm placeholder-[#54656f] dark:placeholder-[#8696a0] outline-none"
           />
-          {searchQuery && (
-            <button type="button" onClick={() => onSearchChange('')} className="text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] ms-1">
+
+          {isSearchingMessages && (
+            <div className="w-3.5 h-3.5 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin shrink-0 me-1" />
+          )}
+
+          {localInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setLocalInput('');
+                onSearchChange('');
+                setMessageResults([]);
+              }}
+              className="text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] ms-1 p-0.5 rounded-full"
+            >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           )}
+
+          {/* Quick toggle for Numbers only */}
+          <button
+            type="button"
+            onClick={() => onSearchTypeChange?.(searchType === 'numbers' ? 'all' : 'numbers')}
+            className={`p-1 ms-1 rounded transition-colors ${
+              searchType === 'numbers'
+                ? 'text-[#00a884]'
+                : 'text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef]'
+            }`}
+            title={t.filter_numbers_only}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+          </button>
         </div>
       </div>
 
-      {/* Unified filter chip row — All/Unread/Mine + label chips */}
+      {/* Unified filter chip row — Numbers only / All / Unread / Mine + label chips */}
       <div className="flex gap-1.5 overflow-x-auto px-3 pb-2 pt-1.5 scrollbar-hide shrink-0 border-b border-[#e9edef] dark:border-[#222e35] bg-white dark:bg-[#111b21]">
+        {/* Numbers only filter chip */}
+        <button
+          type="button"
+          onClick={() => onSearchTypeChange?.(searchType === 'numbers' ? 'all' : 'numbers')}
+          className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+            searchType === 'numbers'
+              ? 'bg-[#00a884] text-white shadow-sm ring-1 ring-[#00a884]'
+              : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
+          }`}
+          title={t.filter_numbers_only}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+          <span>{t.filter_numbers_only}</span>
+        </button>
+
         {/* Static filter chips */}
         {(['all', 'unread', 'unanswered', 'assigned_to_me'] as ConversationFilter[]).map((f) => (
           <button
             key={f}
             onClick={() => onFilterChange(f)}
             className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 ${
-              activeFilter === f && !activeLabelId
+              activeFilter === f && !activeLabelId && searchType !== 'numbers'
                 ? 'bg-[#00a884] text-white'
                 : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
             }`}
@@ -406,32 +511,72 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      {/* Conversations List */}
+      {/* Conversations and Messages List */}
       <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto divide-y divide-[#e9edef]/60 dark:divide-[#202c33]/40">
-        {conversations.length === 0 ? (
+        {conversations.length === 0 && messageResults.length === 0 && !isSearchingMessages ? (
           <div className="flex flex-col items-center justify-center h-48 text-gray-400 dark:text-[#8696a0] text-sm p-4 text-center">
             <svg className="w-10 h-10 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-            {activeLabelId ? 'No conversations with this label' : t.sidebar_no_conversations}
+            {localInput ? t.search_no_results : (activeLabelId ? 'No conversations with this label' : t.sidebar_no_conversations)}
           </div>
         ) : (
-          conversations.map((conv) => (
-            <ConversationRow
-              key={conv.id}
-              conversation={conv}
-              isSelected={conv.id === activeConversationId}
-              viewers={viewers[conv.id]}
-              typingLock={typingLocks[conv.id]}
-              onSelect={() => onSelectConversation(conv)}
-              onMarkUnread={onMarkUnread}
-              onMarkRead={onMarkRead}
-              onTagsChange={onTagsChange}
-              selectionMode={selectionMode}
-              isChecked={selectedIds.has(conv.id)}
-              onToggleSelect={onToggleSelect}
-            />
-          ))
+          <>
+            {/* Chats Section Header when search returned both chats and messages */}
+            {localInput.trim().length >= 2 && searchType !== 'numbers' && conversations.length > 0 && messageResults.length > 0 && (
+              <div className="px-3 py-1.5 text-xs font-semibold text-[#00a884] uppercase tracking-wider bg-gray-50/90 dark:bg-[#182229]/90 sticky top-0 z-10 border-b border-[#e9edef]/50 dark:border-[#222e35]/50">
+                {t.search_chats_section} ({conversations.length})
+              </div>
+            )}
+
+            {/* Conversation Rows */}
+            {conversations.map((conv) => (
+              <ConversationRow
+                key={conv.id}
+                conversation={conv}
+                isSelected={conv.id === activeConversationId}
+                viewers={viewers[conv.id]}
+                typingLock={typingLocks[conv.id]}
+                onSelect={() => onSelectConversation(conv)}
+                onMarkUnread={onMarkUnread}
+                onMarkRead={onMarkRead}
+                onTagsChange={onTagsChange}
+                selectionMode={selectionMode}
+                isChecked={selectedIds.has(conv.id)}
+                onToggleSelect={onToggleSelect}
+                searchQuery={localInput}
+              />
+            ))}
+
+            {/* Messages Section when searching across chats */}
+            {localInput.trim().length >= 2 && searchType !== 'numbers' && messageResults.length > 0 && (
+              <div className="flex flex-col">
+                <div className="px-3 py-1.5 text-xs font-semibold text-[#00a884] uppercase tracking-wider bg-gray-50/90 dark:bg-[#182229]/90 sticky top-0 z-10 border-t border-b border-[#e9edef]/60 dark:border-[#222e35]/60">
+                  {t.search_messages_section} ({messageResults.length})
+                </div>
+                {messageResults.map((msg) => (
+                  <button
+                    key={msg.id}
+                    type="button"
+                    onClick={() => onSelectMessageResult?.(msg.conversationId, msg.id)}
+                    className="w-full text-start px-3 py-2.5 hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] active:bg-[#e9edef] dark:active:bg-[#2a3942] transition flex flex-col gap-1 border-b border-[#e9edef]/40 dark:border-[#222e35]/40 cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-gray-900 dark:text-[#e9edef] truncate">
+                        {highlightMatch(msg.studentName || msg.studentPhone || 'Contact', localInput)}
+                      </span>
+                      <span className="text-[10px] text-gray-400 dark:text-[#8696a0] shrink-0">
+                        {new Date(msg.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-[#8696a0] line-clamp-2 leading-relaxed group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                      {highlightMatch(msg.content, localInput)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {isLoadingMore && (
           <div className="flex items-center justify-center py-3">

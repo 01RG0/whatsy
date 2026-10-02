@@ -13,18 +13,30 @@ async function throwIfError(res: Response): Promise<void> {
   }
 }
 
+export interface MessageSearchResult {
+  id: string
+  conversationId: string
+  content: string
+  direction: 'inbound' | 'outbound'
+  timestamp: string
+  studentName?: string
+  studentPhone?: string
+}
+
 export async function getConversations(
   filter: ConversationFilter = 'all',
   search = '',
   limit = 100,
   before?: string,
   labelId?: string,
+  searchType: 'all' | 'numbers' = 'all',
 ): Promise<ZernioConversation[]> {
   const params = new URLSearchParams({
     platform: 'whatsapp',
     filter,
     limit: String(limit),
     ...(search ? { search } : {}),
+    ...(searchType && searchType !== 'all' ? { search_type: searchType } : {}),
     ...(before ? { before } : {}),
     ...(labelId ? { label: labelId } : {}),
   })
@@ -34,6 +46,24 @@ export async function getConversations(
   await throwIfError(res)
   const json = await res.json() as { conversations?: ZernioConversation[] } | ZernioConversation[]
   return Array.isArray(json) ? json : (json.conversations ?? [])
+}
+
+export async function searchMessages(
+  query: string,
+  conversationId?: string,
+  limit = 25,
+): Promise<MessageSearchResult[]> {
+  if (!query || query.trim().length < 2) return []
+  const params = new URLSearchParams({
+    q: query.trim(),
+    limit: String(limit),
+    ...(conversationId ? { conversation_id: conversationId } : {}),
+  })
+  const res = await fetch(`${API_BASE}/v1/inbox/search?${params}`, {
+    headers: getAuthHeader(),
+  })
+  if (!res.ok) return []
+  return res.json() as Promise<MessageSearchResult[]>
 }
 
 export async function getMessages(

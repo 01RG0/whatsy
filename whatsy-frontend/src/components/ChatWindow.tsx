@@ -5,6 +5,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { ImageLightbox } from './ImageLightbox';
 import { ConversationLabelPicker } from './ConversationLabelPicker';
+import { ChatSearchDrawer } from './ChatSearchDrawer';
 import ImageAnnotator from './ImageAnnotator';
 import type { AgentSummary } from '../api/inbox';
 import { API_BASE } from '../api/inbox';
@@ -63,6 +64,8 @@ interface ChatWindowProps {
   onLoadMoreMessages?: () => void;
   hasMoreMessages?: boolean;
   isLoadingMoreMessages?: boolean;
+  initialTargetMessageId?: string | null;
+  onClearInitialTargetMessageId?: () => void;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -86,6 +89,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onLoadMoreMessages,
   hasMoreMessages = false,
   isLoadingMoreMessages = false,
+  initialTargetMessageId,
+  onClearInitialTargetMessageId,
 }) => {
   const t = useT();
   type ReplyPreview = { id: string; senderName: string; content: string };
@@ -124,8 +129,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   // --- In-chat search state ---
   const [chatSearchActive, setChatSearchActive] = useState(false);
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
-  const [chatSearchMatchIndex, setChatSearchMatchIndex] = useState(0);
+  const [inChatSearchQuery, setInChatSearchQuery] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const assignRef = useRef<HTMLDivElement>(null);
@@ -153,36 +157,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Close search and reset when conversation changes
   useEffect(() => {
     setChatSearchActive(false);
-    setChatSearchQuery('');
-    setChatSearchMatchIndex(0);
+    setInChatSearchQuery('');
   }, [conversation?.id]);
-
-  // Reset match index when query changes
-  useEffect(() => {
-    setChatSearchMatchIndex(0);
-  }, [chatSearchQuery]);
-
-  // IDs of messages whose content matches the current search query (case-insensitive)
-  const chatSearchMatches = useMemo(() => {
-    const q = chatSearchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return messages
-      .filter((m) => m.content && m.content.toLowerCase().includes(q))
-      .map((m) => m.id);
-  }, [messages, chatSearchQuery]);
-
-  // Scroll to the current match whenever the index or match list changes
-  useEffect(() => {
-    if (chatSearchMatches.length === 0) return;
-    const id = chatSearchMatches[chatSearchMatchIndex];
-    const el = scrollContainerRef.current?.querySelector(`[data-message-id="${id}"]`);
-    if (el) (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [chatSearchMatchIndex, chatSearchMatches]);
-
-  const navigateMatch = useCallback((dir: 1 | -1) => {
-    if (chatSearchMatches.length === 0) return;
-    setChatSearchMatchIndex((prev) => (prev + dir + chatSearchMatches.length) % chatSearchMatches.length);
-  }, [chatSearchMatches]);
 
   const handleNavigateToMessage = useCallback((targetId: string) => {
     if (!targetId || !scrollContainerRef.current) return;
@@ -248,6 +224,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onLoadMoreMessages();
     }
   }, [messages, onLoadMoreMessages, isLoadingMoreMessages]);
+
+  // Navigate to target message if specified from external search result
+  useEffect(() => {
+    if (initialTargetMessageId && messages.length > 0) {
+      const timer = setTimeout(() => {
+        handleNavigateToMessage(initialTargetMessageId);
+        onClearInitialTargetMessageId?.();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [initialTargetMessageId, messages, handleNavigateToMessage, onClearInitialTargetMessageId]);
 
   const prevMessageCountRef = useRef(0);
   const prevConvIdRef = useRef<string | null>(null);
@@ -557,68 +544,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       </header>
 
-      {/* In-chat search bar — slides in below the header */}
-      {chatSearchActive && (
-        <div className="bg-[#f0f2f5] dark:bg-[#202c33] px-3 py-2 flex items-center gap-2 border-b border-[#e9edef] dark:border-[#222e35] shrink-0 animate-in slide-in-from-top-2 duration-150">
-          <input
-            autoFocus
-            type="text"
-            value={chatSearchQuery}
-            onChange={(e) => setChatSearchQuery(e.target.value)}
-            placeholder={t.search_in_chat}
-            className="flex-1 bg-white dark:bg-[#111b21] rounded-lg px-3 py-1.5 text-sm text-[#111b21] dark:text-[#e9edef] placeholder-[#54656f] dark:placeholder-[#8696a0] outline-none focus:ring-2 focus:ring-[#00a884]"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') navigateMatch(e.shiftKey ? -1 : 1);
-              if (e.key === 'Escape') setChatSearchActive(false);
-            }}
-          />
-          <span className="text-xs text-[#54656f] dark:text-[#8696a0] shrink-0 tabular-nums min-w-[3.5rem] text-center">
-            {chatSearchQuery.trim() === ''
-              ? ''
-              : chatSearchMatches.length === 0
-                ? t.chat_search_no_matches
-                : `${chatSearchMatchIndex + 1} / ${chatSearchMatches.length}`}
-          </span>
-          <button
-            type="button"
-            aria-label={t.chat_search_prev}
-            title={t.chat_search_prev}
-            disabled={chatSearchMatches.length === 0}
-            onClick={() => navigateMatch(-1)}
-            className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-[#374248] disabled:opacity-40 transition text-[#54656f] dark:text-[#aebac1]"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="18 15 12 9 6 15" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            aria-label={t.chat_search_next}
-            title={t.chat_search_next}
-            disabled={chatSearchMatches.length === 0}
-            onClick={() => navigateMatch(1)}
-            className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-[#374248] disabled:opacity-40 transition text-[#54656f] dark:text-[#aebac1]"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            aria-label={t.cancel}
-            onClick={() => setChatSearchActive(false)}
-            className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-[#374248] transition text-[#54656f] dark:text-[#aebac1]"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* Message Stream */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-4 relative" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cg fill='none' stroke='%23000' stroke-width='0.5' opacity='0.06'%3E%3Cpath d='M30 10 Q40 0 50 10 Q60 20 50 30 Q40 40 30 30 Q20 20 30 10Z'/%3E%3Cpath d='M70 50 Q80 40 90 50 Q100 60 90 70 Q80 80 70 70 Q60 60 70 50Z'/%3E%3Cpath d='M10 60 Q20 50 30 60 Q40 70 30 80 Q20 90 10 80 Q0 70 10 60Z'/%3E%3C/g%3E%3C/svg%3E")` }}>
+      {/* Main Chat Body & WhatsApp-style Search Drawer */}
+      <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex flex-col min-w-0 h-full relative">
+          {/* Message Stream */}
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-4 relative" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cg fill='none' stroke='%23000' stroke-width='0.5' opacity='0.06'%3E%3Cpath d='M30 10 Q40 0 50 10 Q60 20 50 30 Q40 40 30 30 Q20 20 30 10Z'/%3E%3Cpath d='M70 50 Q80 40 90 50 Q100 60 90 70 Q80 80 70 70 Q60 60 70 50Z'/%3E%3Cpath d='M10 60 Q20 50 30 60 Q40 70 30 80 Q20 90 10 80 Q0 70 10 60Z'/%3E%3C/g%3E%3C/svg%3E")` }}>
         {isLoadingMoreMessages && (
           <div className="flex justify-center py-2">
             <div className="w-5 h-5 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
@@ -693,7 +623,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
                         onRetry={isViewerMode ? undefined : onRetryMessage}
                         onNavigateToMessage={handleNavigateToMessage}
-                        highlight={chatSearchActive && chatSearchQuery.trim() ? chatSearchQuery.trim() : undefined}
+                        highlight={chatSearchActive && inChatSearchQuery.trim() ? inChatSearchQuery.trim() : undefined}
                       />
                     </div>
                   </React.Fragment>
@@ -754,6 +684,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onFocus={onInputFocus}
         onBlur={onInputBlur}
       />
+        </div>
+
+        {/* WhatsApp-style In-Chat Search Drawer */}
+        {chatSearchActive && (
+          <ChatSearchDrawer
+            conversationId={conversation.id}
+            contactName={conversation.participant.displayName}
+            messages={messages}
+            onClose={() => {
+              setChatSearchActive(false);
+              setInChatSearchQuery('');
+            }}
+            onNavigateToMessage={handleNavigateToMessage}
+            onQueryChange={setInChatSearchQuery}
+          />
+        )}
+      </div>
     </div>
   );
 };

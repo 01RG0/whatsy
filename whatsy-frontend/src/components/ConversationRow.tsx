@@ -19,6 +19,33 @@ interface ConversationRowProps {
   selectionMode?: boolean;
   isChecked?: boolean;
   onToggleSelect?: (id: string) => void;
+  searchQuery?: string;
+}
+
+function highlightMatch(text: string, query?: string): React.ReactNode {
+  if (!query || !query.trim() || !text) return text;
+  const lq = query.trim().toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let rest = text;
+  let key = 0;
+  while (rest.length > 0) {
+    const idx = rest.toLowerCase().indexOf(lq);
+    if (idx === -1) {
+      parts.push(<span key={key++}>{rest}</span>);
+      break;
+    }
+    if (idx > 0) parts.push(<span key={key++}>{rest.slice(0, idx)}</span>);
+    parts.push(
+      <mark
+        key={key++}
+        className="bg-yellow-300 dark:bg-yellow-500 text-[#111b21] rounded-[2px] px-[1px] not-italic"
+      >
+        {rest.slice(idx, idx + query.length)}
+      </mark>
+    );
+    rest = rest.slice(idx + query.length);
+  }
+  return <>{parts}</>;
 }
 
 export const ConversationRow: React.FC<ConversationRowProps> = ({
@@ -33,6 +60,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
   selectionMode = false,
   isChecked = false,
   onToggleSelect,
+  searchQuery,
 }) => {
   const t = useT();
   const { getByName } = useLabelStore();
@@ -181,11 +209,11 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
         <div className="flex items-center justify-between mb-0.5">
           <div className="flex flex-col min-w-0 flex-1">
             <h3 className="font-medium text-sm text-gray-900 dark:text-[#e9edef] truncate">
-              {conv.participant.phoneNumber || displayName}
+              {highlightMatch(conv.participant.phoneNumber || displayName, searchQuery)}
             </h3>
             {conv.participant.phoneNumber && (
               <span className="text-[11px] text-gray-500 dark:text-[#8696a0] opacity-70 truncate">
-                {displayName}
+                {highlightMatch(displayName, searchQuery)}
               </span>
             )}
           </div>
@@ -242,7 +270,7 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
                   : conv.lastMessage.type === 'location' ? t.location
                   : conv.lastMessage.type === 'contacts' ? t.contact
                   : conv.lastMessage.content === '[Unsupported message]' ? t.unsupported_message_preview
-                  : conv.lastMessage.content
+                  : highlightMatch(conv.lastMessage.content || '', searchQuery)
                 ) : (
                   t.no_messages_yet
                 )}

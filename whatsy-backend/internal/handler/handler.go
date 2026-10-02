@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/whatsy/backend/internal/config"
@@ -49,7 +50,7 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	// an agent id; it must not overwrite the assigned_to_me filter key.
 	_ = r.URL.Query().Get("platform")
 
-	conversations, err := h.convRepo.ListForTenant(r.Context(), tenantID, accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), r.URL.Query().Get("label"), queryLimit(r, 100), r.URL.Query().Get("before"))
+	conversations, err := h.convRepo.ListForTenant(r.Context(), tenantID, accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), r.URL.Query().Get("search_type"), r.URL.Query().Get("label"), queryLimit(r, 100), r.URL.Query().Get("before"))
 	if err != nil {
 		log.Printf("[error] list conversations: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list conversations"})
@@ -82,15 +83,38 @@ func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	const searchQuery = `SELECT m.id, m.conversation_id, m.content, m.direction, m.timestamp,
-		s.name AS student_name, s.phone AS student_phone
-		FROM messages m
-		JOIN conversations c ON c.id = m.conversation_id
-		JOIN students s ON s.id = c.student_id
-		WHERE c.tenant_id = $1::uuid AND m.content ILIKE '%' || $2 || '%'
-		ORDER BY m.timestamp DESC
-		LIMIT $3`
-	rows, err := h.db.QueryContext(r.Context(), searchQuery, tenantID, query, queryLimit(r, 20))
+	convID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+	if convID == "" {
+		convID = strings.TrimSpace(r.URL.Query().Get("conversationId"))
+	}
+
+	var searchQuery string
+	var args []any
+	limit := queryLimit(r, 20)
+
+	if convID != "" {
+		searchQuery = `SELECT m.id, m.conversation_id, m.content, m.direction, m.timestamp,
+			s.name AS student_name, s.phone AS student_phone
+			FROM messages m
+			JOIN conversations c ON c.id = m.conversation_id
+			JOIN students s ON s.id = c.student_id
+			WHERE c.tenant_id = $1::uuid AND m.conversation_id = $2::uuid AND m.content ILIKE '%' || $3 || '%'
+			ORDER BY m.timestamp DESC
+			LIMIT $4`
+		args = []any{tenantID, convID, query, limit}
+	} else {
+		searchQuery = `SELECT m.id, m.conversation_id, m.content, m.direction, m.timestamp,
+			s.name AS student_name, s.phone AS student_phone
+			FROM messages m
+			JOIN conversations c ON c.id = m.conversation_id
+			JOIN students s ON s.id = c.student_id
+			WHERE c.tenant_id = $1::uuid AND m.content ILIKE '%' || $2 || '%'
+			ORDER BY m.timestamp DESC
+			LIMIT $3`
+		args = []any{tenantID, query, limit}
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), searchQuery, args...)
 	if err != nil {
 		log.Printf("[error] search messages: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search messages"})
