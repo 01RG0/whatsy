@@ -152,6 +152,9 @@ type Translations = {
   analysis_col_chats: string
   analysis_col_active_time: string
   analysis_col_working_hours: string
+  analysis_col_start_time: string
+  analysis_col_end_time: string
+  analysis_col_total_time: string
   analysis_sent_from_app: string
   analysis_hourly_activity: string
   analysis_messages_received: string
@@ -299,6 +302,9 @@ export const en: Translations = {
   analysis_col_chats: 'Chats Handled',
   analysis_col_active_time: 'Active Time',
   analysis_col_working_hours: 'Peak Hours',
+  analysis_col_start_time: 'Start Time',
+  analysis_col_end_time: 'End Time',
+  analysis_col_total_time: 'Total Time',
   analysis_sent_from_app: 'Sent from WhatsApp app',
   analysis_hourly_activity: 'Hourly activity',
   analysis_messages_received: 'Messages Received',
@@ -449,6 +455,9 @@ export const ar: Translations = {
   analysis_col_chats: 'المحادثات المكتملة',
   analysis_col_active_time: 'وقت العمل',
   analysis_col_working_hours: 'أوقات الضغط',
+  analysis_col_start_time: 'بداية العمل',
+  analysis_col_end_time: 'نهاية العمل',
+  analysis_col_total_time: 'إجمالي الوقت',
   analysis_sent_from_app: 'أُرسل من تطبيق واتساب',
   analysis_hourly_activity: 'النشاط بالساعة',
   analysis_messages_received: 'الرسائل المستلمة',
