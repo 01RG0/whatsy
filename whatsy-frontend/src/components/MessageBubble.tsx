@@ -286,6 +286,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   };
 
+  if (message.type === 'revoked') {
+    return (
+      <div className={`flex w-full my-0.5 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] italic shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${isOutbound ? 'bg-[#e7ffdb] dark:bg-[#005c4b]' : 'bg-white dark:bg-[#202c33]'} text-gray-400 dark:text-[#8696a0]`}>
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+          </svg>
+          <span>This message was deleted</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={rowRef}

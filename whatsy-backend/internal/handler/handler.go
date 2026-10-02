@@ -275,7 +275,7 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				if msg, err := h.msgRepo.GetByZernioID(r.Context(), zernioMsgID); err == nil && msg != nil {
 					localMsgID = msg.ID
 				}
-				_ = h.msgRepo.DeleteByZernioID(r.Context(), zernioMsgID)
+				_ = h.msgRepo.MarkRevokedByZernioID(r.Context(), zernioMsgID)
 			}
 			h.hub.BroadcastToAll(ws.MessageDeletedEvent{
 				Event:          ws.EventMessageDeleted,

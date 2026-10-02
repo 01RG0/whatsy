@@ -47,6 +47,7 @@ interface InboxState {
   setMobileChatOpen: (open: boolean) => void;
   addReaction: (conversationId: string, messageId: string, emoji: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  markMessageRevoked: (conversationId: string, messageId: string) => void;
   replaceMessage: (conversationId: string, tempId: string, real: ZernioMessage) => void;
   touchWsEvent: () => void;
 }
@@ -133,11 +134,16 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   updateMessageStatus: (messageId, status) =>
     set((state) => {
-      const updated: Record<string, ZernioMessage[]> = {};
+      const updatedMsgs: Record<string, ZernioMessage[]> = {};
       for (const [convId, msgs] of Object.entries(state.messages)) {
-        updated[convId] = msgs.map((m) => (m.id === messageId ? { ...m, status } : m));
+        updatedMsgs[convId] = msgs.map((m) => (m.id === messageId ? { ...m, status } : m));
       }
-      return { messages: updated };
+      const updatedConvs = state.conversations.map((c) =>
+        c.lastMessage?.id === messageId
+          ? { ...c, lastMessage: { ...c.lastMessage, status } }
+          : c
+      );
+      return { messages: updatedMsgs, conversations: updatedConvs };
     }),
 
   updateConversation: (conv) =>
@@ -219,6 +225,20 @@ export const useInboxStore = create<InboxState>((set) => ({
         messages: {
           ...state.messages,
           [conversationId]: msgs.filter((m) => m.id !== messageId),
+        },
+      };
+    }),
+
+  markMessageRevoked: (conversationId, messageId) =>
+    set((state) => {
+      const msgs = state.messages[conversationId];
+      if (!msgs) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: msgs.map((m) =>
+            m.id === messageId ? { ...m, type: 'revoked' as const, content: 'This message was deleted' } : m
+          ),
         },
       };
     }),

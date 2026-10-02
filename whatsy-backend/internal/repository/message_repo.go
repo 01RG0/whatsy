@@ -192,6 +192,17 @@ func (r *MessageRepo) DeleteByZernioID(ctx context.Context, zernioMsgID string) 
 	return nil
 }
 
+func (r *MessageRepo) MarkRevokedByZernioID(ctx context.Context, zernioMsgID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE messages SET content = 'This message was deleted', type = 'revoked' WHERE zernio_message_id = $1",
+		zernioMsgID,
+	)
+	if err != nil {
+		return fmt.Errorf("mark message revoked: %w", err)
+	}
+	return nil
+}
+
 func (r *MessageRepo) GetByID(ctx context.Context, id string) (*domain.Message, error) {
 	query := "SELECT " + messageColumns + messageFrom + "WHERE m.id = $1"
 	message, err := scanMessage(r.db.QueryRowContext(ctx, query, id))

@@ -209,7 +209,7 @@ function connect() {
       }
       case 'MESSAGE_DELETED': {
         const { messageId, conversationId } = data;
-        useInboxStore.getState().deleteMessage(conversationId, messageId);
+        useInboxStore.getState().markMessageRevoked(conversationId, messageId);
         break;
       }
       case 'CONVERSATION_UPDATED': {

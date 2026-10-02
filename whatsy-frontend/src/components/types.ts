@@ -19,7 +19,8 @@ export type MessageType =
   | 'interactive'
   | 'template'
   | 'system'
-  | 'sticker';
+  | 'sticker'
+  | 'revoked';
 
 export interface Attachment {
   id?: string;

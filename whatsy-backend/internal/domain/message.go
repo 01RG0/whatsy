@@ -18,6 +18,7 @@ const (
 	ContentTypeTemplate    ContentType = "template"
 	ContentTypeSystem      ContentType = "system"
 	ContentTypeSticker     ContentType = "sticker"
+	ContentTypeRevoked     ContentType = "revoked"
 )
 
 type DeliveryStatus string
