@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { navigate } from '../App'
 import { getCurrentAgent } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
@@ -177,8 +177,15 @@ export default function NavBar({ path }: { path: string }) {
   const t = useT()
   const [agent, setAgent] = useState(() => getCurrentAgent())
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [showAccountMenu, setShowAccountMenu] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
   const userIsAdmin = agent?.role === 'admin'
   const initials = agent?.name ? agent.name.slice(0, 2).toUpperCase() : '?'
+
+  type SavedAccount = { id: string; name: string; email: string; avatar: string; role: string; token: string }
+  const getSavedAccounts = (): SavedAccount[] => {
+    try { return JSON.parse(localStorage.getItem('whatsy_accounts') || '[]') } catch { return [] }
+  }
   const visibleNavItems = navItems.filter(item => !item.adminOnly || userIsAdmin)
   const totalUnread = useInboxStore(s => s.conversations.filter(c => c.lastMessage?.direction === 'inbound').length)
   const activeConversationId = useInboxStore(s => s.activeConversationId)
@@ -190,10 +197,33 @@ export default function NavBar({ path }: { path: string }) {
     return () => window.removeEventListener('whatsy_agent_updated', syncAgent)
   }, [])
 
+  useEffect(() => {
+    if (!showAccountMenu) return
+    const handler = (e: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
+        setShowAccountMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showAccountMenu])
+
   const handleLogout = () => {
+    const accounts = getSavedAccounts().filter(a => a.id !== agent?.id)
+    localStorage.setItem('whatsy_accounts', JSON.stringify(accounts))
     localStorage.removeItem('whatsy_jwt')
     localStorage.removeItem('whatsy_agent')
-    window.location.href = '/login'
+    if (accounts.length > 0) {
+      localStorage.setItem('whatsy_jwt', accounts[0].token)
+      localStorage.setItem('whatsy_agent', JSON.stringify({ id: accounts[0].id, name: accounts[0].name, email: accounts[0].email, avatar: accounts[0].avatar, role: accounts[0].role }))
+    }
+    window.location.href = accounts.length > 0 ? '/' : '/login'
+  }
+
+  const handleSwitchAccount = (acc: { id: string; name: string; email: string; avatar: string; role: string; token: string }) => {
+    localStorage.setItem('whatsy_jwt', acc.token)
+    localStorage.setItem('whatsy_agent', JSON.stringify({ id: acc.id, name: acc.name, email: acc.email, avatar: acc.avatar, role: acc.role }))
+    window.location.href = '/'
   }
 
   return (
@@ -229,36 +259,87 @@ export default function NavBar({ path }: { path: string }) {
             <LanguageToggleButton />
           </div>
           {agent && (
-            <div className="flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#2a3942] transition-colors group">
-              <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {initials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-gray-900 dark:text-[#e9edef] text-sm font-medium truncate leading-tight">{agent.name}</p>
-                <div className="mt-0.5">
-                  <RoleBadge role={agent.role || 'agent'} />
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowAccountMenu(v => !v)}
+                className="w-full flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-[#2a3942] transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {initials}
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPasswordModal(true)}
-                title={t.nav_change_password}
-                className="p-1.5 text-gray-400 hover:text-[#00a884] dark:hover:text-[#00a884] rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                <div className="min-w-0 flex-1 text-start">
+                  <p className="text-gray-900 dark:text-[#e9edef] text-sm font-medium truncate leading-tight">{agent.name}</p>
+                  <div className="mt-0.5">
+                    <RoleBadge role={agent.role || 'agent'} />
+                  </div>
+                </div>
+                <svg className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${showAccountMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                title={t.nav_sign_out}
-                className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-gray-200 dark:hover:bg-[#374248] transition-colors shrink-0"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
+
+              {showAccountMenu && (
+                <div className="absolute bottom-full mb-1 left-0 right-0 bg-white dark:bg-[#1f2c33] border border-gray-200 dark:border-[#2a3942] rounded-xl shadow-lg overflow-hidden z-50">
+                  {getSavedAccounts().map(acc => {
+                    const isActive = acc.id === agent?.id
+                    const acInitials = acc.name ? acc.name.slice(0, 2).toUpperCase() : '?'
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => { if (!isActive) handleSwitchAccount(acc); else setShowAccountMenu(false) }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
+                          {acInitials}
+                        </div>
+                        <div className="min-w-0 flex-1 text-start">
+                          <p className="text-gray-900 dark:text-[#e9edef] text-sm font-medium truncate">{acc.name}</p>
+                          <p className="text-gray-500 dark:text-[#8696a0] text-xs truncate">{acc.email}</p>
+                        </div>
+                        {isActive && (
+                          <svg className="w-4 h-4 text-[#00a884] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    )
+                  })}
+                  <div className="border-t border-gray-100 dark:border-[#2a3942]">
+                    <button
+                      type="button"
+                      onClick={() => { setShowAccountMenu(false); navigate('/login') }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors text-gray-700 dark:text-[#aebac1]"
+                    >
+                      <svg className="w-4 h-4 text-[#00a884]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="text-sm">Add account</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAccountMenu(false); setShowPasswordModal(true) }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors text-gray-700 dark:text-[#aebac1]"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      <span className="text-sm">{t.nav_change_password}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAccountMenu(false); handleLogout() }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors text-red-500"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      <span className="text-sm">{t.nav_sign_out}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

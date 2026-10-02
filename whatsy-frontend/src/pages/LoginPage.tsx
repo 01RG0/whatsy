@@ -25,6 +25,9 @@ export default function LoginPage() {
       const data = await res.json() as { token: string; id: string; name: string; email: string; avatar: string; role?: string }
       localStorage.setItem('whatsy_jwt', data.token)
       localStorage.setItem('whatsy_agent', JSON.stringify({ id: data.id, name: data.name, email: data.email, avatar: data.avatar, role: data.role || 'agent' }))
+      const savedAccounts = JSON.parse(localStorage.getItem('whatsy_accounts') || '[]') as { id: string; name: string; email: string; avatar: string; role: string; token: string }[]
+      const newAccount = { id: data.id, name: data.name, email: data.email, avatar: data.avatar || '', role: data.role || 'agent', token: data.token }
+      localStorage.setItem('whatsy_accounts', JSON.stringify([newAccount, ...savedAccounts.filter(a => a.id !== data.id)]))
       window.location.href = '/'
     } catch {
       setError(t.error_connection)
