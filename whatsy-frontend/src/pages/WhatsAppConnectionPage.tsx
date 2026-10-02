@@ -361,6 +361,7 @@ export default function WhatsAppConnectionPage() {
   const [msgSync, setMsgSync] = useState<SyncState>({ phase: 'idle', synced: 0, total: 0, percent: 0, message: '' })
   const msgSyncAbortRef = useRef<AbortController | null>(null)
   const msgSyncHadProgressRef = useRef(false)
+  const msgSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Webhook/test panel (shown when a sender exists)
   const [showSecret, setShowSecret] = useState(false)
@@ -411,6 +412,16 @@ export default function WhatsAppConnectionPage() {
   const SYNC_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
   useEffect(() => { loadSenders() }, [])
+
+  // Cleanup the message-sync poll timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (msgSyncPollRef.current) {
+        clearInterval(msgSyncPollRef.current)
+        msgSyncPollRef.current = null
+      }
+    }
+  }, [])
 
   // Background incremental sync on page load — silent, fast, no progress bar
   useEffect(() => {
@@ -481,10 +492,50 @@ export default function WhatsAppConnectionPage() {
   async function startMessageSync() {
     if (msgSync.phase === 'syncing' || msgSync.phase === 'counting') return
     msgSyncAbortRef.current?.abort()
+    // Cancel any running poll from a previous session.
+    if (msgSyncPollRef.current) {
+      clearInterval(msgSyncPollRef.current)
+      msgSyncPollRef.current = null
+    }
     const ctrl = new AbortController()
     msgSyncAbortRef.current = ctrl
     msgSyncHadProgressRef.current = false
     setMsgSync({ phase: 'counting', synced: 0, total: 0, percent: 0, message: 'Loading conversations…' })
+
+    // startPoll begins polling /v1/sync/messages/status every 2 s so the UI
+    // stays live after the SSE stream closes (Railway's 30 s proxy timeout).
+    const startPoll = () => {
+      if (msgSyncPollRef.current) clearInterval(msgSyncPollRef.current)
+      msgSyncPollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_BASE}/v1/sync/messages/status`, { headers: getAuthHeader() })
+          const data = await res.json()
+          if (data.phase === 'running') {
+            setMsgSync({
+              phase: 'syncing',
+              synced: data.current ?? 0,
+              total: data.total ?? 0,
+              percent: data.total > 0 ? Math.min(99, Math.floor((data.current ?? 0) * 100 / data.total)) : 0,
+              message: data.message || `Processing conversation ${data.current} of ${data.total}…`,
+            })
+          } else if (data.phase === 'done' || data.phase === 'idle') {
+            clearInterval(msgSyncPollRef.current!)
+            msgSyncPollRef.current = null
+            setMsgSync(s => ({
+              ...s,
+              phase: 'done',
+              percent: 100,
+              message: data.message || 'Sync complete',
+            }))
+          } else if (data.phase === 'error') {
+            clearInterval(msgSyncPollRef.current!)
+            msgSyncPollRef.current = null
+            setMsgSync(s => ({ ...s, phase: 'error', message: data.message }))
+          }
+        } catch { /* network blip — keep polling */ }
+      }, 2000)
+    }
+
     try {
       const res = await fetch(`${API_BASE}/v1/sync/messages/stream`, {
         headers: getAuthHeader(),
@@ -506,6 +557,9 @@ export default function WhatsAppConnectionPage() {
             const ev = JSON.parse(line.slice(6))
             if (ev.synced > 0) msgSyncHadProgressRef.current = true
             setMsgSync({ phase: ev.phase, synced: ev.synced ?? 0, total: ev.total ?? 0, percent: ev.percent ?? 0, message: ev.message ?? '' })
+            // When the backend sends "background", the SSE stream is about to close.
+            // Switch to polling so progress stays visible.
+            if (ev.phase === 'background') startPoll()
           } catch { /* ignore */ }
         }
       }
@@ -513,6 +567,7 @@ export default function WhatsAppConnectionPage() {
       if ((e as Error)?.name === 'AbortError') return
       if (msgSyncHadProgressRef.current) {
         setMsgSync(s => ({ ...s, phase: 'background', message: 'Sync continues in background' }))
+        startPoll()
       } else {
         setMsgSync(s => ({ ...s, phase: 'error', message: e instanceof Error ? e.message : 'Sync failed' }))
       }

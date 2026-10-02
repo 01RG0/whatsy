@@ -236,6 +236,7 @@ func main() {
 		r.Get("/v1/sync/stream", syncHandler.Sync)
 		r.Post("/v1/sync", syncHandler.SyncJSON)
 		r.Get("/v1/sync/messages/stream", syncHandler.SyncMessagesStream)
+		r.Get("/v1/sync/messages/status", syncHandler.SyncMessagesStatus)
 
 		// Labels
 		r.Get("/v1/labels", labelHandler.List)

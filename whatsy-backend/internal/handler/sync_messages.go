@@ -6,8 +6,26 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 )
+
+// syncMsgStates holds live message-sync progress keyed by tenantID.
+var (
+	syncMsgMu     sync.RWMutex
+	syncMsgStates = map[string]*MsgSyncState{}
+)
+
+// MsgSyncState captures point-in-time progress of a running (or recently completed)
+// message history sync for one tenant.
+type MsgSyncState struct {
+	Phase     string    `json:"phase"`     // "running" | "done" | "error"
+	Current   int       `json:"current"`   // conversations processed so far
+	Total     int       `json:"total"`     // total conversations
+	Inserted  int       `json:"inserted"`  // messages inserted total
+	Message   string    `json:"message"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
 
 // zernioMessage is the shape returned by the Zernio messages API.
 type zernioMessage struct {
@@ -52,6 +70,12 @@ func (h *SyncHandler) SyncMessagesStream(w http.ResponseWriter, r *http.Request)
 		defer cancel()
 		defer close(progressCh)
 
+		// Initialise in-memory state so the /status endpoint can report progress
+		// even after the SSE stream has closed.
+		syncMsgMu.Lock()
+		syncMsgStates[tenantID] = &MsgSyncState{Phase: "running", UpdatedAt: time.Now()}
+		syncMsgMu.Unlock()
+
 		progressFn := func(p SyncProgress) {
 			select {
 			case progressCh <- p:
@@ -62,19 +86,33 @@ func (h *SyncHandler) SyncMessagesStream(w http.ResponseWriter, r *http.Request)
 		totalMsgs, totalConvs, err := h.syncAllMessages(syncCtx, tenantID, key, progressFn)
 		if err != nil {
 			log.Printf("[sync-msgs] error: %v", err)
+			syncMsgMu.Lock()
+			syncMsgStates[tenantID] = &MsgSyncState{Phase: "error", Message: err.Error(), UpdatedAt: time.Now()}
+			syncMsgMu.Unlock()
 			select {
 			case progressCh <- SyncProgress{Phase: "error", Message: err.Error()}:
 			default:
 			}
 			return
 		}
+		doneMsg := fmt.Sprintf("Synced %d messages from %d conversations", totalMsgs, totalConvs)
+		syncMsgMu.Lock()
+		syncMsgStates[tenantID] = &MsgSyncState{
+			Phase:     "done",
+			Current:   totalConvs,
+			Total:     totalConvs,
+			Inserted:  totalMsgs,
+			Message:   doneMsg,
+			UpdatedAt: time.Now(),
+		}
+		syncMsgMu.Unlock()
 		select {
 		case progressCh <- SyncProgress{
 			Phase:   "done",
 			Synced:  totalMsgs,
 			Total:   totalMsgs,
 			Percent: 100,
-			Message: fmt.Sprintf("Synced %d messages from %d conversations", totalMsgs, totalConvs),
+			Message: doneMsg,
 		}:
 		default:
 		}
@@ -154,17 +192,30 @@ func (h *SyncHandler) syncAllMessages(ctx context.Context, tenantID, key string,
 	for i, conv := range convs {
 		convNum := i + 1
 
+		pct := (i * 100) / totalConvs
+		if pct > 99 {
+			pct = 99
+		}
+		msg := fmt.Sprintf("Syncing conversation %d/%d…", convNum, totalConvs)
+
+		// Update in-memory state (polled by /status endpoint).
+		syncMsgMu.Lock()
+		if s := syncMsgStates[tenantID]; s != nil {
+			s.Current = i
+			s.Total = totalConvs
+			s.Inserted = totalInserted
+			s.Message = msg
+			s.UpdatedAt = time.Now()
+		}
+		syncMsgMu.Unlock()
+
 		if emit != nil {
-			pct := (i * 100) / totalConvs
-			if pct > 99 {
-				pct = 99
-			}
 			emit(SyncProgress{
 				Phase:   "syncing",
 				Synced:  totalInserted,
 				Total:   totalConvs,
 				Percent: pct,
-				Message: fmt.Sprintf("Syncing conversation %d/%d…", convNum, totalConvs),
+				Message: msg,
 			})
 		}
 
@@ -176,6 +227,13 @@ func (h *SyncHandler) syncAllMessages(ctx context.Context, tenantID, key string,
 		}
 		log.Printf("[sync-msgs] conversation %d/%d (zernio_id=%s, msgs=%d inserted)", convNum, totalConvs, conv.zernioID, inserted)
 		totalInserted += inserted
+
+		// Keep state up-to-date with the latest inserted count.
+		syncMsgMu.Lock()
+		if s := syncMsgStates[tenantID]; s != nil {
+			s.Inserted = totalInserted
+		}
+		syncMsgMu.Unlock()
 
 		// Pace to stay within Zernio rate limits.
 		select {
@@ -344,4 +402,19 @@ func parseTimestamp(s string) time.Time {
 		return time.Unix(ms/1000, (ms%1000)*int64(time.Millisecond))
 	}
 	return time.Now()
+}
+
+// SyncMessagesStatus returns the current (or last completed) message-sync state
+// for the requesting tenant.  The frontend polls this every 2 s after the SSE
+// stream closes.
+func (h *SyncHandler) SyncMessagesStatus(w http.ResponseWriter, r *http.Request) {
+	tenantID := tenantIDFromRequest(r)
+	syncMsgMu.RLock()
+	state := syncMsgStates[tenantID]
+	syncMsgMu.RUnlock()
+	if state == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"phase": "idle"})
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
 }
