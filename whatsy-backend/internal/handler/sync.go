@@ -229,12 +229,9 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			return total, err
 		}
 		if status >= 400 {
-			preview := string(body)
-			if len(preview) > 200 {
-				preview = preview[:200] + "...[truncated]"
-			}
-			log.Printf("[sync] FAILED at page %d — Zernio returned HTTP %d (tenant=%s): body_len=%d preview=%s", page+1, status, tenantID, len(body), preview)
-			return total, fmt.Errorf("zernio error %d: %s", status, string(body))
+			errMsg := extractJSONError(body)
+			log.Printf("[sync] FAILED at page %d — Zernio returned HTTP %d (tenant=%s): body_len=%d msg=%s", page+1, status, tenantID, len(body), errMsg)
+			return total, fmt.Errorf("zernio error %d: %s", status, errMsg)
 		}
 
 		var pageData struct {
@@ -245,11 +242,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			} `json:"pagination"`
 		}
 		if err := json.Unmarshal(body, &pageData); err != nil {
-			preview := string(body)
-			if len(preview) > 200 {
-				preview = preview[:200] + "...[truncated]"
-			}
-			log.Printf("[sync] FAILED — could not decode page %d response (tenant=%s): %v | body_len=%d preview=%s", page+1, tenantID, err, len(body), preview)
+			log.Printf("[sync] FAILED — could not decode page %d response (tenant=%s): %v | body_len=%d", page+1, tenantID, err, len(body))
 			return total, fmt.Errorf("decode page: %w", err)
 		}
 
@@ -380,4 +373,22 @@ func (h *SyncHandler) upsertConversation(ctx context.Context, tenantID string, c
 	)
 
 	return nil
+}
+
+// extractJSONError pulls only the "error" or "message" string from a JSON
+// error body so we can log a safe, non-PII summary.
+func extractJSONError(body []byte) string {
+	var v struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &v); err == nil {
+		if v.Error != "" {
+			return v.Error
+		}
+		if v.Message != "" {
+			return v.Message
+		}
+	}
+	return fmt.Sprintf("(unparseable, len=%d)", len(body))
 }
