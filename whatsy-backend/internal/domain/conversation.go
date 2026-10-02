@@ -39,7 +39,8 @@ type Conversation struct {
 	IsMuted        bool               `json:"isMuted"`
 	IsGroup        bool               `json:"isGroup"`
 	Tags           []string           `json:"tags"`
-	AssignedAgent  *AssignedAgent     `json:"assignedAgent"`
-	UpdatedAt      time.Time          `json:"updatedAt"`
+	AssignedAgent    *AssignedAgent     `json:"assignedAgent"`
+	UpdatedAt        time.Time          `json:"updatedAt"`
+	LastAgentReplyAt *time.Time         `json:"lastAgentReplyAt,omitempty"`
 }
 

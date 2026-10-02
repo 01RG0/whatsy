@@ -190,6 +190,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		Status:          domain.StatusDelivered,
 		ZernioMessageID: dedupeID,
 		CreatedAt:       payload.Timestamp,
+		ContactPhone:    payload.ContactPhone,
 	}
 	if message.Direction == "" {
 		message.Direction = "inbound"
@@ -197,6 +198,23 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	if message.Type == "" {
 		message.Type = domain.ContentTypeText
 	}
+
+	// Resolve quoted-reply context: look up the quoted message by its wamid so
+	// we can show a preview bubble in the UI.
+	if payload.ReplyTo != nil && payload.ReplyTo.ZernioMessageID != "" {
+		if quoted, err := s.msgRepo.GetByZernioID(ctx, payload.ReplyTo.ZernioMessageID); err == nil && quoted != nil {
+			senderName := quoted.SenderName
+			if quoted.Direction == "outbound" {
+				senderName = "You"
+			}
+			message.ReplyTo = &domain.ReplyTo{
+				ID:         quoted.ID,
+				SenderName: senderName,
+				Content:    quoted.Content,
+			}
+		}
+	}
+
 	// Inbound interactive tap: contact replied to a button or list row.
 	if payload.InteractiveType != "" {
 		message.Type = domain.ContentTypeInteractive

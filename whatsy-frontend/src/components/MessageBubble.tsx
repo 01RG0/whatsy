@@ -319,7 +319,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             }`}
           >
             <span className="font-semibold text-[#53bdeb] mb-0.5">{message.replyTo.senderName}</span>
-            <span className="truncate opacity-80">{renderFormattedText(message.replyTo.content)}</span>
+            <span className="truncate opacity-80">{renderFormattedText(message.replyTo.content ?? '')}</span>
           </div>
         )}
 
@@ -478,6 +478,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <span className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate">
                   {message.content && message.content !== '[Unsupported message]' ? message.content : 'Contact'}
                 </span>
+                {message.contactPhone && (
+                  <p className="text-xs text-[#54656f] dark:text-[#8696a0] mt-0.5 dir-ltr">{message.contactPhone}</p>
+                )}
                 <span className="text-xs text-[#9da3a7]">Contact</span>
               </div>
             </div>

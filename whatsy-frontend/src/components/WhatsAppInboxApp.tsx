@@ -565,6 +565,7 @@ export const WhatsAppInboxApp: React.FC = () => {
       </div>
       <div className={!showChatOnMobile ? 'hidden md:contents' : 'contents'}>
         <ChatWindow
+          key={activeConversationId ?? ''}
           conversation={activeConversation}
           messages={currentMessages}
           isLoadingMessages={isLoadingMessages}

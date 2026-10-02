@@ -22,7 +22,7 @@ func NewMessageRepo(db *sql.DB) *MessageRepo {
 const messageColumns = `m.id, m.conversation_id, m.direction, m.content_type, m.content, m.status,
 	COALESCE(m.zernio_message_id, ''), m.attachments, m.timestamp,
 	COALESCE(m.sent_by_agent_id::text, ''), COALESCE(a.name, ''), COALESCE(a.avatar, ''),
-	COALESCE(m.interactive::text, ''), COALESCE(m.reply_to::text, '')`
+	COALESCE(m.interactive::text, ''), COALESCE(m.reply_to::text, ''), COALESCE(m.contact_phone, '')`
 
 func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	if msg == nil {
@@ -49,8 +49,8 @@ func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	}
 
 	const query = `INSERT INTO messages
-		(conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, sent_by_agent_id, interactive, reply_to)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7::jsonb, COALESCE($8, NOW()), NULLIF($9, '')::uuid, $10::jsonb, $11::jsonb)
+		(conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, sent_by_agent_id, interactive, reply_to, contact_phone)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7::jsonb, COALESCE($8, NOW()), NULLIF($9, '')::uuid, $10::jsonb, $11::jsonb, $12)
 		RETURNING id, timestamp`
 	var createdAt any
 	if !msg.CreatedAt.IsZero() {
@@ -59,7 +59,7 @@ func (r *MessageRepo) Create(ctx context.Context, msg *domain.Message) error {
 	err := r.db.QueryRowContext(ctx, query,
 		msg.ConversationID, msg.Direction, msg.Type, msg.Content, msg.Status,
 		msg.ZernioMessageID, attachments, createdAt, msg.SentByAgentID,
-		interactiveJSON, replyToJSON,
+		interactiveJSON, replyToJSON, msg.ContactPhone,
 	).Scan(&msg.ID, &msg.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("create message: %w", err)
@@ -227,7 +227,7 @@ func scanMessage(row messageScanner) (domain.Message, error) {
 		&message.ID, &message.ConversationID, &message.Direction, &message.Type,
 		&message.Content, &message.Status, &message.ZernioMessageID, &attachments, &message.CreatedAt,
 		&message.SentByAgentID, &message.SenderName, &message.SenderAvatar,
-		&interactive, &replyTo,
+		&interactive, &replyTo, &message.ContactPhone,
 	)
 	if err != nil {
 		return message, err

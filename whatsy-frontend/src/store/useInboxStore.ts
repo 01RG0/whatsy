@@ -225,8 +225,16 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   replaceMessage: (conversationId, tempId, real) =>
     set((state) => {
-      const msgs = state.messages[conversationId];
-      if (!msgs) return state;
+      const msgs = state.messages[conversationId] ?? [];
+      // WS beat HTTP — real already in list, just remove the temp
+      if (msgs.some((m) => m.id === real.id)) {
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: msgs.filter((m) => m.id !== tempId),
+          },
+        };
+      }
       return {
         messages: {
           ...state.messages,

@@ -81,9 +81,10 @@ export interface ZernioMessage {
   interactive?: InteractiveTemplate;
   replyTo?: {
     id: string;
-    senderName: string;
-    content: string;
+    senderName?: string;
+    content?: string;
   };
+  contactPhone?: string;
   reactions?: Array<{
     emoji: string;
     senderId: string;
@@ -132,6 +133,7 @@ export interface ZernioConversation {
     name: string;
     avatarUrl?: string;
   };
+  lastAgentReplyAt?: string;
   updatedAt: string;
 }
 

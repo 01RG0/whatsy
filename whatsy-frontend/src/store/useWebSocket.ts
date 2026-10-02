@@ -220,6 +220,9 @@ function connect() {
           typeof document !== 'undefined' &&
           document.visibilityState === 'visible';
 
+        // Preserve lastAgentReplyAt regardless of active-view suppression
+        const lastAgentReplyAt = patch.lastAgentReplyAt;
+
         if (isViewingActive) {
           patch.unreadCount = 0;
           if (typeof data.conversation.unreadCount === 'number' && data.conversation.unreadCount > 0) {
@@ -232,6 +235,12 @@ function connect() {
         ) {
           delete (patch as Record<string, unknown>).unreadCount;
         }
+
+        // Always include lastAgentReplyAt so sidebar can re-sort correctly
+        if (lastAgentReplyAt !== undefined) {
+          patch.lastAgentReplyAt = lastAgentReplyAt;
+        }
+
         store().updateConversation(patch);
         break;
       }

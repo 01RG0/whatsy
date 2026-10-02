@@ -86,4 +86,5 @@ type Message struct {
 	Interactive      *Interactive   `json:"interactive,omitempty"`
 	ReplyTo          *ReplyTo       `json:"replyTo,omitempty"`
 	Reactions        []Reaction     `json:"reactions,omitempty"`
+	ContactPhone     string         `json:"contactPhone,omitempty"`
 }

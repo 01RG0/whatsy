@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 	"github.com/whatsy/backend/internal/domain"
@@ -26,7 +27,7 @@ const conversationColumns = `
 	COALESCE(last_msg.direction, ''), COALESCE(last_msg.sender_name, ''), COALESCE(last_msg.status, 'sent'),
 	c.unread_count, COALESCE(c.is_marked_unread, false), COALESCE(tags.names, ARRAY[]::text[]),
 	COALESCE(a.id::text, ''), COALESCE(a.name, ''), COALESCE(a.avatar, ''),
-	c.updated_at`
+	c.updated_at, c.last_agent_reply_at`
 
 const conversationJoins = `
 	FROM conversations c
@@ -163,7 +164,7 @@ func (r *ConversationRepo) IncrementUnread(ctx context.Context, conversationID s
 }
 
 func (r *ConversationRepo) ResetUnread(ctx context.Context, conversationID string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET unread_count = 0, is_marked_unread = FALSE, updated_at = NOW() WHERE id = $1", conversationID)
+	_, err := r.db.ExecContext(ctx, "UPDATE conversations SET unread_count = 0, is_marked_unread = FALSE, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $1", conversationID)
 	if err != nil {
 		return fmt.Errorf("reset unread count: %w", err)
 	}
@@ -215,6 +216,7 @@ func scanConversation(row conversationScanner, accountID string) (domain.Convers
 	var conversation domain.Conversation
 	var tags pq.StringArray
 	var agentID, agentName, agentAvatar string
+	var lastAgentReplyAt *time.Time
 
 	err := row.Scan(
 		&conversation.ID, &conversation.Platform,
@@ -223,7 +225,7 @@ func scanConversation(row conversationScanner, accountID string) (domain.Convers
 		&conversation.LastMessage.ID, &conversation.LastMessage.Type, &conversation.LastMessage.Direction, &conversation.LastMessage.SenderName, &conversation.LastMessage.Status,
 		&conversation.UnreadCount, &conversation.IsMarkedUnread, &tags,
 		&agentID, &agentName, &agentAvatar,
-		&conversation.UpdatedAt,
+		&conversation.UpdatedAt, &lastAgentReplyAt,
 	)
 	if err != nil {
 		return domain.Conversation{}, err
@@ -231,6 +233,7 @@ func scanConversation(row conversationScanner, accountID string) (domain.Convers
 
 	conversation.AccountID = accountID
 	conversation.Tags = []string(tags)
+	conversation.LastAgentReplyAt = lastAgentReplyAt
 	if agentID != "" {
 		conversation.AssignedAgent = &domain.AssignedAgent{ID: agentID, Name: agentName, AvatarURL: agentAvatar}
 	}

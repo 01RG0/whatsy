@@ -267,6 +267,15 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
               <span key={conv.unreadCount} className="animate-in zoom-in-75 duration-75 bg-[#00a884] text-white font-bold text-[11px] min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
                 {conv.unreadCount}
               </span>
+            ) : conv.lastAgentReplyAt && conv.lastMessage?.direction === 'outbound' ? (
+              <span
+                title="Replied"
+                className="flex items-center gap-0.5 text-[10px] text-gray-400 dark:text-[#8696a0]"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
             ) : null}
 
             {/* Hover arrow trigger for action menu */}

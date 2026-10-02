@@ -52,6 +52,16 @@ func statusFromEvent(eventType string) string {
 	return ""
 }
 
+// ReplyToPayload holds the quoted-message context parsed from a WhatsApp
+// contextInfo / context block. ZernioMessageID is the wamid of the quoted
+// message; SenderName and Content are populated later by HandleInboundMessage
+// after the quoted message is looked up in the local DB.
+type ReplyToPayload struct {
+	ZernioMessageID string
+	SenderName      string
+	Content         string
+}
+
 // InboundMessagePayload is the body of a message.received event. It supports
 // both the documented flat shape ({event, message, conversation, account,
 // timestamp}) and the legacy {type, payload:{...}} envelope.
@@ -75,6 +85,10 @@ type InboundMessagePayload struct {
 	InteractiveType  string // "list_reply" | "button_reply" | "nfm_reply"
 	InteractiveId    string // tapped button/row id
 	InteractiveTitle string // display title of the tapped item
+	// ReplyTo is non-nil when the inbound message is a quoted reply.
+	ReplyTo *ReplyToPayload
+	// ContactPhone is the phone number of the first contact in a contacts message.
+	ContactPhone string
 }
 
 type rawInboundMessage struct {
@@ -104,6 +118,27 @@ type rawInboundMessage struct {
 			InteractiveId    string `json:"interactiveId"`
 			InteractiveTitle string `json:"interactiveTitle"`
 		} `json:"metadata"`
+		// Context carries the quoted-reply wamid for WhatsApp quoted messages.
+		Context struct {
+			ID   string `json:"id"`
+			From string `json:"from"`
+		} `json:"context"`
+		// ContextInfo is an alternative shape some Zernio versions send.
+		ContextInfo struct {
+			QuotedMessage struct {
+				Body string `json:"body"`
+			} `json:"quotedMessage"`
+			StanzaID string `json:"stanzaId"`
+		} `json:"contextInfo"`
+		// Contacts carries vCard data for contacts messages.
+		Contacts []struct {
+			Name struct {
+				FormattedName string `json:"formatted_name"`
+			} `json:"name"`
+			Phones []struct {
+				Phone string `json:"phone"`
+			} `json:"phones"`
+		} `json:"contacts"`
 	} `json:"message"`
 	// Legacy flat payload fields.
 	ConversationID  string    `json:"conversationId"`
@@ -168,6 +203,24 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 	p.InteractiveType = m.Metadata.InteractiveType
 	p.InteractiveId = m.Metadata.InteractiveId
 	p.InteractiveTitle = m.Metadata.InteractiveTitle
+
+	// Quoted-reply context: prefer message.context.id (wamid), then contextInfo.stanzaId.
+	quotedWamid := firstNonEmpty(m.Context.ID, m.ContextInfo.StanzaID)
+	if quotedWamid != "" {
+		p.ReplyTo = &ReplyToPayload{ZernioMessageID: quotedWamid}
+	}
+
+	// Contact messages: populate content from formatted_name and phone from first number.
+	if p.Type == "contacts" && len(m.Contacts) > 0 {
+		c := m.Contacts[0]
+		if p.Content == "" && c.Name.FormattedName != "" {
+			p.Content = c.Name.FormattedName
+		}
+		if len(c.Phones) > 0 && c.Phones[0].Phone != "" {
+			p.ContactPhone = c.Phones[0].Phone
+		}
+	}
+
 	p.MediaURL = raw.MediaURL
 	if p.MediaURL == "" && len(m.Attachments) > 0 {
 		p.MediaURL = m.Attachments[0].URL
