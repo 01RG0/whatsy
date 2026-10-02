@@ -263,8 +263,13 @@ func main() {
 			path := strings.TrimPrefix(req.URL.Path, "/")
 			if _, err := fs.Stat(publicFS, path); err != nil {
 				// Not a real file — serve index.html for SPA routing.
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				http.ServeFileFS(w, req, publicFS, "index.html")
 				return
+			}
+			// index.html itself must never be cached so clients always get the latest build.
+			if path == "" || path == "index.html" {
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			}
 			fileServer.ServeHTTP(w, req)
 		})
