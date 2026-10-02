@@ -433,6 +433,24 @@ func (c *Client) EnsureWebhookActive(ctx context.Context) error {
 	return nil
 }
 
+// FetchAccountID fetches the accountId from the first WhatsApp conversation
+// via the Zernio API. Used as a fallback when whatsapp_connections.account_id
+// is NULL in the DB.
+func (c *Client) FetchAccountID(ctx context.Context) (string, error) {
+	var resp struct {
+		Data []struct {
+			AccountID string `json:"accountId"`
+		} `json:"data"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, "/inbox/conversations?platform=whatsapp&limit=1", nil, &resp); err != nil {
+		return "", err
+	}
+	if len(resp.Data) == 0 {
+		return "", nil
+	}
+	return resp.Data[0].AccountID, nil
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if v != "" {

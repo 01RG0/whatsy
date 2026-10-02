@@ -5,6 +5,7 @@ import { isAdmin } from '../lib/auth'
 import { useT } from '../i18n/translations'
 import { useLanguageStore } from '../store/useLanguageStore'
 import { useDarkModeStore } from '../store/useDarkModeStore'
+import { API_BASE, getAuthHeader } from '../api/inbox'
 
 // ─── Feature definitions ────────────────────────────────────────────────────
 
@@ -130,6 +131,70 @@ function AppearanceSection() {
           {lang === 'en' ? 'عربي' : 'EN'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── Retry Failed Messages button ────────────────────────────────────────────
+
+function RetryFailedButton() {
+  const admin = isAdmin()
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{ total: number; sent: number; failed: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!admin) return null
+
+  const handleRetry = async () => {
+    setLoading(true)
+    setResult(null)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/v1/admin/retry-failed`, {
+        method: 'POST',
+        headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        setError(`خطأ ${res.status}: ${text}`)
+        return
+      }
+      const data = await res.json()
+      setResult(data)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="p-4 rounded-xl bg-white dark:bg-[#111b21] border border-gray-200 dark:border-[#222e35] shadow-sm">
+      <div className="flex items-start gap-3 mb-3">
+        <span className="text-2xl mt-0.5 shrink-0">🔄</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-gray-800 dark:text-[#e9edef]">إعادة إرسال الرسائل الفاشلة</p>
+          <p className="text-xs text-gray-500 dark:text-[#8696a0] mt-1 leading-relaxed">
+            إعادة محاولة إرسال آخر 20 رسالة فاشلة خلال الساعتين الماضيتين.
+          </p>
+          {result && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
+              المجموع: {result.total} — تم الإرسال: {result.sent} — فشل: {result.failed}
+            </p>
+          )}
+          {error && (
+            <p className="text-xs text-red-500 dark:text-red-400 mt-2">{error}</p>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleRetry}
+        disabled={loading}
+        className="px-4 py-2 rounded-lg bg-[#00a884] hover:bg-[#008f72] text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading ? 'جارٍ الإرسال…' : 'إعادة الإرسال'}
+      </button>
     </div>
   )
 }
@@ -345,8 +410,9 @@ export default function SettingsPage() {
         )}
 
         {tab === 'integrations' && (
-          <div className="max-w-2xl mx-auto p-6">
+          <div className="max-w-2xl mx-auto p-6 space-y-3">
             <IntegrationsSection />
+            <RetryFailedButton />
           </div>
         )}
       </div>

@@ -31,6 +31,7 @@ type ZernioSender interface {
 	SendMessageWithKey(ctx context.Context, conversationID string, payload zernio.SendMessagePayload, apiKey string) (*zernio.SentMessage, error)
 	MarkRead(ctx context.Context, conversationID, accountID string) error
 	MarkReadWithKey(ctx context.Context, conversationID, accountID, apiKey string) error
+	FetchAccountID(ctx context.Context) (string, error)
 }
 
 // AutoReplier evaluates auto-reply rules for inbound messages.
@@ -106,6 +107,24 @@ func (s *ChatService) getZernioKey(ctx context.Context, tenantID string) string 
 		return s.zernioAPIKey
 	}
 	return key
+}
+
+// resolveAccountID returns the WhatsApp accountId for background retry paths
+// that have no tenant context. It first checks the DB; if the column is NULL
+// (common after fresh deploys) it falls back to asking the Zernio API directly.
+func (s *ChatService) resolveAccountID(ctx context.Context) string {
+	if id := s.zernioAccountID(ctx, ""); id != "" {
+		return id
+	}
+	id, err := s.zernioClient.FetchAccountID(ctx)
+	if err != nil {
+		log.Printf("[retry] fallback FetchAccountID error: %v", err)
+		return ""
+	}
+	if id != "" {
+		log.Printf("[retry] using accountId from Zernio API fallback: %s", id)
+	}
+	return id
 }
 
 // HandleInboundMessage persists a Zernio message and notifies active clients.
@@ -582,7 +601,11 @@ func (s *ChatService) RetryPendingOnce(ctx context.Context) {
 	}
 	log.Printf("[retry-pending] retrying %d stuck pending messages", len(msgs))
 
-	accountID := s.zernioAccountID(ctx, "")
+	accountID := s.resolveAccountID(ctx)
+	if accountID == "" {
+		log.Printf("[retry-pending] skipping: could not resolve accountId")
+		return
+	}
 	for _, msg := range msgs {
 		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, msg.ConversationID)
 		if err != nil || zernioConvID == "" {
@@ -651,7 +674,11 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 	}
 	log.Printf("[retry-failed] retrying %d failed messages", total)
 
-	accountID := s.zernioAccountID(ctx, "")
+	accountID := s.resolveAccountID(ctx)
+	if accountID == "" {
+		log.Printf("[retry-failed] skipping: could not resolve accountId")
+		return
+	}
 	for _, msg := range msgs {
 		_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusPending)
 
