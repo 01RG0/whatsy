@@ -484,12 +484,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               {!text.trim() && (
                 <div className="flex items-end gap-3 shrink-0 pb-0.5">
                   {/* Paperclip + its popover — co-located so popover anchors to the button */}
-                  <div className="relative" ref={attachMenuRef}>
+                  <div className="relative flex items-center h-6" ref={attachMenuRef}>
                     <button
                       type="button"
                       onClick={() => setShowAttachMenu((p) => !p)}
                       disabled={disabled || isUploading}
-                      className={`transition ${showAttachMenu ? 'text-[#00a884]' : 'text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef]'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      className={`flex items-center transition ${showAttachMenu ? 'text-[#00a884]' : 'text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef]'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                       title={t.attach_file}
                     >
                       {isUploading ? (
@@ -530,7 +530,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     type="button"
                     onClick={() => { mediaFileInputRef.current?.click(); }}
                     disabled={disabled || isUploading}
-                    className={`text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef] transition ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    className={`flex items-center h-6 text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#e9edef] transition ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     title="Photo / Video"
                   >
                     <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
