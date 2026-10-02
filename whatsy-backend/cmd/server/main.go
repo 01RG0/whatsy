@@ -47,11 +47,23 @@ func main() {
 	}
 	defer db.Close()
 
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	if err := db.Ping(); err != nil {
-		log.Fatalf("ping database: %v", err)
+	// Supabase session-mode pool cap is 15. Keep well below so that during
+	// rolling deploys (old + new instance briefly co-exist) the total never
+	// exceeds the limit: 2 instances × 6 = 12 < 15.
+	db.SetMaxOpenConns(6)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(2 * time.Minute)
+	db.SetConnMaxIdleTime(30 * time.Second)
+	// Retry ping — during rolling deploy the old instance may still hold slots.
+	for i := range 8 {
+		if err := db.Ping(); err == nil {
+			break
+		} else if i == 7 {
+			log.Fatalf("ping db: %v", err)
+		} else {
+			log.Printf("ping db: %v — retrying in 3s (attempt %d/8)", err, i+1)
+			time.Sleep(3 * time.Second)
+		}
 	}
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
