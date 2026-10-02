@@ -232,6 +232,14 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 				SenderName: senderName,
 				Content:    quoted.Content,
 			}
+		} else {
+			// Quoted message not in DB (e.g. failed send, old message) — store
+			// the wamid so the frontend can still show a "replying to" indicator.
+			message.ReplyTo = &domain.ReplyTo{
+				ID:         payload.ReplyTo.ZernioMessageID,
+				SenderName: "",
+				Content:    "",
+			}
 		}
 	}
 

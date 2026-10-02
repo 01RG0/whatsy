@@ -333,8 +333,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 : 'bg-[#f0f2f5] dark:bg-[#182229] border-[#00a884]'
             }`}
           >
-            <span className="font-semibold text-[#53bdeb] mb-0.5">{message.replyTo.senderName}</span>
-            <span className="truncate opacity-80">{renderFormattedText(message.replyTo.content ?? '')}</span>
+            <span className="font-semibold text-[#53bdeb] mb-0.5">{message.replyTo.senderName || '…'}</span>
+            <span className="truncate opacity-80">{message.replyTo.content ? renderFormattedText(message.replyTo.content) : <span className="italic opacity-60">Message not available</span>}</span>
           </div>
         )}
 
