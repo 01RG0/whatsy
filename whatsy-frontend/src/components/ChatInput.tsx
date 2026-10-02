@@ -506,11 +506,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     {showAttachMenu && (
                       <div className="absolute bottom-full end-0 mb-2 bg-white dark:bg-[#233138] rounded-xl shadow-2xl p-2 flex flex-col gap-2 z-50 border border-gray-200 dark:border-[#2a3942] animate-in fade-in slide-in-from-bottom-2 duration-75">
                         <button type="button" onClick={() => { setShowAttachMenu(false); docFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
-                          <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center text-white">📄</span>
+                          <span className="w-8 h-8 rounded-full bg-[#5f66cd] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z"/></svg>
+                          </span>
                           <span>{t.document}</span>
                         </button>
                         <button type="button" onClick={() => { setShowAttachMenu(false); audioFileInputRef.current?.click(); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
-                          <span className="w-8 h-8 rounded-full bg-[#e67e22] flex items-center justify-center text-white">🎵</span>
+                          <span className="w-8 h-8 rounded-full bg-[#e67e22] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6zm-2 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
+                          </span>
                           <span>Audio</span>
                         </button>
                         {interactiveEnabled && (
@@ -519,7 +523,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             onClick={() => { setShowAttachMenu(false); setShowInteractiveComposer(true); }}
                             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition"
                           >
-                            <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">⚡</span>
+                            <span className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center">
+                              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </span>
                             <span>{t.interactive_template}</span>
                           </button>
                         )}
