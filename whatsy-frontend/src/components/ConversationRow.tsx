@@ -267,15 +267,27 @@ export const ConversationRow: React.FC<ConversationRowProps> = ({
               <span key={conv.unreadCount} className="animate-in zoom-in-75 duration-75 bg-[#00a884] text-white font-bold text-[11px] min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
                 {conv.unreadCount}
               </span>
-            ) : conv.lastAgentReplyAt && conv.lastMessage?.direction === 'outbound' ? (
-              <span
-                title="Replied"
-                className="flex items-center gap-0.5 text-[10px] text-gray-400 dark:text-[#8696a0]"
-              >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12" />
+            ) : conv.lastMessage?.direction === 'outbound' ? (
+              // Delivery status ticks for outbound last message — mirrors MessageBubble status icons
+              conv.lastMessage.status === 'read' ? (
+                <svg className="w-4 h-4 text-[#53bdeb] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2 13l4 4L14 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 13l4 4L21 7" />
                 </svg>
-              </span>
+              ) : conv.lastMessage.status === 'delivered' ? (
+                <svg className="w-4 h-4 text-gray-400 dark:text-[#8696a0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2 13l4 4L14 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 13l4 4L21 7" />
+                </svg>
+              ) : conv.lastMessage.status === 'sent' ? (
+                <svg className="w-3.5 h-3.5 text-gray-400 dark:text-[#8696a0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : conv.lastMessage.status === 'pending' ? (
+                <svg className="w-3.5 h-3.5 text-gray-400 dark:text-[#8696a0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" /><polyline points="12 6 12 12 16 14" />
+                </svg>
+              ) : null
             ) : null}
 
             {/* Hover arrow trigger for action menu */}
