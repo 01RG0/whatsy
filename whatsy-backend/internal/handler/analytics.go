@@ -188,13 +188,15 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		mu.Unlock()
 	}()
 
-	// Q4: unassigned conversations — live snapshot, no time filter
+	// Q4: unassigned conversations with pending inbound messages — live snapshot, no time filter.
+	// Only counts conversations where a customer is still waiting (unread_count > 0) and no agent
+	// has been assigned, so old/dormant conversations don't inflate the number.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		var cnt int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM conversations WHERE assigned_agent_id IS NULL AND tenant_id = $1::uuid`,
+			`SELECT COUNT(*) FROM conversations WHERE assigned_agent_id IS NULL AND unread_count > 0 AND tenant_id = $1::uuid`,
 			tenantID,
 		).Scan(&cnt)
 		if err != nil {
