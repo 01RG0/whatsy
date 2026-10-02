@@ -169,28 +169,11 @@ func main() {
 	syncHandler := handler.NewSyncHandler(db, cfg.ZernioAPIKey)
 	analyticsHandler := handler.NewAnalyticsHandler(db)
 
-	// Background incremental sync every 10 minutes — heals +unknown- contacts and
-	// keeps conversation list current even when webhooks are missed.
-	go func() {
-		// Run once at startup to heal any existing +unknown- records immediately.
-		if n, err := syncHandler.SyncSince(context.Background(), time.Now().Add(-30*24*time.Hour)); err != nil {
-			log.Printf("[sync] startup sync error: %v", err)
-		} else {
-			log.Printf("[sync] startup sync: %d conversations upserted", n)
-		}
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-		lastSync := time.Now()
-		for range ticker.C {
-			since := lastSync
-			lastSync = time.Now()
-			if n, err := syncHandler.SyncSince(context.Background(), since); err != nil {
-				log.Printf("[sync] background sync error: %v", err)
-			} else if n > 0 {
-				log.Printf("[sync] background sync: %d conversations updated", n)
-			}
-		}
-	}()
+	// Background sync disabled — whatsy-worker is the dedicated sync service and
+	// handles all startup + incremental syncing. Running both in parallel was
+	// doubling Zernio API usage and exhausting the 60 req/min rate limit.
+	// The syncHandler and /v1/sync/* HTTP routes below remain active for
+	// on-demand sync triggered from the frontend.
 
 	authLimiter := handler.NewRateLimiter(10) // 10 req/min per IP on auth endpoints
 
