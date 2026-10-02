@@ -12,12 +12,13 @@ const PRESET_COLORS = [
 
 interface LabelManagerProps {
   onClose: () => void
+  initialCreate?: boolean
 }
 
-export const LabelManager: React.FC<LabelManagerProps> = ({ onClose }) => {
+export const LabelManager: React.FC<LabelManagerProps> = ({ onClose, initialCreate = false }) => {
   const { labels, add, update, remove } = useLabelStore()
   const [editing, setEditing] = useState<Label | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(initialCreate || labels.length === 0)
   const [name, setName] = useState('')
   const [color, setColor] = useState(PRESET_COLORS[5])
   const [error, setError] = useState('')

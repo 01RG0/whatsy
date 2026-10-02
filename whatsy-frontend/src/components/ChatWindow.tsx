@@ -256,6 +256,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }, [isLoadingMessages, messages]);
 
+  // Track whether we need to scroll to the bottom after a conversation change
+  const pendingScrollRef = useRef(false);
+
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -263,11 +266,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const isNewMessage = messages.length > prevMessageCountRef.current && !convChanged;
     const wasNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
 
-    if (convChanged || (isNewMessage && wasNearBottom)) {
+    if (convChanged) {
+      // Immediately jump to bottom (synchronous, before paint)
+      el.scrollTop = el.scrollHeight;
+      // Mark that we need a second scroll after async content renders (images etc.)
+      pendingScrollRef.current = true;
+    } else if (isNewMessage && wasNearBottom) {
       el.scrollTop = el.scrollHeight;
     }
+
     prevMessageCountRef.current = messages.length;
     prevConvIdRef.current = conversation?.id ?? null;
+  }, [messages, conversation?.id]);
+
+  // Second-stage scroll: fires after paint to handle async content (images, etc.)
+  useEffect(() => {
+    if (!pendingScrollRef.current) return;
+    pendingScrollRef.current = false;
+
+    const raf = requestAnimationFrame(() => {
+      const el = scrollContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+      // One more delayed scroll for slow image loads
+      setTimeout(() => {
+        const el2 = scrollContainerRef.current;
+        if (el2) {
+          el2.scrollTop = el2.scrollHeight;
+          messagesEndRef.current?.scrollIntoView({ block: 'end' });
+        }
+      }, 250);
+    });
+
+    return () => cancelAnimationFrame(raf);
   }, [messages, conversation?.id]);
 
   const handleScroll = useCallback(() => {

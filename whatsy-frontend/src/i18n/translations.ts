@@ -18,6 +18,7 @@ type Translations = {
   switch_account: string
   add_account: string
   accounts: string
+  labels: string
   // Sidebar
   sidebar_chats: string
   sidebar_mark_all_read_title: string
@@ -191,6 +192,7 @@ export const en: Translations = {
   switch_account: 'Switch account',
   add_account: 'Add account',
   accounts: 'Accounts',
+  labels: 'Labels',
   sidebar_chats: 'Chats',
   sidebar_mark_all_read_title: 'Mark all as read',
   sidebar_new_chat_title: 'New Chat',
@@ -353,6 +355,7 @@ export const ar: Translations = {
   switch_account: 'تبديل الحساب',
   add_account: 'إضافة حساب',
   accounts: 'الحسابات',
+  labels: 'التصنيفات',
   sidebar_chats: 'المحادثات',
   sidebar_mark_all_read_title: 'تحديد الكل كمقروء',
   sidebar_new_chat_title: 'محادثة جديدة',

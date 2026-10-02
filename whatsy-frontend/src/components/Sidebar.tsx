@@ -106,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showNewChat, setShowNewChat] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const [labelManagerInitialCreate, setLabelManagerInitialCreate] = useState(false);
   const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
   const [currentAgent, setCurrentAgent] = useState(() => getCurrentAgent());
   const agentInitials = currentAgent?.name ? currentAgent.name.slice(0, 2).toUpperCase() : '?';
@@ -527,11 +528,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         ))}
 
-        {/* Manage labels gear button */}
+        {/* Manage labels gear button (only when labels exist) */}
         {labels.length > 0 && (
           <button
             type="button"
-            onClick={() => setShowLabelManager(true)}
+            onClick={() => { setLabelManagerInitialCreate(false); setShowLabelManager(true); }}
             className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
             title="Manage labels"
           >
@@ -541,6 +542,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </svg>
           </button>
         )}
+
+        {/* WhatsApp-style "New label" button */}
+        <button
+          type="button"
+          onClick={() => { setLabelManagerInitialCreate(true); setShowLabelManager(true); }}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition shrink-0 border border-dashed border-[#c5ccd0] dark:border-[#374248] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942] hover:border-[#00a884] hover:text-[#00a884] dark:hover:text-[#00a884]"
+          title={t.labels}
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>{t.labels}</span>
+        </button>
       </div>
 
       {/* Bulk action bar — shown when selection mode is active */}
@@ -632,7 +646,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
 
     {/* Label manager modal */}
-    {showLabelManager && <LabelManager onClose={() => setShowLabelManager(false)} />}
+    {showLabelManager && (
+      <LabelManager
+        initialCreate={labelManagerInitialCreate}
+        onClose={() => { setShowLabelManager(false); setLabelManagerInitialCreate(false); }}
+      />
+    )}
 
     {/* Account switcher modal */}
     <AccountSwitcherModal
