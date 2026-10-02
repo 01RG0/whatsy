@@ -104,6 +104,7 @@ interface MessageBubbleProps {
   onReply?: (message: ZernioMessage) => void;
   onRetry?: (message: ZernioMessage) => void;
   onEditImage?: (url: string) => void;
+  onNavigateToMessage?: (messageId: string) => void;
   isConsecutive?: boolean;
   isNew?: boolean;
   /** When provided, matched text within the bubble is wrapped in <mark>. */
@@ -117,6 +118,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReply,
   onRetry,
   onEditImage,
+  onNavigateToMessage,
   isConsecutive,
   isNew = false,
   highlight,
@@ -304,6 +306,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div
       id={'msg-' + message.id}
+      data-message-id={message.id}
+      {...(message.zernioMessageId ? { 'data-zernio-id': message.zernioMessageId } : {})}
       ref={rowRef}
       className={`group relative flex w-full ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
     >
@@ -319,7 +323,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       </div>
       <div
         ref={bubbleRef}
-        className={`${isNew ? 'msg-in' : ''} relative max-w-[75%] sm:max-w-[65%] md:max-w-[62%] lg:max-w-[62%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
+        className={`${isNew ? 'msg-in' : ''} reply-bubble-target relative max-w-[75%] sm:max-w-[65%] md:max-w-[62%] lg:max-w-[62%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
           isOutbound
             ? `bg-[#e7ffdb] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef]${!isConsecutive ? ' ltr:rounded-tr-none rtl:rounded-tl-none' : ''}`
             : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db]${!isConsecutive ? ' ltr:rounded-tl-none rtl:rounded-tr-none' : ''}`
@@ -330,16 +334,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div
             onClick={(e) => {
               e.stopPropagation();
-              const el = document.getElementById('msg-' + message.replyTo?.id);
-              if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.classList.remove('reply-highlight');
-                void el.offsetWidth;
-                el.classList.add('reply-highlight');
-                setTimeout(() => el.classList.remove('reply-highlight'), 1500);
+              const replyId = message.replyTo?.id;
+              if (!replyId) return;
+              if (onNavigateToMessage) {
+                onNavigateToMessage(replyId);
+              } else {
+                const target =
+                  document.querySelector(`[data-message-id="${replyId}"]`) ||
+                  document.querySelector(`[data-zernio-id="${replyId}"]`) ||
+                  document.getElementById('msg-' + replyId);
+                if (target) {
+                  (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  const bubble = (target.querySelector('.reply-bubble-target') as HTMLElement) || (target as HTMLElement);
+                  bubble.classList.remove('reply-highlight');
+                  void bubble.offsetWidth;
+                  bubble.classList.add('reply-highlight');
+                  setTimeout(() => bubble.classList.remove('reply-highlight'), 1800);
+                }
               }
             }}
-            className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-s-4 cursor-pointer select-none ${
+            className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-s-4 cursor-pointer select-none transition-opacity hover:opacity-90 active:opacity-75 ${
               isOutbound
                 ? 'bg-[#cff5c3] dark:bg-[#025144] border-[#00a884]'
                 : 'bg-[#f0f2f5] dark:bg-[#182229] border-[#00a884]'

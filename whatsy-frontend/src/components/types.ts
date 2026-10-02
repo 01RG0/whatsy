@@ -85,6 +85,7 @@ export interface ZernioMessage {
     senderName?: string;
     content?: string;
   };
+  zernioMessageId?: string;
   contactPhone?: string;
   reactions?: Array<{
     emoji: string;

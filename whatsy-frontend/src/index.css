@@ -89,12 +89,42 @@ html:not(.dark) .placeholder-gray-400::placeholder { color: var(--light-text-mut
 .safe-left   { padding-left:   env(safe-area-inset-left); }
 .safe-right  { padding-right:  env(safe-area-inset-right); }
 
-/* Quoted reply highlight flash */
-@keyframes replyHighlight {
-  0% { background-color: rgba(0, 168, 132, 0.25); }
-  100% { background-color: transparent; }
+/* Quoted reply highlight flash (WhatsApp style) */
+@keyframes replyHighlightLight {
+  0% {
+    filter: brightness(0.85);
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.45);
+  }
+  60% {
+    filter: brightness(0.92);
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.2);
+  }
+  100% {
+    filter: none;
+    box-shadow: none;
+  }
 }
+
+@keyframes replyHighlightDark {
+  0% {
+    filter: brightness(1.35);
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.55);
+  }
+  60% {
+    filter: brightness(1.15);
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.25);
+  }
+  100% {
+    filter: none;
+    box-shadow: none;
+  }
+}
+
 .reply-highlight {
-  animation: replyHighlight 1.5s ease-out;
-  border-radius: 8px;
+  animation: replyHighlightLight 1.6s ease-out;
+}
+
+html.dark .reply-highlight,
+.dark .reply-highlight {
+  animation: replyHighlightDark 1.6s ease-out;
 }

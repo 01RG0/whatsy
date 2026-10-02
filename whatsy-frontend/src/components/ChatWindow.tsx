@@ -184,6 +184,53 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setChatSearchMatchIndex((prev) => (prev + dir + chatSearchMatches.length) % chatSearchMatches.length);
   }, [chatSearchMatches]);
 
+  const handleNavigateToMessage = useCallback((targetId: string) => {
+    if (!targetId || !scrollContainerRef.current) return;
+
+    const targetMsg = messages.find(
+      (m) => m.id === targetId || m.zernioMessageId === targetId
+    );
+    const idToFind = targetMsg ? targetMsg.id : targetId;
+    const zernioIdToFind = targetMsg?.zernioMessageId;
+
+    const container = scrollContainerRef.current;
+    const findEl = (): HTMLElement | null => {
+      const allMessageNodes = container.querySelectorAll<HTMLElement>('[data-message-id]');
+      for (let i = 0; i < allMessageNodes.length; i++) {
+        const node = allMessageNodes[i];
+        const msgId = node.getAttribute('data-message-id');
+        const zId = node.getAttribute('data-zernio-id');
+        if (
+          (idToFind && (msgId === idToFind || zId === idToFind)) ||
+          (zernioIdToFind && (msgId === zernioIdToFind || zId === zernioIdToFind)) ||
+          (targetId && (msgId === targetId || zId === targetId))
+        ) {
+          return node;
+        }
+      }
+      return (
+        document.getElementById('msg-' + idToFind) ||
+        (zernioIdToFind ? document.getElementById('msg-' + zernioIdToFind) : null) ||
+        document.getElementById('msg-' + targetId)
+      );
+    };
+
+    const targetEl = findEl();
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const bubbleEl =
+        (targetEl.classList.contains('reply-bubble-target')
+          ? targetEl
+          : (targetEl.querySelector('.reply-bubble-target') as HTMLElement)) || targetEl;
+      bubbleEl.classList.remove('reply-highlight');
+      void bubbleEl.offsetWidth;
+      bubbleEl.classList.add('reply-highlight');
+      setTimeout(() => bubbleEl.classList.remove('reply-highlight'), 1800);
+    } else if (onLoadMoreMessages && !isLoadingMoreMessages) {
+      onLoadMoreMessages();
+    }
+  }, [messages, onLoadMoreMessages, isLoadingMoreMessages]);
+
   const prevMessageCountRef = useRef(0);
   const prevConvIdRef = useRef<string | null>(null);
   const initialMessageIdsRef = useRef<Set<string>>(new Set());
@@ -609,7 +656,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </span>
                       </div>
                     )}
-                    <div data-message-id={msg.id}>
+                    <div data-message-id={msg.id} {...(msg.zernioMessageId ? { 'data-zernio-id': msg.zernioMessageId } : {})}>
                       <MessageBubble
                         message={msg}
                         isConsecutive={isConsecutive}
@@ -623,6 +670,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         })}
                         onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
                         onRetry={isViewerMode ? undefined : onRetryMessage}
+                        onNavigateToMessage={handleNavigateToMessage}
                         highlight={chatSearchActive && chatSearchQuery.trim() ? chatSearchQuery.trim() : undefined}
                       />
                     </div>
