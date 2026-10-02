@@ -215,22 +215,65 @@ function MessageTypeChart({ data }: MessageTypeChartProps) {
 
 interface WorkloadChartProps { agents: AgentStat[] }
 
+// Pure-CSS horizontal bar chart — no SVG axes so RTL Arabic renders perfectly
 function WorkloadChart({ agents }: WorkloadChartProps) {
-  const data = agents.map((a) => ({ name: a.name, conversations: a.conversationsHandled }))
+  const data = agents
+    .filter((a) => a.id !== 'whatsapp-app')
+    .map((a) => ({ id: a.id, name: a.name, avatar: a.avatar, conversations: a.conversationsHandled }))
+    .sort((a, b) => b.conversations - a.conversations)
+
+  const max = Math.max(...data.map((d) => d.conversations), 1)
+
+  // Assign a distinct color per rank so bars are easy to tell apart
+  const barColors = ['#00a884', '#06cf9c', '#4ade80', '#34d399', '#a3e635', '#facc15', '#fb923c', '#f87171']
+
   return (
-    <ResponsiveContainer width="100%" height={Math.max(120, data.length * 36)}>
-      <BarChart layout="vertical" data={data} margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.4} horizontal={false} />
-        <XAxis type="number" tick={{ fontSize: 11, fill: '#8696a0' }} axisLine={false} tickLine={false} allowDecimals={false} />
-        <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#8696a0' }} axisLine={false} tickLine={false} width={80} />
-        <Tooltip
-          formatter={(value: unknown) => [`${value as number} chats`, '']}
-          contentStyle={{ background: '#111b21', border: '1px solid #222e35', borderRadius: 8, color: '#e9edef', fontSize: 12 }}
-          cursor={{ fill: '#8696a0', fillOpacity: 0.08 }}
-        />
-        <Bar dataKey="conversations" fill="#8696a0" radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-3 py-1">
+      {data.map((item, i) => {
+        const pct = Math.max((item.conversations / max) * 100, item.conversations > 0 ? 4 : 0)
+        const color = barColors[i % barColors.length]
+        return (
+          <div key={item.id} className="flex items-center gap-3">
+            {/* Avatar / initials */}
+            {item.avatar ? (
+              <img src={item.avatar} alt={item.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
+            ) : (
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                style={{ backgroundColor: color }}
+              >
+                {item.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+            )}
+
+            {/* Name */}
+            <span className="w-24 shrink-0 text-xs font-medium text-gray-700 dark:text-[#e9edef] truncate" title={item.name}>
+              {item.name}
+            </span>
+
+            {/* Bar track */}
+            <div className="flex-1 bg-gray-100 dark:bg-[#2a3942] rounded-full h-5 overflow-hidden">
+              <div
+                className="h-full rounded-full flex items-center justify-end px-2 transition-all duration-500"
+                style={{ width: `${pct}%`, backgroundColor: color, minWidth: item.conversations > 0 ? '2rem' : 0 }}
+              >
+                {item.conversations > 0 && (
+                  <span className="text-white text-xs font-semibold leading-none">{item.conversations}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Numeric value outside bar for small bars */}
+            <span className="w-8 text-xs text-gray-400 dark:text-[#8696a0] shrink-0 text-end tabular-nums">
+              {item.conversations}
+            </span>
+          </div>
+        )
+      })}
+      {data.length === 0 && (
+        <p className="text-xs text-gray-400 dark:text-[#8696a0] text-center py-4">—</p>
+      )}
+    </div>
   )
 }
 
