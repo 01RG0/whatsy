@@ -423,6 +423,64 @@ export default function WhatsAppConnectionPage() {
     }
   }, [])
 
+  // startPoll polls /v1/sync/messages/status every 2 s to keep the progress bar
+  // live after the SSE stream closes (Railway's 30 s proxy timeout), and also on
+  // page load/refresh when a sync is already running in the background.
+  function startPoll() {
+    if (msgSyncPollRef.current) clearInterval(msgSyncPollRef.current)
+    msgSyncPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/v1/sync/messages/status`, { headers: getAuthHeader() })
+        const data = await res.json()
+        if (data.phase === 'running') {
+          setMsgSync({
+            phase: 'syncing',
+            synced: data.current ?? 0,
+            total: data.total ?? 0,
+            percent: data.total > 0 ? Math.min(99, Math.floor((data.current ?? 0) * 100 / data.total)) : 0,
+            message: data.message || `Processing conversation ${data.current} of ${data.total}…`,
+          })
+        } else if (data.phase === 'done' || data.phase === 'idle') {
+          clearInterval(msgSyncPollRef.current!)
+          msgSyncPollRef.current = null
+          setMsgSync(s => ({
+            ...s,
+            phase: 'done',
+            percent: 100,
+            message: data.message || 'Sync complete',
+          }))
+        } else if (data.phase === 'error') {
+          clearInterval(msgSyncPollRef.current!)
+          msgSyncPollRef.current = null
+          setMsgSync(s => ({ ...s, phase: 'error', message: data.message }))
+        }
+      } catch { /* network blip — keep polling */ }
+    }, 2000)
+  }
+
+  // On mount, check whether a message sync is already running (e.g. the user
+  // refreshed the page mid-sync). If so, resume the progress bar immediately.
+  useEffect(() => {
+    async function checkSyncOnMount() {
+      try {
+        const res = await fetch(`${API_BASE}/v1/sync/messages/status`, { headers: getAuthHeader() })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.phase === 'running') {
+          setMsgSync({
+            phase: 'syncing',
+            synced: data.current ?? 0,
+            total: data.total ?? 0,
+            percent: data.total > 0 ? Math.min(99, Math.floor((data.current ?? 0) * 100 / data.total)) : 0,
+            message: data.message || `Processing conversation ${data.current} of ${data.total}…`,
+          })
+          startPoll()
+        }
+      } catch { /* ignore — page still works without auto-resume */ }
+    }
+    checkSyncOnMount()
+  }, [])
+
   // Background incremental sync on page load — silent, fast, no progress bar
   useEffect(() => {
     if (senders.length === 0) return
@@ -501,40 +559,6 @@ export default function WhatsAppConnectionPage() {
     msgSyncAbortRef.current = ctrl
     msgSyncHadProgressRef.current = false
     setMsgSync({ phase: 'counting', synced: 0, total: 0, percent: 0, message: 'Loading conversations…' })
-
-    // startPoll begins polling /v1/sync/messages/status every 2 s so the UI
-    // stays live after the SSE stream closes (Railway's 30 s proxy timeout).
-    const startPoll = () => {
-      if (msgSyncPollRef.current) clearInterval(msgSyncPollRef.current)
-      msgSyncPollRef.current = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_BASE}/v1/sync/messages/status`, { headers: getAuthHeader() })
-          const data = await res.json()
-          if (data.phase === 'running') {
-            setMsgSync({
-              phase: 'syncing',
-              synced: data.current ?? 0,
-              total: data.total ?? 0,
-              percent: data.total > 0 ? Math.min(99, Math.floor((data.current ?? 0) * 100 / data.total)) : 0,
-              message: data.message || `Processing conversation ${data.current} of ${data.total}…`,
-            })
-          } else if (data.phase === 'done' || data.phase === 'idle') {
-            clearInterval(msgSyncPollRef.current!)
-            msgSyncPollRef.current = null
-            setMsgSync(s => ({
-              ...s,
-              phase: 'done',
-              percent: 100,
-              message: data.message || 'Sync complete',
-            }))
-          } else if (data.phase === 'error') {
-            clearInterval(msgSyncPollRef.current!)
-            msgSyncPollRef.current = null
-            setMsgSync(s => ({ ...s, phase: 'error', message: data.message }))
-          }
-        } catch { /* network blip — keep polling */ }
-      }, 2000)
-    }
 
     try {
       const res = await fetch(`${API_BASE}/v1/sync/messages/stream`, {
