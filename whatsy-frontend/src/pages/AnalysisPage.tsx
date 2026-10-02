@@ -236,25 +236,32 @@ function WorkloadChart({ agents }: WorkloadChartProps) {
 
 interface HourlyChartProps { activeHours: ActiveHour[] }
 
+// Convert a UTC hour integer to a Cairo-timezone AM/PM label (e.g. "9 ص", "3 م")
+function utcHourToCairo(utcHour: number, locale = 'ar-EG'): string {
+  const d = new Date()
+  d.setUTCHours(utcHour, 0, 0, 0)
+  return d.toLocaleTimeString(locale, { timeZone: 'Africa/Cairo', hour: 'numeric', hour12: true })
+}
+
 function HourlyChart({ activeHours }: HourlyChartProps) {
   const filled = Array.from({ length: 24 }, (_, h) => {
     const found = activeHours.find((a) => a.hour === h)
     return { hour: h, count: found ? found.count : 0 }
   })
   return (
-    <ResponsiveContainer width="100%" height={100}>
+    <ResponsiveContainer width="100%" height={110}>
       <BarChart data={filled} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
         <XAxis
           dataKey="hour"
           tick={{ fontSize: 9, fill: '#8696a0' }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(h: number) => (h % 2 === 0 ? `${h}` : '')}
+          tickFormatter={(h: number) => (h % 3 === 0 ? utcHourToCairo(h) : '')}
         />
         <YAxis hide allowDecimals={false} />
         <Tooltip
-          formatter={(value: unknown) => [`${value as number} msgs`, '']}
-          labelFormatter={(h: React.ReactNode) => `${h}:00`}
+          formatter={(value: unknown) => [`${value as number} رسالة`, '']}
+          labelFormatter={(h: unknown) => utcHourToCairo(h as number)}
           contentStyle={{ background: '#111b21', border: '1px solid #222e35', borderRadius: 8, color: '#e9edef', fontSize: 11 }}
           cursor={{ fill: '#00a884', fillOpacity: 0.1 }}
         />
@@ -262,6 +269,15 @@ function HourlyChart({ activeHours }: HourlyChartProps) {
       </BarChart>
     </ResponsiveContainer>
   )
+}
+
+// Derive first-active and last-active hours from activeHours array, formatted in Cairo time
+function getWorkingHours(activeHours: ActiveHour[]): string {
+  const active = activeHours.filter((h) => h.count > 0)
+  if (!active.length) return '—'
+  const min = Math.min(...active.map((h) => h.hour))
+  const max = Math.max(...active.map((h) => h.hour))
+  return `${utcHourToCairo(min)} – ${utcHourToCairo(max)}`
 }
 
 function AgentInitials({ name }: { name: string }) {
@@ -547,6 +563,7 @@ export default function AnalysisPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_msgs_sent}</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_chats}</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_active_time}</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_working_hours}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -581,6 +598,7 @@ export default function AnalysisPage() {
                     <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.messagesSent.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : agent.conversationsHandled.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatActiveTime(agent.activeTimeSeconds)}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{isWhatsAppApp ? '—' : getWorkingHours(agent.activeHours ?? [])}</td>
                     <td className="px-4 py-3 text-right">
                       {!isWhatsAppApp && (
                         <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
@@ -596,7 +614,7 @@ export default function AnalysisPage() {
                   </tr>
                   {!isWhatsAppApp && expandedAgent === agent.id && (
                     <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
-                      <td colSpan={5} className="px-5 py-3">
+                      <td colSpan={6} className="px-5 py-3">
                         <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">{t.analysis_hourly_activity}</p>
                         <HourlyChart activeHours={agent.activeHours ?? []} />
                       </td>
