@@ -133,12 +133,14 @@ func parseSince(s string) time.Time {
 	return t
 }
 
-// fetchPage fetches a single Zernio API page with retry on 429 and 5xx.
+// fetchPage fetches a single Zernio API page with retry on 429, 5xx, and network errors.
 func (h *SyncHandler) fetchPage(ctx context.Context, url, key string) ([]byte, int, error) {
 	const max429 = 5
 	const max5xx = 3
+	const maxNet = 3
 	retries429 := 0
 	retries5xx := 0
+	retriesNet := 0
 	for {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -147,7 +149,17 @@ func (h *SyncHandler) fetchPage(ctx context.Context, url, key string) ([]byte, i
 		req.Header.Set("Authorization", "Bearer "+key)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return nil, 0, fmt.Errorf("zernio fetch: %w", err)
+			retriesNet++
+			if retriesNet > maxNet {
+				return nil, 0, fmt.Errorf("zernio fetch: %w", err)
+			}
+			log.Printf("[sync] network error, waiting 3s (retry %d/%d): %v", retriesNet, maxNet, err)
+			select {
+			case <-ctx.Done():
+				return nil, 0, ctx.Err()
+			case <-time.After(3 * time.Second):
+			}
+			continue
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
