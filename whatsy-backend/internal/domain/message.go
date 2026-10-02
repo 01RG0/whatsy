@@ -88,4 +88,5 @@ type Message struct {
 	ReplyTo          *ReplyTo       `json:"replyTo,omitempty"`
 	Reactions        []Reaction     `json:"reactions,omitempty"`
 	ContactPhone     string         `json:"contactPhone,omitempty"`
+	IsForwarded      bool           `json:"isForwarded"`
 }

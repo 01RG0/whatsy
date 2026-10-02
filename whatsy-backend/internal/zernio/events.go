@@ -89,6 +89,8 @@ type InboundMessagePayload struct {
 	ReplyTo *ReplyToPayload
 	// ContactPhone is the phone number of the first contact in a contacts message.
 	ContactPhone string
+	// IsForwarded is true when the message was forwarded.
+	IsForwarded bool
 }
 
 type rawInboundMessage struct {
@@ -134,7 +136,9 @@ type rawInboundMessage struct {
 			QuotedMessage struct {
 				Body string `json:"body"`
 			} `json:"quotedMessage"`
-			StanzaID string `json:"stanzaId"`
+			StanzaID        string `json:"stanzaId"`
+			IsForwarded     bool   `json:"is_forwarded"`
+			ForwardingScore int    `json:"forwarding_score"`
 		} `json:"contextInfo"`
 		// Contacts carries vCard data for contacts messages.
 		// Zernio send API uses phones[].phone; WhatsApp Business app echoes use Meta's
@@ -188,6 +192,11 @@ type rawInboundMessage struct {
 	Account struct {
 		AccountID string `json:"accountId"`
 	} `json:"account"`
+
+	ContextInfo struct {
+		IsForwarded     bool `json:"is_forwarded"`
+		ForwardingScore int  `json:"forwarding_score"`
+	} `json:"contextInfo"`
 }
 
 // UnmarshalJSON accepts the documented message.received shape and the legacy
@@ -252,6 +261,11 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 		if m.ContextInfo.QuotedMessage.Body != "" {
 			p.ReplyTo.Content = m.ContextInfo.QuotedMessage.Body
 		}
+	}
+
+	if m.ContextInfo.IsForwarded || m.ContextInfo.ForwardingScore > 0 ||
+		raw.ContextInfo.IsForwarded || raw.ContextInfo.ForwardingScore > 0 {
+		p.IsForwarded = true
 	}
 
 	// Contact messages: Zernio puts the contacts array in top-level metadata.contacts

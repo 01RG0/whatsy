@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
 import { ChatWindow } from './ChatWindow';
+import { ForwardModal } from './ForwardModal';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
 import { getMessages, getConversations, sendMessage, markRead, markUnread, assignConversation, getAgents, addConversationLabel } from '../api/inbox';
@@ -48,6 +49,17 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<ZernioMessage | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  }, []);
 
   // On mobile, push a history entry when a chat opens so the system back button
   // closes the chat instead of exiting the app.
@@ -566,6 +578,106 @@ export const WhatsAppInboxApp: React.FC = () => {
     [activeConversationId, agents, updateConversation]
   );
 
+  const handleForwardSubmit = useCallback(
+    async (targetConversationIds: string[], msg: ZernioMessage) => {
+      let basePayload: Partial<SendMessagePayload>;
+
+      if (msg.type === 'contacts') {
+        basePayload = {
+          contacts: [
+            {
+              name: { formatted_name: msg.content || '' },
+              phones: [{ phone: msg.contactPhone || '' }],
+            },
+          ],
+          forwarded: true,
+        };
+      } else if (msg.attachments && msg.attachments.length > 0) {
+        basePayload = {
+          message: msg.content || '',
+          attachmentUrl: msg.attachments[0].url,
+          attachmentType: (msg.attachments[0].mimeType || msg.attachments[0].type) as any,
+          attachmentName: msg.attachments[0].name,
+          forwarded: true,
+        };
+      } else {
+        basePayload = {
+          message: msg.content || '',
+          forwarded: true,
+        };
+      }
+
+      const now = new Date().toISOString();
+
+      await Promise.all(
+        targetConversationIds.map(async (targetId) => {
+          const tempId = `temp-${crypto.randomUUID()}`;
+          const optimistic: ZernioMessage = {
+            id: tempId,
+            conversationId: targetId,
+            direction: 'outbound',
+            type: msg.type,
+            content: basePayload.message || msg.content || '',
+            status: 'sent',
+            createdAt: now,
+            isForwarded: true,
+            contactPhone: msg.contactPhone,
+            attachments: basePayload.attachmentUrl
+              ? [
+                  {
+                    url: basePayload.attachmentUrl,
+                    type: (basePayload.attachmentType === 'file' ? 'file' : (basePayload.attachmentType || 'document')) as any,
+                    name: basePayload.attachmentName,
+                  },
+                ]
+              : msg.attachments,
+          };
+
+          receiveMessage(targetId, optimistic);
+          bumpConversation(targetId, {
+            lastMessage: {
+              id: tempId,
+              content: optimistic.content,
+              type: optimistic.type,
+              direction: 'outbound',
+              senderName: 'You',
+              createdAt: now,
+              status: 'sent',
+            },
+            updatedAt: now,
+            unreadCount: 0,
+            isMarkedUnread: false,
+          });
+
+          try {
+            const real = await sendMessage(targetId, basePayload);
+            useInboxStore.getState().replaceMessage(targetId, tempId, { ...real, status: 'sent', isForwarded: true });
+            updateConversation({
+              id: targetId,
+              lastMessage: {
+                id: real.id,
+                content: real.content,
+                type: real.type,
+                direction: real.direction,
+                senderName: real.senderName,
+                createdAt: real.createdAt,
+                status: real.status,
+              },
+              updatedAt: real.createdAt,
+            });
+          } catch (err) {
+            console.error(`[WhatsAppInboxApp] Forward to ${targetId} failed:`, err);
+            useInboxStore.getState().updateMessageStatus(tempId, 'failed');
+          }
+        })
+      );
+
+      setForwardingMessage(null);
+      showToast(t.message_forwarded);
+    },
+    [receiveMessage, bumpConversation, updateConversation, showToast, t.message_forwarded]
+  );
+
   return (
     <div className="w-full flex-1 min-h-0 flex flex-col bg-gray-100 dark:bg-[#111b21] overflow-hidden">
       {!wsConnected && (
@@ -626,6 +738,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           onClearInitialTargetMessageId={() => setTargetMessageId(null)}
           onSendMessage={handleSendMessage}
           onRetryMessage={handleRetryMessage}
+          onForward={(msg) => setForwardingMessage(msg)}
           onContactMessage={handleContactMessage}
           viewers={activeViewers}
           typingLock={activeLock}
@@ -643,6 +756,23 @@ export const WhatsAppInboxApp: React.FC = () => {
         />
       </div>
       </div>
+
+      <ForwardModal
+        isOpen={Boolean(forwardingMessage)}
+        message={forwardingMessage}
+        conversations={conversations}
+        onClose={() => setForwardingMessage(null)}
+        onForward={handleForwardSubmit}
+      />
+
+      {toastMessage && (
+        <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#111b21] dark:bg-[#202c33] text-white text-sm px-4 py-2.5 rounded-lg shadow-xl border border-gray-700/50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <svg className="w-4 h-4 text-[#00a884] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

@@ -211,6 +211,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		ZernioMessageID: dedupeID,
 		CreatedAt:       payload.Timestamp,
 		ContactPhone:    payload.ContactPhone,
+		IsForwarded:     payload.IsForwarded,
 	}
 	if message.Direction == "" {
 		message.Direction = "inbound"
@@ -451,6 +452,18 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		Content:        payload.Message,
 		Status:         domain.StatusPending,
 		SentByAgentID:  agentID,
+	}
+	if payload.Forwarded {
+		message.IsForwarded = true
+	}
+	if len(payload.Contacts) > 0 {
+		c := payload.Contacts[0]
+		if message.Content == "" {
+			message.Content = c.Name.FormattedName
+		}
+		if len(c.Phones) > 0 {
+			message.ContactPhone = c.Phones[0].Phone
+		}
 	}
 	if payload.AttachmentURL != "" {
 		message.Attachments = []domain.Attachment{{
@@ -807,6 +820,9 @@ func (s *ChatService) StartRetryLoop(ctx context.Context) {
 }
 
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
+	if len(payload.Contacts) > 0 {
+		return domain.ContentTypeContacts
+	}
 	if payload.VoiceNote {
 		return domain.ContentTypeVoiceNote
 	}

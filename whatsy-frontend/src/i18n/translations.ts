@@ -85,6 +85,12 @@ type Translations = {
   download: string
   tap_to_retry: string
   reply: string
+  forward: string
+  forward_message_to: string
+  forwarded: string
+  message_forwarded: string
+  send_to: string
+  select_chats: string
   // ConversationRow
   unknown_contact: string
   no_messages_yet: string
@@ -245,6 +251,12 @@ export const en: Translations = {
   download: 'Download',
   tap_to_retry: 'Tap to retry',
   reply: 'Reply',
+  forward: 'Forward',
+  forward_message_to: 'Forward message to',
+  forwarded: 'Forwarded',
+  message_forwarded: 'Message forwarded',
+  send_to: 'Send to',
+  select_chats: 'Select chats',
   unknown_contact: 'Unknown Contact',
   no_messages_yet: 'No messages yet',
   chat_options: 'Chat options',
@@ -398,6 +410,12 @@ export const ar: Translations = {
   download: 'تنزيل',
   tap_to_retry: 'انقر للإعادة',
   reply: 'رد',
+  forward: 'إعادة توجيه',
+  forward_message_to: 'إعادة توجيه الرسالة إلى',
+  forwarded: 'رسالة محولة',
+  message_forwarded: 'تمت إعادة توجيه الرسالة',
+  send_to: 'إرسال إلى',
+  select_chats: 'اختر المحادثات',
   unknown_contact: 'جهة اتصال غير معروفة',
   no_messages_yet: 'لا توجد رسائل بعد',
   chat_options: 'خيارات المحادثة',

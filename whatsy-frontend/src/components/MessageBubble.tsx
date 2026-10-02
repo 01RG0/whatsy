@@ -102,6 +102,7 @@ interface MessageBubbleProps {
   onImageClick?: (url: string) => void;
   onButtonClick?: (buttonId: string, buttonText: string) => void;
   onReply?: (message: ZernioMessage) => void;
+  onForward?: (message: ZernioMessage) => void;
   onContactMessage?: (phone: string) => void;
   onRetry?: (message: ZernioMessage) => void;
   onEditImage?: (url: string) => void;
@@ -117,6 +118,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onImageClick,
   onButtonClick,
   onReply,
+  onForward,
   onRetry,
   onEditImage,
   onContactMessage,
@@ -331,6 +333,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#d1d7db]${!isConsecutive ? ' ltr:rounded-tl-none rtl:rounded-tr-none' : ''}`
         }`}
       >
+        {/* Forwarded Indicator */}
+        {message.isForwarded && (
+          <div className="flex items-center gap-1 text-[11px] text-[#8696a0] dark:text-[#8696a0] italic mb-1 px-3 pt-1.5 select-none">
+            <svg className="w-3 h-3 text-[#8696a0] rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 10H11a5 5 0 00-5 5v3M21 10l-6-6M21 10l-6 6" />
+            </svg>
+            <span>{t.forwarded}</span>
+          </div>
+        )}
+
         {/* Reply Quote Banner */}
         {message.replyTo && (
           <div
@@ -698,15 +710,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Hover Quick Actions */}
-        <div className="absolute top-1 end-1 hidden group-hover:flex items-center gap-1 bg-white/90 dark:bg-[#111b21]/80 rounded px-1 py-0.5 backdrop-blur-sm shadow">
+        <div className="absolute top-1 end-1 hidden group-hover:flex items-center gap-1 bg-white/90 dark:bg-[#111b21]/80 rounded px-1 py-0.5 backdrop-blur-sm shadow z-10">
           <button
             type="button"
             onClick={() => onReply?.(message)}
             title={t.reply}
-            className="text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white p-0.5"
+            className="text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 10h10a5 5 0 015 5v3M3 10l6-6M3 10l6 6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => onForward?.(message)}
+            title={t.forward}
+            className="text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
+          >
+            <svg className="w-3.5 h-3.5 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 10H11a5 5 0 00-5 5v3M21 10l-6-6M21 10l-6 6" />
             </svg>
           </button>
         </div>

@@ -49,6 +49,7 @@ interface ChatWindowProps {
   isLoadingMessages?: boolean;
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
   onRetryMessage?: (message: ZernioMessage) => void;
+  onForward?: (message: ZernioMessage) => void;
   onContactMessage?: (phone: string) => void;
   onSendVoiceNote?: (audioBlob: Blob) => void;
   onBack?: () => void;
@@ -75,6 +76,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isLoadingMessages = false,
   onSendMessage,
   onRetryMessage,
+  onForward,
   onContactMessage,
   onSendVoiceNote,
   onBack,
@@ -622,6 +624,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           senderName: m.direction === 'outbound' ? t.reply_you : conversation.participant.displayName,
                           content: m.content || 'Attachment',
                         })}
+                        onForward={onForward}
                         onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
                         onRetry={isViewerMode ? undefined : onRetryMessage}
                         onContactMessage={onContactMessage}

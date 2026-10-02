@@ -100,23 +100,40 @@ type Interactive struct {
 	Action *InteractiveAction `json:"action,omitempty"`
 }
 
+// ContactCardPhone is a phone entry in a contact card.
+type ContactCardPhone struct {
+	Phone string `json:"phone"`
+	Type  string `json:"type,omitempty"` // CELL | HOME | WORK
+	WaID  string `json:"wa_id,omitempty"`
+}
+
+// ContactCard is a WhatsApp contact card for contacts messages.
+type ContactCard struct {
+	Name struct {
+		FormattedName string `json:"formatted_name"`
+	} `json:"name"`
+	Phones []ContactCardPhone `json:"phones"`
+}
+
 // SendMessagePayload is the JSON body for POST /v1/inbox/conversations/{id}/messages.
 // accountId is required by the Zernio send-message endpoint; message, or an
 // attachment, must be present. attachmentType is one of image, video, audio,
 // file. quickReplies and buttons are mutually exclusive (max 13 / max 3).
 type SendMessagePayload struct {
-	AccountID      string       `json:"accountId"`
-	ConversationID string       `json:"conversationId,omitempty"`
-	ParticipantID  string       `json:"participantId,omitempty"`
-	Message        string       `json:"message"`
-	AttachmentURL  string       `json:"attachmentUrl,omitempty"`
-	AttachmentType string       `json:"attachmentType,omitempty"` // image, video, audio, file
-	AttachmentName string       `json:"attachmentName,omitempty"` // WhatsApp document display name
-	VoiceNote      bool         `json:"voiceNote,omitempty"`      // WhatsApp audio -> PTT (.ogg OPUS)
-	ReplyTo        string       `json:"replyTo,omitempty"`        // WhatsApp: platform message id (wamid)
-	Buttons        []Button     `json:"buttons,omitempty"`        // max 3, mutually exclusive with QuickReplies
-	QuickReplies   []QuickReply `json:"quickReplies,omitempty"`   // max 13
-	Interactive    *Interactive `json:"interactive,omitempty"`    // list / CTA URL / flow
+	AccountID      string        `json:"accountId"`
+	ConversationID string        `json:"conversationId,omitempty"`
+	ParticipantID  string        `json:"participantId,omitempty"`
+	Message        string        `json:"message"`
+	AttachmentURL  string        `json:"attachmentUrl,omitempty"`
+	AttachmentType string        `json:"attachmentType,omitempty"` // image, video, audio, file
+	AttachmentName string        `json:"attachmentName,omitempty"` // WhatsApp document display name
+	VoiceNote      bool          `json:"voiceNote,omitempty"`      // WhatsApp audio -> PTT (.ogg OPUS)
+	ReplyTo        string        `json:"replyTo,omitempty"`        // WhatsApp: platform message id (wamid)
+	Buttons        []Button      `json:"buttons,omitempty"`        // max 3, mutually exclusive with QuickReplies
+	QuickReplies   []QuickReply  `json:"quickReplies,omitempty"`   // max 13
+	Interactive    *Interactive  `json:"interactive,omitempty"`    // list / CTA URL / flow
+	Contacts       []ContactCard `json:"contacts,omitempty"`       // WhatsApp contact cards
+	Forwarded      bool          `json:"forwarded,omitempty"`
 }
 
 // SentMessage is returned after a successful send.

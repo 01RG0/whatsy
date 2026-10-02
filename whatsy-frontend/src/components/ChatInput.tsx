@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { SendMessagePayload } from './types';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { SendMessagePayload, ContactCard } from './types';
 import { API_BASE } from '../api/inbox';
 import { useT } from '../i18n/translations';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -62,6 +62,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const waveformAnimRef = useRef<number | null>(null);
   const [annotatorFile, setAnnotatorFile] = useState<File | null>(null);
 
+  // Contact picker state
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [contactTab, setContactTab] = useState<'search' | 'manual'>('search');
+  const [contactSearch, setContactSearch] = useState('');
+  const [contactResults, setContactResults] = useState<{ id: string; name: string; phone: string }[]>([]);
+  const [contactSearchLoading, setContactSearchLoading] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualPhone, setManualPhone] = useState('');
+
   // Interactive message composer state
   const [showInteractiveComposer, setShowInteractiveComposer] = useState(false);
   const [interactiveTab, setInteractiveTab] = useState<'buttons' | 'list'>('buttons');
@@ -101,6 +110,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       document.removeEventListener('touchstart', handler);
     };
   }, [showAttachMenu]);
+
+  useEffect(() => {
+    if (!showContactPicker || contactTab !== 'search') return;
+    if (contactSearch.trim().length < 1) { setContactResults([]); return; }
+    let cancelled = false;
+    setContactSearchLoading(true);
+    const token = localStorage.getItem('whatsy_jwt');
+    fetch(`${API_BASE}/v1/students?search=${encodeURIComponent(contactSearch)}&limit=20`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then((data: { students?: { id: string; name: string; phone: string }[] }) => {
+        if (!cancelled) setContactResults(data.students || []);
+      })
+      .catch(() => { if (!cancelled) setContactResults([]); })
+      .finally(() => { if (!cancelled) setContactSearchLoading(false); });
+    return () => { cancelled = true; };
+  }, [contactSearch, contactTab, showContactPicker]);
+
+  const handleSendContact = useCallback((card: ContactCard) => {
+    onSendMessage({ message: '', contacts: [card] });
+    setShowContactPicker(false);
+    setContactSearch('');
+    setManualName('');
+    setManualPhone('');
+  }, [onSendMessage]);
 
   useEffect(() => {
     if (!isRecording) {
@@ -517,6 +552,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           </span>
                           <span>Audio</span>
                         </button>
+                        <button type="button" onClick={() => { setShowAttachMenu(false); setShowContactPicker(true); }} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#182229] text-sm text-gray-700 dark:text-[#e9edef] transition">
+                          <span className="w-8 h-8 rounded-full bg-[#25d366] flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+                          </span>
+                          <span>Contact</span>
+                        </button>
                         {interactiveEnabled && (
                           <button
                             type="button"
@@ -582,6 +623,89 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         )}
       </div>
     </div>
+
+    {/* Contact Picker Modal */}
+    {showContactPicker && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowContactPicker(false)}>
+        <div className="bg-white dark:bg-[#1f2c33] rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <span className="font-semibold text-gray-900 dark:text-[#e9edef] text-base">Send Contact</span>
+            <button type="button" onClick={() => setShowContactPicker(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-[#e9edef]">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div className="flex border-b border-gray-100 dark:border-[#2a3942] mx-4">
+            {(['search', 'manual'] as const).map(tab => (
+              <button key={tab} type="button" onClick={() => setContactTab(tab)}
+                className={`flex-1 py-2 text-xs font-medium transition ${contactTab === tab ? 'text-[#00a884] border-b-2 border-[#00a884]' : 'text-gray-400 dark:text-[#8696a0]'}`}>
+                {tab === 'search' ? 'Search Contacts' : 'Enter Manually'}
+              </button>
+            ))}
+          </div>
+          <div className="p-4">
+            {contactTab === 'search' ? (
+              <>
+                <input
+                  type="text"
+                  value={contactSearch}
+                  onChange={e => setContactSearch(e.target.value)}
+                  placeholder="Search by name or phone..."
+                  autoFocus
+                  className="w-full bg-gray-50 dark:bg-[#2a3942] border border-gray-200 dark:border-[#3d4a54] rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] outline-none focus:border-[#00a884] transition mb-3"
+                />
+                <div className="max-h-52 overflow-y-auto flex flex-col gap-1">
+                  {contactSearchLoading && <p className="text-xs text-center text-gray-400 py-2">Searching…</p>}
+                  {!contactSearchLoading && contactSearch.trim().length > 0 && contactResults.length === 0 && (
+                    <p className="text-xs text-center text-gray-400 py-2">No contacts found</p>
+                  )}
+                  {!contactSearchLoading && contactSearch.trim().length === 0 && (
+                    <p className="text-xs text-center text-gray-400 py-2">Type to search</p>
+                  )}
+                  {contactResults.map(c => (
+                    <button key={c.id} type="button"
+                      onClick={() => handleSendContact({ name: { formatted_name: c.name }, phones: [{ phone: c.phone, type: 'CELL' }] })}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-[#2a3942] transition text-start w-full">
+                      <div className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {c.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-[#e9edef] truncate">{c.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-[#8696a0] truncate">{c.phone}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={e => setManualName(e.target.value)}
+                  placeholder="Name"
+                  className="w-full bg-gray-50 dark:bg-[#2a3942] border border-gray-200 dark:border-[#3d4a54] rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] outline-none focus:border-[#00a884] transition"
+                />
+                <input
+                  type="tel"
+                  value={manualPhone}
+                  onChange={e => setManualPhone(e.target.value)}
+                  placeholder="Phone number (e.g. +201234567890)"
+                  className="w-full bg-gray-50 dark:bg-[#2a3942] border border-gray-200 dark:border-[#3d4a54] rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] outline-none focus:border-[#00a884] transition"
+                />
+                <button
+                  type="button"
+                  disabled={!manualName.trim() || !manualPhone.trim()}
+                  onClick={() => handleSendContact({ name: { formatted_name: manualName.trim() }, phones: [{ phone: manualPhone.trim(), type: 'CELL' }] })}
+                  className="w-full py-2.5 bg-[#00a884] text-white text-sm font-medium rounded-xl hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Send Contact
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 };

@@ -138,3 +138,79 @@ func TestInboundMessagePayload_QuotedReplies(t *testing.T) {
 		})
 	}
 }
+
+func TestInboundMessagePayload_IsForwarded(t *testing.T) {
+	tests := []struct {
+		name        string
+		jsonPayload string
+		expected    bool
+	}{
+		{
+			name: "is_forwarded true in message.contextInfo",
+			jsonPayload: `{
+				"message": {
+					"id": "msg-1",
+					"contextInfo": {
+						"is_forwarded": true
+					}
+				}
+			}`,
+			expected: true,
+		},
+		{
+			name: "forwarding_score > 0 in message.contextInfo",
+			jsonPayload: `{
+				"message": {
+					"id": "msg-2",
+					"contextInfo": {
+						"forwarding_score": 1
+					}
+				}
+			}`,
+			expected: true,
+		},
+		{
+			name: "is_forwarded false and forwarding_score 0",
+			jsonPayload: `{
+				"message": {
+					"id": "msg-3",
+					"contextInfo": {
+						"is_forwarded": false,
+						"forwarding_score": 0
+					}
+				}
+			}`,
+			expected: false,
+		},
+		{
+			name: "top-level contextInfo is_forwarded",
+			jsonPayload: `{
+				"message": {"id": "msg-4"},
+				"contextInfo": {
+					"is_forwarded": true
+				}
+			}`,
+			expected: true,
+		},
+		{
+			name: "no contextInfo",
+			jsonPayload: `{
+				"message": {"id": "msg-5"}
+			}`,
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var p InboundMessagePayload
+			if err := json.Unmarshal([]byte(tc.jsonPayload), &p); err != nil {
+				t.Fatalf("unexpected unmarshal error: %v", err)
+			}
+			if p.IsForwarded != tc.expected {
+				t.Errorf("expected IsForwarded %v, got %v", tc.expected, p.IsForwarded)
+			}
+		})
+	}
+}
+

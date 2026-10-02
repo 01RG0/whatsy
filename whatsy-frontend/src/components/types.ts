@@ -87,12 +87,15 @@ export interface ZernioMessage {
   };
   zernioMessageId?: string;
   contactPhone?: string;
+  isForwarded?: boolean;
   reactions?: Array<{
     emoji: string;
     senderId: string;
     senderName?: string;
   }>;
 }
+
+export type Conversation = ZernioConversation;
 
 export interface ZernioParticipant {
   id: string;
@@ -153,6 +156,17 @@ export interface InteractivePayload {
   action?: InteractiveListAction;
 }
 
+export interface ContactCardPhone {
+  phone: string;
+  type?: string;
+  wa_id?: string;
+}
+
+export interface ContactCard {
+  name: { formatted_name: string };
+  phones: ContactCardPhone[];
+}
+
 export interface SendMessagePayload {
   accountId: string;
   conversationId?: string;
@@ -166,6 +180,8 @@ export interface SendMessagePayload {
   replyTo?: string;
   buttons?: InteractiveButton[];
   interactive?: InteractivePayload;
+  contacts?: ContactCard[];
+  forwarded?: boolean;
 }
 
 export type ConversationFilter = 'all' | 'unread' | 'groups' | 'assigned_to_me' | 'unanswered';
