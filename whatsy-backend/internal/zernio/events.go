@@ -242,8 +242,10 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Contact messages: populate content from formatted_name and phone from first number.
-	if p.Type == "contacts" && len(m.Contacts) > 0 {
+	// Contact messages: parse contacts array whenever present regardless of type field,
+	// because Zernio sometimes sends type="text" with a contacts array for WhatsApp contact shares.
+	if len(m.Contacts) > 0 {
+		p.Type = "contacts"
 		c := m.Contacts[0]
 		if p.Content == "" && c.Name.FormattedName != "" {
 			p.Content = c.Name.FormattedName
