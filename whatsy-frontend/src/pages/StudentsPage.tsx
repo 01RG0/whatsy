@@ -28,6 +28,7 @@ export default function StudentsPage() {
   const [form, setForm] = useState({ name: '', phone: '', grade: '', enrolledCourse: '', paymentStatus: 'Pending' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -40,8 +41,9 @@ export default function StudentsPage() {
     try {
       const res = await fetch(`${API_BASE}/v1/students?limit=${PAGE_SIZE}&offset=${newOffset}`, { headers: getAuthHeader() })
       if (!res.ok) throw new Error(`[${res.status}]`)
-      const data = await res.json() as Student[] | { students: Student[] }
+      const data = await res.json() as Student[] | { students: Student[]; total?: number }
       const page = Array.isArray(data) ? data : (data.students ?? [])
+      if (!Array.isArray(data) && typeof data.total === 'number') setTotal(data.total)
       setStudents(prev => reset ? page : [...prev, ...page])
       setOffset(newOffset + page.length)
       setHasMore(page.length === PAGE_SIZE)
@@ -96,7 +98,7 @@ export default function StudentsPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-gray-900 dark:text-[#e9edef]">Students</h1>
           <span className="text-sm text-gray-400 dark:text-[#8696a0] bg-gray-100 dark:bg-[#202c33] px-2 py-0.5 rounded-full">
-            {filtered.length}
+            {total > 0 ? total.toLocaleString() : filtered.length}
           </span>
         </div>
         <button
@@ -213,7 +215,7 @@ export default function StudentsPage() {
             {/* Pagination */}
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-[#222e35]">
               <span className="text-sm text-gray-400 dark:text-[#8696a0]">
-                Showing {filtered.length} of {students.length} students
+                Showing {filtered.length} of {total > 0 ? total.toLocaleString() : students.length} students
               </span>
               {hasMore && (
                 <button

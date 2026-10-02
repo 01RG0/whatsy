@@ -60,6 +60,28 @@ func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := queryLimit(r, 50)
 	offset := queryOffset(r, 0)
 
+	// Build count query with the same WHERE filters (no LIMIT/OFFSET).
+	countQuery := `SELECT COUNT(*) FROM students WHERE tenant_id = $1::uuid`
+	countArgs := []any{tenantID}
+	if grade != "" {
+		countArgs = append(countArgs, grade)
+		countQuery += " AND grade = $" + strconv.Itoa(len(countArgs))
+	}
+	if course != "" {
+		countArgs = append(countArgs, course)
+		countQuery += " AND enrolled_course = $" + strconv.Itoa(len(countArgs))
+	}
+	if paymentStatus != "" {
+		countArgs = append(countArgs, paymentStatus)
+		countQuery += " AND payment_status = $" + strconv.Itoa(len(countArgs))
+	}
+	if search != "" {
+		countArgs = append(countArgs, "%"+search+"%")
+		countQuery += " AND (name ILIKE $" + strconv.Itoa(len(countArgs)) + " OR phone ILIKE $" + strconv.Itoa(len(countArgs)) + ")"
+	}
+	var total int
+	_ = h.db.QueryRowContext(r.Context(), countQuery, countArgs...).Scan(&total)
+
 	query := `SELECT id, name, phone, grade, enrolled_course, payment_status, tags, custom_fields, created_at, updated_at FROM students WHERE tenant_id = $1::uuid`
 	args := []any{tenantID}
 
@@ -103,7 +125,7 @@ func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list students"})
 		return
 	}
-	writeJSON(w, http.StatusOK, students)
+	writeJSON(w, http.StatusOK, map[string]any{"students": students, "total": total})
 }
 
 // Create handles POST /v1/students.
