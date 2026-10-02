@@ -148,6 +148,14 @@ type zernioMessage struct {
 	SentAt         time.Time       `json:"sentAt"`
 	CreatedAt      time.Time       `json:"createdAt"`
 	Attachments    json.RawMessage `json:"attachments"`
+	Contacts       []struct {
+		Name struct {
+			FormattedName string `json:"formatted_name"`
+		} `json:"name"`
+		Phones []struct {
+			Phone string `json:"phone"`
+		} `json:"phones"`
+	} `json:"contacts"`
 }
 
 // acquireToken blocks until a rate-limit token is available or ctx is done.
@@ -444,15 +452,27 @@ func (w *worker) upsertMessage(ctx context.Context, dbConvID string, msg zernioM
 		contentType = "text"
 	}
 
+	content := msg.Message
+	contactPhone := ""
+	if contentType == "contacts" && len(msg.Contacts) > 0 {
+		c := msg.Contacts[0]
+		if content == "" && c.Name.FormattedName != "" {
+			content = c.Name.FormattedName
+		}
+		if len(c.Phones) > 0 {
+			contactPhone = c.Phones[0].Phone
+		}
+	}
+
 	var msgID string
 	err := w.db.QueryRowContext(ctx,
 		`INSERT INTO messages
-		    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+		    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, contact_phone)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
 		 ON CONFLICT (zernio_message_id) DO NOTHING
 		 RETURNING id`,
-		dbConvID, direction, contentType, msg.Message, status,
-		msg.ID, attachmentsJSON, ts,
+		dbConvID, direction, contentType, content, status,
+		msg.ID, attachmentsJSON, ts, contactPhone,
 	).Scan(&msgID)
 	if err == sql.ErrNoRows {
 		return nil

@@ -529,31 +529,42 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         }
 
         {message.type === 'contacts' && (
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-[220px]">
             <div className="flex items-center gap-3 px-3 pt-3 pb-2">
-              <div className="w-10 h-10 rounded-full bg-[#00a884]/20 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-[#00a884]" viewBox="0 0 24 24" fill="currentColor">
+              <div className="w-12 h-12 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center shrink-0 text-[#54656f] dark:text-[#aebac1]">
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
                 </svg>
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate">
+                <span className="font-semibold text-[15px] text-[#111b21] dark:text-[#e9edef] truncate leading-tight">
                   {message.content && message.content !== '[Unsupported message]' ? message.content : 'Contact'}
                 </span>
                 {message.contactPhone && (
-                  <p className="text-xs text-[#54656f] dark:text-[#8696a0] mt-0.5 dir-ltr">{message.contactPhone}</p>
+                  <span className="text-[13px] text-[#54656f] dark:text-[#8696a0] mt-0.5 dir-ltr">{message.contactPhone}</span>
                 )}
-                <span className="text-xs text-[#9da3a7]">Contact</span>
               </div>
             </div>
-            <div className="border-t border-black/10 dark:border-white/10 py-2 text-center">
-              <span className="text-sm font-medium text-[#00a884]">View Contact</span>
+            <div className="border-t border-black/10 dark:border-white/10">
+              {message.contactPhone ? (
+                <a
+                  href={`https://wa.me/${message.contactPhone.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full py-2.5 text-center text-sm font-medium text-[#00a884] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Message
+                </a>
+              ) : (
+                <div className="py-2.5 text-center text-sm font-medium text-[#00a884]">Contact</div>
+              )}
             </div>
           </div>
         )}
 
         {/* Text Content */}
-        {message.content && message.content !== '[Unsupported message]' && (
+        {message.content && message.content !== '[Unsupported message]' && message.type !== 'contacts' && (
           <div className="px-3 pt-2 pb-1.5 whitespace-pre-wrap break-words">
             {highlight
               ? <span>{highlightText(displayedContent, highlight)}</span>
