@@ -219,26 +219,68 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		message.Type = domain.ContentTypeText
 	}
 
-	// Resolve quoted-reply context: look up the quoted message by its wamid so
-	// we can show a preview bubble in the UI.
+	// Resolve quoted-reply context: look up the quoted message by its wamid (or local ID)
+	// so we can show a preview bubble in the UI.
 	if payload.ReplyTo != nil && payload.ReplyTo.ZernioMessageID != "" {
-		if quoted, err := s.msgRepo.GetByZernioID(ctx, payload.ReplyTo.ZernioMessageID); err == nil && quoted != nil {
-			senderName := quoted.SenderName
+		quoted, err := s.msgRepo.GetByZernioID(ctx, payload.ReplyTo.ZernioMessageID)
+		if err != nil || quoted == nil {
+			quoted, _ = s.msgRepo.GetByID(ctx, payload.ReplyTo.ZernioMessageID)
+		}
+
+		if quoted != nil {
+			var senderName string
 			if quoted.Direction == "outbound" {
 				senderName = "You"
+			} else if quoted.SenderName != "" {
+				senderName = quoted.SenderName
+			} else {
+				convID := quoted.ConversationID
+				if convID == "" {
+					convID = localConvID
+				}
+				if conv, err := s.convRepo.GetByID(ctx, convID); err == nil && conv != nil && conv.Participant.DisplayName != "" {
+					senderName = conv.Participant.DisplayName
+				} else if payload.ParticipantName != "" {
+					senderName = payload.ParticipantName
+				} else {
+					senderName = "Contact"
+				}
 			}
+
+			var content string
+			if quoted.Content != "" {
+				content = quoted.Content
+			} else if payload.ReplyTo.Content != "" {
+				content = payload.ReplyTo.Content
+			} else {
+				switch quoted.Type {
+				case domain.ContentTypeImage:
+					content = "📷 Photo"
+				case domain.ContentTypeAudio, domain.ContentTypeVoiceNote:
+					content = "🎵 Voice message"
+				case domain.ContentTypeVideo:
+					content = "🎥 Video"
+				case domain.ContentTypeDocument:
+					content = "📄 Document"
+				case domain.ContentTypeSticker:
+					content = "Sticker"
+				default:
+					content = ""
+				}
+			}
+
 			message.ReplyTo = &domain.ReplyTo{
 				ID:         quoted.ID,
 				SenderName: senderName,
-				Content:    quoted.Content,
+				Content:    content,
 			}
 		} else {
 			// Quoted message not in DB (e.g. failed send, old message) — store
-			// the wamid so the frontend can still show a "replying to" indicator.
+			// the fallback data so the frontend can still show a preview.
 			message.ReplyTo = &domain.ReplyTo{
 				ID:         payload.ReplyTo.ZernioMessageID,
-				SenderName: "",
-				Content:    "",
+				SenderName: payload.ReplyTo.SenderName,
+				Content:    payload.ReplyTo.Content,
 			}
 		}
 	}

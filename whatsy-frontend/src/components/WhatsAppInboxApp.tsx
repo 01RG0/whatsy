@@ -411,6 +411,23 @@ export const WhatsAppInboxApp: React.FC = () => {
       if (!activeConversationId) return;
       const now = new Date().toISOString();
       const tempId = `temp-${crypto.randomUUID()}`;
+
+      let replyTo: ZernioMessage['replyTo'] | undefined;
+      if (payload.replyTo) {
+        const convMessages = messages[activeConversationId] ?? [];
+        const quoted = convMessages.find((m) => m.id === payload.replyTo);
+        if (quoted) {
+          replyTo = {
+            id: quoted.id,
+            senderName:
+              quoted.direction === 'outbound'
+                ? 'You'
+                : (quoted.senderName || (activeConversation as any)?.participantName || activeConversation?.participant?.displayName || 'Contact'),
+            content: quoted.content || (quoted.attachments?.length ? 'Attachment' : ''),
+          };
+        }
+      }
+
       const optimistic: ZernioMessage = {
         id: tempId,
         conversationId: activeConversationId,
@@ -419,6 +436,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         content: payload.message || '',
         status: 'sent',
         createdAt: now,
+        ...(replyTo ? { replyTo } : {}),
         attachments: payload.attachmentUrl
           ? [{
               url: payload.attachmentUrl,
@@ -470,7 +488,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         }
       }
     },
-    [activeConversationId, bumpConversation, receiveMessage, updateConversation]
+    [activeConversationId, bumpConversation, receiveMessage, updateConversation, messages, activeConversation]
   );
 
   const handleRetryMessage = useCallback(
@@ -481,6 +499,9 @@ export const WhatsAppInboxApp: React.FC = () => {
       if (message.attachments?.length) {
         payload.attachmentUrl = message.attachments[0].url;
         payload.attachmentType = message.attachments[0].type;
+      }
+      if (message.replyTo) {
+        payload.replyTo = message.replyTo.id;
       }
       try {
         const real = await sendMessage(activeConversationId, payload);

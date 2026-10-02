@@ -114,9 +114,15 @@ type rawInboundMessage struct {
 			Name        string `json:"name"`
 		} `json:"sender"`
 		Metadata struct {
-			InteractiveType  string `json:"interactiveType"`  // list_reply | button_reply | nfm_reply
-			InteractiveId    string `json:"interactiveId"`
-			InteractiveTitle string `json:"interactiveTitle"`
+			InteractiveType   string `json:"interactiveType"`  // list_reply | button_reply | nfm_reply
+			InteractiveId     string `json:"interactiveId"`
+			InteractiveTitle  string `json:"interactiveTitle"`
+			QuotedMessageID   string `json:"quotedMessageId"`
+			QuotedMessage     struct {
+				MessageID         string `json:"messageId"`
+				PlatformMessageID string `json:"platformMessageId"`
+			} `json:"quotedMessage"`
+			ReplyTo           string `json:"replyTo"`
 		} `json:"metadata"`
 		// Context carries the quoted-reply wamid for WhatsApp quoted messages.
 		Context struct {
@@ -149,6 +155,17 @@ type rawInboundMessage struct {
 	MediaURL        string    `json:"mediaUrl"`
 	Timestamp       time.Time `json:"timestamp"`
 	From            string    `json:"from"`
+
+	Metadata struct {
+		QuotedMessageID string `json:"quotedMessageId"`
+		QuotedMessage   struct {
+			MessageID         string `json:"messageId"`
+			PlatformMessageID string `json:"platformMessageId"`
+		} `json:"quotedMessage"`
+		ReplyTo         string `json:"replyTo"`
+	} `json:"metadata"`
+	ReplyTo         string `json:"replyTo"`
+	QuotedMessageID string `json:"quotedMessageId"`
 
 	Conversation struct {
 		ParticipantID       string `json:"participantId"`
@@ -204,10 +221,25 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 	p.InteractiveId = m.Metadata.InteractiveId
 	p.InteractiveTitle = m.Metadata.InteractiveTitle
 
-	// Quoted-reply context: prefer message.context.id (wamid), then contextInfo.stanzaId.
-	quotedWamid := firstNonEmpty(m.Context.ID, m.ContextInfo.StanzaID)
-	if quotedWamid != "" {
-		p.ReplyTo = &ReplyToPayload{ZernioMessageID: quotedWamid}
+	// Quoted-reply context: extract quoted message identifier from all possible Zernio fields.
+	quotedID := firstNonEmpty(
+		raw.Metadata.QuotedMessage.PlatformMessageID,
+		raw.Metadata.QuotedMessageID,
+		raw.Message.Metadata.QuotedMessage.PlatformMessageID,
+		raw.Message.Metadata.QuotedMessageID,
+		raw.Metadata.ReplyTo,
+		raw.ReplyTo,
+		raw.QuotedMessageID,
+		m.Context.ID,
+		m.ContextInfo.StanzaID,
+		raw.Metadata.QuotedMessage.MessageID,
+		raw.Message.Metadata.QuotedMessage.MessageID,
+	)
+	if quotedID != "" {
+		p.ReplyTo = &ReplyToPayload{ZernioMessageID: quotedID}
+		if m.ContextInfo.QuotedMessage.Body != "" {
+			p.ReplyTo.Content = m.ContextInfo.QuotedMessage.Body
+		}
 	}
 
 	// Contact messages: populate content from formatted_name and phone from first number.

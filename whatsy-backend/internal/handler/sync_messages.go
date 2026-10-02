@@ -39,6 +39,9 @@ type zernioMessage struct {
 		URL      string `json:"url"`
 		Filename string `json:"filename"`
 	} `json:"attachments"`
+	Metadata struct {
+		QuotedMessageID string `json:"quotedMessageId"`
+	} `json:"metadata"`
 }
 
 // SyncMessagesStream is the SSE handler for message history sync.
@@ -334,12 +337,22 @@ func (h *SyncHandler) syncConversationMessages(ctx context.Context, localConvID,
 				}
 			}
 
+			var replyToJSON any
+			if msg.Metadata.QuotedMessageID != "" {
+				type replyToPayload struct {
+					ID string `json:"id"`
+				}
+				if b, err := json.Marshal(replyToPayload{ID: msg.Metadata.QuotedMessageID}); err == nil {
+					replyToJSON = string(b)
+				}
+			}
+
 			_, err := h.db.ExecContext(ctx,
 				`INSERT INTO messages
-				    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp)
-				 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8)
+				    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp, reply_to)
+				 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb)
 				 ON CONFLICT DO NOTHING`,
-				localConvID, direction, contentType, msg.Message, status, zernioMsgID, attachmentsJSON, ts,
+				localConvID, direction, contentType, msg.Message, status, zernioMsgID, attachmentsJSON, ts, replyToJSON,
 			)
 			if err != nil {
 				log.Printf("[sync-msgs] insert msg %s: %v", zernioMsgID, err)

@@ -88,3 +88,13 @@ html:not(.dark) .placeholder-gray-400::placeholder { color: var(--light-text-mut
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-left   { padding-left:   env(safe-area-inset-left); }
 .safe-right  { padding-right:  env(safe-area-inset-right); }
+
+/* Quoted reply highlight flash */
+@keyframes replyHighlight {
+  0% { background-color: rgba(0, 168, 132, 0.25); }
+  100% { background-color: transparent; }
+}
+.reply-highlight {
+  animation: replyHighlight 1.5s ease-out;
+  border-radius: 8px;
+}

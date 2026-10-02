@@ -290,7 +290,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   if (message.type === 'revoked') {
     return (
-      <div className={`flex w-full my-0.5 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+      <div id={'msg-' + message.id} className={`flex w-full my-0.5 px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] italic shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${isOutbound ? 'bg-[#e7ffdb] dark:bg-[#005c4b]' : 'bg-white dark:bg-[#202c33]'} text-gray-400 dark:text-[#8696a0]`}>
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
@@ -303,6 +303,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <div
+      id={'msg-' + message.id}
       ref={rowRef}
       className={`group relative flex w-full ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
     >
@@ -327,6 +328,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Reply Quote Banner */}
         {message.replyTo && (
           <div
+            onClick={(e) => {
+              e.stopPropagation();
+              const el = document.getElementById('msg-' + message.replyTo?.id);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.remove('reply-highlight');
+                void el.offsetWidth;
+                el.classList.add('reply-highlight');
+                setTimeout(() => el.classList.remove('reply-highlight'), 1500);
+              }
+            }}
             className={`mx-1.5 mt-1.5 p-2 rounded flex flex-col text-xs border-s-4 cursor-pointer select-none ${
               isOutbound
                 ? 'bg-[#cff5c3] dark:bg-[#025144] border-[#00a884]'
