@@ -385,7 +385,7 @@ export const WhatsAppInboxApp: React.FC = () => {
         c.lastMessage?.content?.toLowerCase().includes(q)
       )) return false;
     }
-    if (filter === 'unread') return (c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread;
+    if (filter === 'unread') return ((c.unreadCount ?? 0) > 0 || !!c.isMarkedUnread) && (!c.lastMessage?.direction || c.lastMessage.direction === 'inbound');
     if (filter === 'unanswered') return !c.lastMessage?.direction || c.lastMessage.direction === 'inbound';
     if (activeLabelIds.length > 0) {
       const activeNames = activeLabelIds.map(id => allLabels.find(l => l.id === id)?.name).filter(Boolean) as string[];

@@ -137,12 +137,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      if (navigator.maxTouchPoints > 0) return; // mobile: let Enter insert newline
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
     }
-    // Shift+Enter will naturally insert newline and trigger onChange -> auto-resize
+    // plain Enter (including Shift+Enter): let the browser insert a newline
   };
 
   const startRecording = async () => {
