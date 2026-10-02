@@ -750,7 +750,8 @@ func (s *ChatService) StartRetryLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.RetryFailedMessages(ctx)
+			// RetryFailedMessages disabled — causes duplicate sends when messages
+			// were already delivered but marked failed due to rate limiting.
 		}
 	}
 }
