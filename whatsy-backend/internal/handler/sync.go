@@ -229,7 +229,11 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			return total, err
 		}
 		if status >= 400 {
-			log.Printf("[sync] FAILED at page %d — Zernio returned HTTP %d (tenant=%s): %s", page+1, status, tenantID, string(body))
+			preview := string(body)
+			if len(preview) > 200 {
+				preview = preview[:200] + "...[truncated]"
+			}
+			log.Printf("[sync] FAILED at page %d — Zernio returned HTTP %d (tenant=%s): body_len=%d preview=%s", page+1, status, tenantID, len(body), preview)
 			return total, fmt.Errorf("zernio error %d: %s", status, string(body))
 		}
 
@@ -241,7 +245,11 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			} `json:"pagination"`
 		}
 		if err := json.Unmarshal(body, &pageData); err != nil {
-			log.Printf("[sync] FAILED — could not decode page %d response (tenant=%s): %v | raw: %s", page+1, tenantID, err, string(body))
+			preview := string(body)
+			if len(preview) > 200 {
+				preview = preview[:200] + "...[truncated]"
+			}
+			log.Printf("[sync] FAILED — could not decode page %d response (tenant=%s): %v | body_len=%d preview=%s", page+1, tenantID, err, len(body), preview)
 			return total, fmt.Errorf("decode page: %w", err)
 		}
 
