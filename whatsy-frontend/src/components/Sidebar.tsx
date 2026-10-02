@@ -345,7 +345,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Unified filter chip row — All/Unread/Mine + label chips */}
       <div className="flex gap-1.5 overflow-x-auto px-3 pb-2 pt-1.5 scrollbar-hide shrink-0 border-b border-[#e9edef] dark:border-[#222e35] bg-white dark:bg-[#111b21]">
         {/* Static filter chips */}
-        {(['all', 'unread', 'assigned_to_me'] as ConversationFilter[]).map((f) => (
+        {(['all', 'unread', 'unanswered', 'assigned_to_me'] as ConversationFilter[]).map((f) => (
           <button
             key={f}
             onClick={() => onFilterChange(f)}
@@ -355,7 +355,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : 'bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]'
             }`}
           >
-            {f === 'all' ? t.filter_all : f === 'unread' ? t.filter_unread : t.filter_mine}
+            {f === 'all' ? t.filter_all : f === 'unread' ? t.filter_unread : f === 'unanswered' ? t.filter_unanswered : t.filter_mine}
           </button>
         ))}
 

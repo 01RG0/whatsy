@@ -158,14 +158,13 @@ export const useInboxStore = create<InboxState>((set) => ({
         else if (!wasUnread && nowUnread) delta = 1;
         return patched;
       });
-      // Re-sort by updatedAt descending when the patch carries a new timestamp.
-      // This ensures WS CONVERSATION_UPDATED events (e.g. after an agent reply)
-      // float the conversation to the correct position for ALL clients, not just
-      // the sender who already called bumpConversation optimistically.
-      if (conv.updatedAt !== undefined) {
+      // Re-sort only when a real new message arrived (lastMessage.createdAt changed).
+      // Using updatedAt caused mark-unread/assign/label events to jump chats to the top.
+      if (conv.lastMessage?.createdAt !== undefined) {
         conversations.sort(
           (a, b) =>
-            new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
+            new Date(b.lastMessage?.createdAt ?? b.updatedAt ?? 0).getTime() -
+            new Date(a.lastMessage?.createdAt ?? a.updatedAt ?? 0).getTime()
         );
       }
       return { conversations, totalUnread: Math.max(0, state.totalUnread + delta) };
@@ -190,10 +189,20 @@ export const useInboxStore = create<InboxState>((set) => ({
       let delta = 0;
       if (isUnread(old) && !isUnread(updated)) delta = -1;
       else if (!isUnread(old) && isUnread(updated)) delta = 1;
-      return {
-        conversations: [updated, ...rest],
-        totalUnread: Math.max(0, state.totalUnread + delta),
-      };
+      // Only move to front when a newer message actually arrived.
+      // mark-unread / assign patches don't carry a new lastMessage so they
+      // should NOT jump the conversation to position #1.
+      const shouldBump = !patch?.lastMessage?.createdAt ||
+        new Date(patch.lastMessage.createdAt).getTime() > new Date(old.lastMessage?.createdAt ?? 0).getTime();
+      if (shouldBump) {
+        return {
+          conversations: [updated, ...rest],
+          totalUnread: Math.max(0, state.totalUnread + delta),
+        };
+      }
+      const newConvs = [...state.conversations];
+      newConvs[idx] = updated;
+      return { conversations: newConvs, totalUnread: Math.max(0, state.totalUnread + delta) };
     }),
 
   setViewers: (studentId, viewers) =>
