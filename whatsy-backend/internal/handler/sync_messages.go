@@ -29,15 +29,16 @@ type MsgSyncState struct {
 
 // zernioMessage is the shape returned by the Zernio messages API.
 type zernioMessage struct {
-	ID                string `json:"id"`
-	PlatformMessageID string `json:"platformMessageId"`
-	Direction         string `json:"direction"` // "incoming" | "outgoing"
-	Type              string `json:"type"`      // "text" | "image" | "audio" | "video" | "document"
-	Content           string `json:"content"`
-	Timestamp         string `json:"timestamp"`
-	AttachmentURL     string `json:"attachmentUrl"`
-	AttachmentType    string `json:"attachmentType"`
-	AttachmentName    string `json:"attachmentName"`
+	ID          string `json:"id"`        // platform message id (wamid)
+	Direction   string `json:"direction"` // "incoming" | "outgoing"
+	Type        string `json:"type"`      // may be empty; fall back to first attachment type
+	Message     string `json:"message"`   // message text
+	CreatedAt   string `json:"createdAt"` // ISO timestamp
+	Attachments []struct {
+		Type     string `json:"type"`
+		URL      string `json:"url"`
+		Filename string `json:"filename"`
+	} `json:"attachments"`
 }
 
 // SyncMessagesStream is the SSE handler for message history sync.
@@ -272,7 +273,7 @@ func (h *SyncHandler) syncConversationMessages(ctx context.Context, localConvID,
 		}
 
 		var pageData struct {
-			Data       []zernioMessage `json:"data"`
+			Messages   []zernioMessage `json:"messages"`
 			Pagination struct {
 				HasMore    bool   `json:"hasMore"`
 				NextCursor string `json:"nextCursor"`
@@ -282,12 +283,9 @@ func (h *SyncHandler) syncConversationMessages(ctx context.Context, localConvID,
 			return inserted, fmt.Errorf("decode messages page: %w", err)
 		}
 
-		for _, msg := range pageData.Data {
-			// Use platformMessageId if present, fall back to id.
-			zernioMsgID := msg.PlatformMessageID
-			if zernioMsgID == "" {
-				zernioMsgID = msg.ID
-			}
+		for _, msg := range pageData.Messages {
+			// Platform message id is just "id".
+			zernioMsgID := msg.ID
 			if zernioMsgID == "" {
 				continue
 			}
@@ -305,22 +303,33 @@ func (h *SyncHandler) syncConversationMessages(ctx context.Context, localConvID,
 			}
 
 			direction := mapDirection(msg.Direction)
-			contentType := mapContentType(msg.Type)
+
+			// Derive content type: use msg.Type if present, else first attachment type.
+			msgType := msg.Type
+			if msgType == "" && len(msg.Attachments) > 0 {
+				msgType = msg.Attachments[0].Type
+			}
+			contentType := mapContentType(msgType)
+
 			status := "received"
 			if direction == "outbound" {
 				status = "sent"
 			}
 
-			ts := parseTimestamp(msg.Timestamp)
+			ts := parseTimestamp(msg.CreatedAt)
 
 			attachmentsJSON := "[]"
-			if msg.AttachmentURL != "" {
-				att := []map[string]string{{
-					"url":  msg.AttachmentURL,
-					"type": msg.AttachmentType,
-					"name": msg.AttachmentName,
-				}}
-				if b, err := json.Marshal(att); err == nil {
+			if len(msg.Attachments) > 0 {
+				type att struct {
+					URL  string `json:"url"`
+					Type string `json:"type"`
+					Name string `json:"name"`
+				}
+				atts := make([]att, 0, len(msg.Attachments))
+				for _, a := range msg.Attachments {
+					atts = append(atts, att{URL: a.URL, Type: a.Type, Name: a.Filename})
+				}
+				if b, err := json.Marshal(atts); err == nil {
 					attachmentsJSON = string(b)
 				}
 			}
@@ -330,7 +339,7 @@ func (h *SyncHandler) syncConversationMessages(ctx context.Context, localConvID,
 				    (conversation_id, direction, content_type, content, status, zernio_message_id, attachments, timestamp)
 				 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8)
 				 ON CONFLICT DO NOTHING`,
-				localConvID, direction, contentType, msg.Content, status, zernioMsgID, attachmentsJSON, ts,
+				localConvID, direction, contentType, msg.Message, status, zernioMsgID, attachmentsJSON, ts,
 			)
 			if err != nil {
 				log.Printf("[sync-msgs] insert msg %s: %v", zernioMsgID, err)
