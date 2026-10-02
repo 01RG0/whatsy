@@ -49,6 +49,8 @@ type agentStatRow struct {
 	ConversationsHandled int          `json:"conversationsHandled"`
 	ActiveTimeSeconds    *float64     `json:"activeTimeSeconds"`
 	ActiveHours          []activeHour `json:"activeHours"`
+	StartWorkTime        *time.Time   `json:"startWorkTime,omitempty"`
+	EndWorkTime          *time.Time   `json:"endWorkTime,omitempty"`
 }
 
 type activeHour struct {
@@ -503,6 +505,38 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Q4: start and end work time per agent
+	rows4, err := h.db.QueryContext(r.Context(),
+		`SELECT sent_by_agent_id::text, MIN(timestamp) AS start_time, MAX(timestamp) AS end_time
+		 FROM messages
+		 WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
+		   AND timestamp >= $1 AND timestamp < $2
+		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+		 GROUP BY sent_by_agent_id`,
+		from, to, tenantID,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
+		return
+	}
+	defer rows4.Close()
+	for rows4.Next() {
+		var agentID string
+		var startT, endT time.Time
+		if err := rows4.Scan(&agentID, &startT, &endT); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
+			return
+		}
+		if s, ok := statsMap[agentID]; ok {
+			s.StartWorkTime = &startT
+			s.EndWorkTime = &endT
+		}
+	}
+	if err := rows4.Err(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "analytics agents"})
+		return
+	}
+
 	// Build ordered result slice
 	result := make([]agentStatRow, 0, len(orderedIDs))
 	for _, id := range orderedIDs {
@@ -544,6 +578,19 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		if waHours == nil {
 			waHours = []activeHour{}
 		}
+		var waStart, waEnd *time.Time
+		var waStartT, waEndT time.Time
+		errWaTime := h.db.QueryRowContext(r.Context(),
+			`SELECT MIN(timestamp), MAX(timestamp) FROM messages
+			 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
+			   AND timestamp >= $1 AND timestamp < $2
+			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+			from, to, tenantID,
+		).Scan(&waStartT, &waEndT)
+		if errWaTime == nil && !waStartT.IsZero() {
+			waStart = &waStartT
+			waEnd = &waEndT
+		}
 		result = append(result, agentStatRow{
 			ID:                   "whatsapp-app",
 			Name:                 "WhatsApp App",
@@ -552,6 +599,8 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 			ConversationsHandled: unattribConvs,
 			ActiveTimeSeconds:    nil,
 			ActiveHours:          waHours,
+			StartWorkTime:        waStart,
+			EndWorkTime:          waEnd,
 		})
 	}
 

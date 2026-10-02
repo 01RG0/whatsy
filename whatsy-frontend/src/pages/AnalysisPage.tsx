@@ -35,6 +35,8 @@ interface AgentStat {
   conversationsHandled: number
   activeTimeSeconds: number | null
   activeHours: ActiveHour[]
+  startWorkTime?: string
+  endWorkTime?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,6 +48,24 @@ function formatActiveTime(s: number | null): string {
   if (h === 0) return `${m}m`
   if (m === 0) return `${h}h`
   return `${h}h ${m}m`
+}
+
+function formatWorkTime(start?: string, end?: string): string {
+  if (!start || !end) return '—'
+  const diffMs = new Date(end).getTime() - new Date(start).getTime()
+  if (diffMs <= 0) return '< 1m'
+  const totalMins = Math.floor(diffMs / 60000)
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+function formatWorkTimestamp(ts?: string): string {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  return d.toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
 function trendPct(current: number, prev?: number): number | null {
@@ -617,6 +637,9 @@ export default function AnalysisPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_chats}</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_active_time}</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_working_hours}</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Start Time</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">End Time</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Total Time</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -652,6 +675,9 @@ export default function AnalysisPage() {
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{agent.conversationsHandled.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatActiveTime(agent.activeTimeSeconds)}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{getWorkingHours(agent.activeHours ?? [])}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{formatWorkTimestamp(agent.startWorkTime)}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{formatWorkTimestamp(agent.endWorkTime)}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{isWhatsAppApp ? '—' : formatWorkTime(agent.startWorkTime, agent.endWorkTime)}</td>
                     <td className="px-4 py-3 text-right">
                       {(
                         <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
@@ -667,7 +693,7 @@ export default function AnalysisPage() {
                   </tr>
                   {expandedAgent === agent.id && (
                     <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
-                      <td colSpan={6} className="px-5 py-3">
+                      <td colSpan={9} className="px-5 py-3">
                         <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">{t.analysis_hourly_activity}</p>
                         <HourlyChart activeHours={agent.activeHours ?? []} />
                       </td>
