@@ -2,7 +2,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -246,11 +245,6 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
 			return
 		}
-	}
-
-	// DEBUG: log raw payload for contact messages so we can see the actual shape
-	if bytes.Contains(body, []byte("\U0001F464")) || bytes.Contains(body, []byte(`"contacts"`)) {
-		log.Printf("[webhook-debug-contact] raw payload: %s", string(body))
 	}
 
 	event, err := zernio.ParseWebhookEventWithType(body, r.Header.Get("X-Zernio-Event"))

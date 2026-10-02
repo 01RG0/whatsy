@@ -145,8 +145,7 @@ type rawInboundMessage struct {
 			} `json:"name"`
 			Phones []struct {
 				Phone string `json:"phone"`
-				WaID  string `json:"wa_id"`
-				VCard string `json:"vcard"`
+				WaID string `json:"wa_id"`
 			} `json:"phones"`
 		} `json:"contacts"`
 	} `json:"message"`
@@ -166,7 +165,16 @@ type rawInboundMessage struct {
 			MessageID         string `json:"messageId"`
 			PlatformMessageID string `json:"platformMessageId"`
 		} `json:"quotedMessage"`
-		ReplyTo         string `json:"replyTo"`
+		ReplyTo  string `json:"replyTo"`
+		Contacts []struct {
+			Name struct {
+				FormattedName string `json:"formatted_name"`
+			} `json:"name"`
+			Phones []struct {
+				Phone string `json:"phone"`
+				WaID  string `json:"wa_id"`
+			} `json:"phones"`
+		} `json:"contacts"`
 	} `json:"metadata"`
 	ReplyTo         string `json:"replyTo"`
 	QuotedMessageID string `json:"quotedMessageId"`
@@ -246,16 +254,19 @@ func (p *InboundMessagePayload) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Contact messages: parse contacts array whenever present regardless of type field,
-	// because Zernio sometimes sends type="text" with a contacts array for WhatsApp contact shares.
-	if len(m.Contacts) > 0 {
+	// Contact messages: Zernio puts the contacts array in top-level metadata.contacts
+	// (not message.contacts). Parse from there; also check message.contacts as fallback.
+	contactsList := raw.Metadata.Contacts
+	if len(contactsList) == 0 {
+		contactsList = m.Contacts
+	}
+	if len(contactsList) > 0 {
 		p.Type = "contacts"
-		c := m.Contacts[0]
+		c := contactsList[0]
 		if p.Content == "" && c.Name.FormattedName != "" {
 			p.Content = c.Name.FormattedName
 		}
 		if len(c.Phones) > 0 {
-			// Prefer phone; fall back to wa_id (Meta's shape from WhatsApp Business app echoes)
 			p.ContactPhone = firstNonEmpty(c.Phones[0].Phone, c.Phones[0].WaID)
 		}
 	}
