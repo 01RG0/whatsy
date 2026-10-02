@@ -307,7 +307,9 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
 				eventlog.WebhookError(event.Type, err)
 			} else {
-				zernioMsgID := firstNonEmpty(payload.MessageID, payload.PlatformMessageID)
+				// Prefer PlatformMessageID (wamid) — that is what the DB stores as
+				// zernio_message_id after the message.sent claim (cd9700c).
+				zernioMsgID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
 				eventlog.Webhook(event.Type, zernioMsgID)
 				if err := h.chatService.HandleMessageStatus(r.Context(), payload); err != nil {
 					eventlog.WebhookError(event.Type, err)

@@ -246,12 +246,15 @@ export const useInboxStore = create<InboxState>((set) => ({
   replaceMessage: (conversationId, tempId, real) =>
     set((state) => {
       const msgs = state.messages[conversationId] ?? [];
-      // WS beat HTTP — real already in list, just remove the temp
+      // WS beat HTTP — real already in list; remove temp and apply the HTTP
+      // response's status (the WS copy arrived as status='pending').
       if (msgs.some((m) => m.id === real.id)) {
         return {
           messages: {
             ...state.messages,
-            [conversationId]: msgs.filter((m) => m.id !== tempId),
+            [conversationId]: msgs
+              .filter((m) => m.id !== tempId)
+              .map((m) => m.id === real.id ? { ...m, status: real.status } : m),
           },
         };
       }
