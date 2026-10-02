@@ -464,25 +464,38 @@ func (h *Handler) syncConversationOnDemand(ctx context.Context, tenantID, dbConv
 		return
 	}
 
-	apiURL := "https://zernio.com/api/v1/inbox/conversations/" + url.PathEscape(zernioConvID) + "/messages?limit=100"
-	if accountID != "" {
-		apiURL += "&accountId=" + url.QueryEscape(accountID)
+	fetchMessages := func(withAccount bool) (*http.Response, error) {
+		fetchURL := "https://zernio.com/api/v1/inbox/conversations/" + url.PathEscape(zernioConvID) + "/messages?limit=100"
+		if withAccount && accountID != "" {
+			fetchURL += "&accountId=" + url.QueryEscape(accountID)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		req.Header.Set("Accept", "application/json")
+		return http.DefaultClient.Do(req)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		log.Printf("[on-demand-sync] create request failed: %v", err)
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fetchMessages(false)
 	if err != nil {
 		log.Printf("[on-demand-sync] fetch messages failed: %v", err)
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 && accountID != "" {
+		if respWithAcc, errWithAcc := fetchMessages(true); errWithAcc == nil {
+			if respWithAcc.StatusCode < 400 {
+				resp.Body.Close()
+				resp = respWithAcc
+				defer resp.Body.Close()
+			} else {
+				respWithAcc.Body.Close()
+			}
+		}
+	}
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)

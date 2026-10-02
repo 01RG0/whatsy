@@ -295,11 +295,11 @@ func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) 
 				log.Printf("upsert conv %s: %v", conv.ID, err)
 				continue
 			}
-			// Sync messages for conversations active in the last 30 days.
+			// Only sync messages for conversations active in the last 48h.
 			// Older conversations have their metadata updated via upsertConversation;
 			// full message history is fetched on-demand when an agent opens the chat.
 			if conv.UpdatedTime != "" {
-				if t, err := time.Parse(time.RFC3339, conv.UpdatedTime); err == nil && time.Since(t) < 30*24*time.Hour {
+				if t, err := time.Parse(time.RFC3339, conv.UpdatedTime); err == nil && time.Since(t) < 48*time.Hour {
 					if err := w.syncMessages(ctx, conv.ID, conv.AccountID, dbConvID); err != nil {
 						log.Printf("sync messages %s: %v", conv.ID, err)
 					}
