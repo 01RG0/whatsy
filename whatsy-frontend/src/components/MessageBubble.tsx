@@ -227,6 +227,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     (message.content.length > LONG_MESSAGE_CHAR_LIMIT || lineCount > LONG_MESSAGE_LINE_LIMIT)
   );
 
+  const hasMedia = Boolean(
+    (message.attachments && message.attachments.length > 0) ||
+    message.type === 'image' ||
+    message.type === 'video' ||
+    message.type === 'audio' ||
+    message.type === 'voice_note' ||
+    message.type === 'sticker' ||
+    message.type === 'document' ||
+    message.type === 'contacts'
+  );
+
   const displayedContent = useMemo(() => {
     if (!message.content) return '';
     if (!isLongMessage || isExpanded) return message.content;
@@ -313,7 +324,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       data-message-id={message.id}
       {...(message.zernioMessageId ? { 'data-zernio-id': message.zernioMessageId } : {})}
       ref={rowRef}
-      className={`group relative flex w-full reply-row-target ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+      className={`group relative flex w-full reply-row-target items-center gap-2 ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
     >
       {/* Swipe-to-reply indicator — always in DOM, driven by native touch handler */}
       <div
@@ -325,6 +336,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <path d="M3 10h10a5 5 0 015 5v3M3 10l6-6M3 10l6 6" />
         </svg>
       </div>
+
+      {/* WhatsApp Beside-Message Forward Button (Outbound) */}
+      {onForward && isOutbound && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onForward(message);
+          }}
+          title={t.forward}
+          className={`self-center shrink-0 w-8 h-8 rounded-full bg-white/95 dark:bg-[#202c33]/95 hover:bg-white dark:hover:bg-[#2a3942] text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-[#e9edef] shadow-[0_1px_2px_rgba(11,20,26,0.18)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.4)] border border-black/[0.05] dark:border-white/[0.08] flex items-center justify-center transition-all duration-150 cursor-pointer hover:scale-105 active:scale-95 ${
+            hasMedia ? 'opacity-80 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <svg className="w-4 h-4 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 10H11a5 5 0 00-5 5v3M21 10l-6-6M21 10l-6 6" />
+          </svg>
+        </button>
+      )}
+
       <div
         ref={bubbleRef}
         className={`${isNew ? 'msg-in' : ''} reply-bubble-target relative max-w-[75%] sm:max-w-[65%] md:max-w-[62%] lg:max-w-[62%] rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] text-[14.2px] leading-[19px] overflow-hidden transition-all ${
@@ -733,6 +764,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </button>
         </div>
       </div>
+
+      {/* WhatsApp Beside-Message Forward Button (Inbound) */}
+      {onForward && !isOutbound && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onForward(message);
+          }}
+          title={t.forward}
+          className={`self-center shrink-0 w-8 h-8 rounded-full bg-white/95 dark:bg-[#202c33]/95 hover:bg-white dark:hover:bg-[#2a3942] text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-[#e9edef] shadow-[0_1px_2px_rgba(11,20,26,0.18)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.4)] border border-black/[0.05] dark:border-white/[0.08] flex items-center justify-center transition-all duration-150 cursor-pointer hover:scale-105 active:scale-95 ${
+            hasMedia ? 'opacity-80 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <svg className="w-4 h-4 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 10H11a5 5 0 00-5 5v3M21 10l-6-6M21 10l-6 6" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 };
