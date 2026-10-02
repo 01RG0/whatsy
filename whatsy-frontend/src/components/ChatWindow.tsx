@@ -5,9 +5,31 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { ImageLightbox } from './ImageLightbox';
 import { ConversationLabelPicker } from './ConversationLabelPicker';
+import ImageAnnotator from './ImageAnnotator';
 import type { AgentSummary } from '../api/inbox';
+import { API_BASE } from '../api/inbox';
 import { canWrite, isViewer } from '../lib/auth';
 import { useT } from '../i18n/translations';
+
+async function uploadToBackend(blob: Blob, filename: string): Promise<string> {
+  const token = localStorage.getItem('whatsy_jwt');
+  const form = new FormData();
+  form.append('file', blob, filename);
+  const res = await fetch(`${API_BASE}/v1/whatsapp/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Upload failed: ${res.status} ${errText}`);
+  }
+  const data = await res.json();
+  const url = data.url || data.mediaUrl || data.attachmentUrl ||
+    data?.data?.url || data?.data?.mediaUrl || data?.data?.attachmentUrl;
+  if (!url) throw new Error(`Upload succeeded but response has no URL: ${JSON.stringify(data)}`);
+  return url as string;
+}
 
 export interface ViewerInfo {
   agentId: string;
@@ -70,6 +92,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const isViewerMode = isViewer() || !canWrite();
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [editingImageFile, setEditingImageFile] = useState<File | null>(null);
+
+  const handleEditImage = useCallback(async (url: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const file = new File([blob], 'edit.jpg', { type: blob.type || 'image/jpeg' });
+      setEditingImageFile(file);
+    } catch (err) {
+      console.error('[ChatWindow] Failed to load image for editing:', err);
+    }
+  }, []);
+
+  const handleResendAnnotated = useCallback(async (blob: Blob) => {
+    setEditingImageFile(null);
+    try {
+      const url = await uploadToBackend(blob, 'annotated-image.png');
+      onSendMessage({
+        message: '',
+        attachmentUrl: url,
+        attachmentType: 'image',
+        attachmentName: 'annotated-image.png',
+      });
+    } catch (err) {
+      console.error('[ChatWindow] Annotated image upload failed:', err);
+    }
+  }, [onSendMessage]);
   const [assignOpen, setAssignOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
@@ -566,6 +615,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         isConsecutive={isConsecutive}
                         isNew={!initialMessageIdsRef.current.has(msg.id)}
                         onImageClick={(url) => setLightboxUrl(url)}
+                        onEditImage={isViewerMode ? undefined : handleEditImage}
                         onReply={(m) => setReplyingTo({
                           id: m.id,
                           senderName: m.direction === 'outbound' ? t.reply_you : conversation.participant.displayName,
@@ -608,6 +658,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {lightboxUrl && (
         <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      )}
+
+      {editingImageFile && (
+        <ImageAnnotator
+          file={editingImageFile}
+          onConfirm={handleResendAnnotated}
+          onCancel={() => setEditingImageFile(null)}
+        />
       )}
 
       {/* Chat Input */}

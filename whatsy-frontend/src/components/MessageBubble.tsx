@@ -103,6 +103,7 @@ interface MessageBubbleProps {
   onButtonClick?: (buttonId: string, buttonText: string) => void;
   onReply?: (message: ZernioMessage) => void;
   onRetry?: (message: ZernioMessage) => void;
+  onEditImage?: (url: string) => void;
   isConsecutive?: boolean;
   isNew?: boolean;
   /** When provided, matched text within the bubble is wrapped in <mark>. */
@@ -115,6 +116,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onButtonClick,
   onReply,
   onRetry,
+  onEditImage,
   isConsecutive,
   isNew = false,
   highlight,
@@ -378,6 +380,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       loading="lazy"
                       onError={() => setFailedImages((prev) => ({ ...prev, [idx]: true }))}
                     />
+                    {/* Edit (annotate & resend) button */}
+                    {onEditImage && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onEditImage(mediaUrl); }}
+                        className="absolute bottom-2 end-12 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition hover:bg-black/70"
+                        title="Edit and resend"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    )}
                     {/* Download button — bottom-end, WhatsApp style */}
                     <button
                       type="button"

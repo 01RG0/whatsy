@@ -40,6 +40,7 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
   const [currentTime, setCurrentTime] = useState(0);
   const [speedIndex, setSpeedIndex] = useState(0);
   const [playError, setPlayError] = useState(false);
+  const isDraggingRef = useRef(false);
 
   const BAR_COUNT = 36;
   const bars = useMemo(() => generateWaveformBars(messageId, BAR_COUNT), [messageId]);
@@ -128,6 +129,15 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
     setCurrentTime(audio.currentTime);
   }, [duration]);
 
+  const seekFromClientX = useCallback((clientX: number, container: HTMLDivElement) => {
+    const rect = container.getBoundingClientRect();
+    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const audio = audioRef.current;
+    if (audio && duration > 0) {
+      audio.currentTime = fraction * duration;
+    }
+  }, [duration]);
+
   const cycleSpeed = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -200,7 +210,7 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         {/* Waveform bars */}
         <div
-          className="flex items-end gap-[1.5px] h-6 cursor-pointer"
+          className="relative flex items-end gap-[1.5px] h-6 cursor-pointer"
           onClick={handleWaveformClick}
           role="slider"
           aria-label="Audio progress"
@@ -208,6 +218,19 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
           aria-valuemax={100}
           aria-valuenow={Math.round(progress * 100)}
           tabIndex={0}
+          onMouseDown={(e) => { isDraggingRef.current = true; seekFromClientX(e.clientX, e.currentTarget); }}
+          onMouseMove={(e) => { if (isDraggingRef.current) seekFromClientX(e.clientX, e.currentTarget); }}
+          onMouseUp={() => { isDraggingRef.current = false; }}
+          onMouseLeave={() => { isDraggingRef.current = false; }}
+          onTouchStart={(e) => { e.preventDefault(); isDraggingRef.current = true; seekFromClientX(e.touches[0].clientX, e.currentTarget); }}
+          onTouchMove={(e) => { e.preventDefault(); if (isDraggingRef.current) seekFromClientX(e.touches[0].clientX, e.currentTarget); }}
+          onTouchEnd={() => { isDraggingRef.current = false; }}
+          onKeyDown={(e) => {
+            const audio = audioRef.current;
+            if (!audio) return;
+            if (e.key === 'ArrowRight') { e.preventDefault(); audio.currentTime = Math.min(duration, audio.currentTime + 5); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - 5); }
+          }}
         >
           {bars.map((height, i) => {
             const barProgress = i / BAR_COUNT;
@@ -224,6 +247,10 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isOutbound, mess
               />
             );
           })}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md pointer-events-none transition-[left] duration-75"
+            style={{ left: `calc(${progress * 100}% - 5px)` }}
+          />
         </div>
 
         {/* Duration + speed row */}

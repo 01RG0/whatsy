@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 
-type Tool = 'pen' | 'highlight' | 'eraser';
+type Tool = 'pen' | 'highlight' | 'eraser' | 'crop' | 'text' | 'emoji';
 
 interface Point { x: number; y: number }
 
@@ -14,6 +14,8 @@ const COLORS = [
   '#ff3b30', '#ff9500', '#ffcc00', '#34c759',
   '#007aff', '#af52de', '#ffffff', '#000000',
 ];
+
+const EMOJIS = ['😊','😂','❤️','👍','🔥','✨','🎉','😍','🙏','💯','😎','🤩','💪','🥰','😭','🤣','😱','🌟','💥','🎊'];
 
 function getPoint(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement): Point {
   const rect = canvas.getBoundingClientRect();
@@ -31,6 +33,17 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState('#ff3b30');
   const [isSending, setIsSending] = useState(false);
+
+  // Crop state
+  const [cropRect, setCropRect] = useState<{x:number;y:number;w:number;h:number} | null>(null);
+  const cropDragStartRef = useRef<{x:number;y:number} | null>(null);
+
+  // Text overlay state
+  const [textInput, setTextInput] = useState<{x:number;y:number;value:string} | null>(null);
+
+  // Emoji state
+  const [selectedEmoji, setSelectedEmoji] = useState('😊');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const undoStackRef = useRef<ImageData[]>([]);
   const isDrawingRef = useRef(false);
@@ -122,6 +135,32 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
     const canvas = canvasRef.current;
     if (!canvas) return;
     if ('touches' in e) e.preventDefault();
+
+    if (tool === 'crop') {
+      const rect = canvas.getBoundingClientRect();
+      const src = 'touches' in e ? e.touches[0] : e as MouseEvent;
+      cropDragStartRef.current = { x: src.clientX - rect.left, y: src.clientY - rect.top };
+      setCropRect(null);
+      return;
+    }
+
+    if (tool === 'text') {
+      const rect = canvas.getBoundingClientRect();
+      const src = 'touches' in e ? e.touches[0] : e as MouseEvent;
+      setTextInput({ x: src.clientX - rect.left, y: src.clientY - rect.top, value: '' });
+      return;
+    }
+
+    if (tool === 'emoji') {
+      const pt = getPoint(e, canvas);
+      const ctx = canvas.getContext('2d')!;
+      saveSnapshot();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.font = '36px serif';
+      ctx.fillText(selectedEmoji, pt.x, pt.y);
+      return;
+    }
+
     const pt = getPoint(e, canvas);
     saveSnapshot();
     isDrawingRef.current = true;
@@ -131,9 +170,28 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
     applyStyle(ctx);
     ctx.beginPath();
     ctx.moveTo(pt.x, pt.y);
-  }, [applyStyle, saveSnapshot]);
+  }, [applyStyle, saveSnapshot, tool, selectedEmoji]);
 
   const onPointerMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (tool === 'crop') {
+      if (!cropDragStartRef.current) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if ('touches' in e) e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const src = 'touches' in e ? e.touches[0] : e as MouseEvent;
+      const displayX = src.clientX - rect.left;
+      const displayY = src.clientY - rect.top;
+      const start = cropDragStartRef.current;
+      setCropRect({
+        x: Math.min(start.x, displayX),
+        y: Math.min(start.y, displayY),
+        w: Math.abs(displayX - start.x),
+        h: Math.abs(displayY - start.y),
+      });
+      return;
+    }
+
     if (!isDrawingRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -151,9 +209,14 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
     ctx.moveTo(midX, midY);
     prevPointRef.current = lastPointRef.current;
     lastPointRef.current = curr;
-  }, [applyStyle]);
+  }, [applyStyle, tool]);
 
   const onPointerUp = useCallback((e: MouseEvent | TouchEvent) => {
+    if (tool === 'crop') {
+      cropDragStartRef.current = null;
+      return;
+    }
+
     if (!isDrawingRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -167,7 +230,7 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
     isDrawingRef.current = false;
     lastPointRef.current = null;
     prevPointRef.current = null;
-  }, [applyStyle]);
+  }, [applyStyle, tool]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -202,6 +265,28 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
       }
     }, 'image/png');
   };
+
+  const applyCrop = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !cropRect) return;
+    const ctx = canvas.getContext('2d')!;
+    const scaleX = canvas.width / canvas.offsetWidth;
+    const scaleY = canvas.height / canvas.offsetHeight;
+    const sx = Math.round(cropRect.x * scaleX);
+    const sy = Math.round(cropRect.y * scaleY);
+    const sw = Math.round(cropRect.w * scaleX);
+    const sh = Math.round(cropRect.h * scaleY);
+    if (sw <= 0 || sh <= 0) return;
+    saveSnapshot();
+    const imageData = ctx.getImageData(sx, sy, sw, sh);
+    canvas.width = sw;
+    canvas.height = sh;
+    canvas.style.width = `${Math.round(cropRect.w)}px`;
+    canvas.style.height = `${Math.round(cropRect.h)}px`;
+    ctx.putImageData(imageData, 0, 0);
+    setCropRect(null);
+    setTool('pen');
+  }, [cropRect, saveSnapshot]);
 
   const toolButtons: { id: Tool; label: string; icon: React.ReactNode }[] = [
     {
@@ -274,15 +359,102 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
 
       {/* Canvas area — fills remaining space */}
       <div className="flex-1 flex items-center justify-center overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="max-w-full max-h-full"
-          style={{ cursor: 'crosshair', touchAction: 'none', display: 'block' }}
-        />
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            className="max-w-full max-h-full"
+            style={{ cursor: tool === 'text' ? 'text' : 'crosshair', touchAction: 'none', display: 'block' }}
+          />
+          {/* Crop selection overlay */}
+          {cropRect && tool === 'crop' && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: cropRect.x,
+                top: cropRect.y,
+                width: cropRect.w,
+                height: cropRect.h,
+                border: '2px dashed white',
+                boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
+              }}
+            />
+          )}
+          {/* Text input overlay */}
+          {textInput && tool === 'text' && (
+            <textarea
+              autoFocus
+              value={textInput.value}
+              rows={1}
+              onChange={(e) => setTextInput(prev => prev ? { ...prev, value: e.target.value } : null)}
+              style={{
+                position: 'absolute',
+                left: textInput.x,
+                top: textInput.y,
+                background: 'transparent',
+                border: '1px dashed white',
+                color: color,
+                fontSize: '20px',
+                minWidth: '100px',
+                resize: 'none',
+                outline: 'none',
+              }}
+              onBlur={() => {
+                const canvas = canvasRef.current;
+                if (!canvas || !textInput || !textInput.value.trim()) { setTextInput(null); return; }
+                const ctx = canvas.getContext('2d')!;
+                const scaleX = canvas.width / canvas.offsetWidth;
+                const scaleY = canvas.height / canvas.offsetHeight;
+                saveSnapshot();
+                ctx.font = '24px Arial';
+                ctx.fillStyle = color;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.fillText(textInput.value, textInput.x * scaleX, (textInput.y + 20) * scaleY);
+                setTextInput(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  (e.target as HTMLTextAreaElement).blur();
+                }
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Bottom toolbar */}
       <div className="shrink-0 bg-black" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        {/* Apply Crop button — shown only when crop tool is active and a rect is drawn */}
+        {tool === 'crop' && cropRect && cropRect.w > 5 && cropRect.h > 5 && (
+          <div className="flex justify-center py-2">
+            <button
+              type="button"
+              onClick={applyCrop}
+              className="px-5 py-1.5 rounded-full bg-white text-gray-900 text-sm font-semibold"
+            >
+              Apply Crop
+            </button>
+          </div>
+        )}
+
+        {/* Emoji picker panel */}
+        {showEmojiPicker && tool === 'emoji' && (
+          <div className="flex justify-center pb-1">
+            <div className="bg-gray-900 rounded-xl p-2 grid grid-cols-10 gap-0.5">
+              {EMOJIS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => { setSelectedEmoji(em); setShowEmojiPicker(false); }}
+                  className="w-8 h-8 text-lg hover:bg-white/20 rounded flex items-center justify-center"
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tool + undo row */}
         <div className="flex items-center justify-center gap-1 px-4 py-2">
           {toolButtons.map((tb) => (
@@ -311,6 +483,42 @@ const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({ file, onConfirm, onCanc
               <polyline points="9 14 4 9 9 4"/>
               <path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
             </svg>
+          </button>
+          <div className="w-px h-7 bg-white/20 mx-1" />
+          {/* Crop tool */}
+          <button
+            type="button"
+            onClick={() => setTool('crop')}
+            title="Crop"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+              tool === 'crop' ? 'bg-white text-gray-900 scale-105' : 'text-white hover:bg-white/15'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14" />
+            </svg>
+          </button>
+          {/* Text tool */}
+          <button
+            type="button"
+            onClick={() => setTool('text')}
+            title="Add text"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all font-bold text-sm ${
+              tool === 'text' ? 'bg-white text-gray-900 scale-105' : 'text-white hover:bg-white/15'
+            }`}
+          >
+            T
+          </button>
+          {/* Emoji tool */}
+          <button
+            type="button"
+            onClick={() => { setTool('emoji'); setShowEmojiPicker(p => !p); }}
+            title="Emoji"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all text-lg ${
+              tool === 'emoji' ? 'bg-white/30 scale-105' : 'hover:bg-white/15'
+            }`}
+          >
+            {selectedEmoji}
           </button>
         </div>
 
