@@ -166,7 +166,7 @@ func (c *Client) MarkReadWithKey(ctx context.Context, conversationID, accountID,
 // SendMessage posts a message to an inbox conversation.
 // On 429 it waits for the Retry-After window and retries once; if still
 // rate-limited it returns ErrRateLimited so the caller can save the message
-// as pending and let RetryStuckMessages handle it.
+// as pending and let StartRetryLoop handle it.
 func (c *Client) SendMessage(ctx context.Context, conversationID string, payload SendMessagePayload) (*SentMessage, error) {
 	if conversationID == "" {
 		return nil, fmt.Errorf("zernio: conversation id is required")

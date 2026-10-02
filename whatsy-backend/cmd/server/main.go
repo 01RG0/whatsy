@@ -149,8 +149,8 @@ func main() {
 	chatService := service.NewChatService(db, convRepo, msgRepo, zernioClient, hub, cfg.ZernioAPIKey)
 	chatService.SetAutoReplier(service.NewAutoReplyService(db))
 
-	// Retry any outbound messages left stuck in "pending" from a killed deploy.
-	go chatService.RetryStuckMessages(context.Background())
+	// On startup: recover pending messages; then every 5 min: retry recent failures.
+	go chatService.StartRetryLoop(context.Background())
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	tagService := service.NewTagService(db)
 	labelHandler := handler.NewLabelHandler(tagService)

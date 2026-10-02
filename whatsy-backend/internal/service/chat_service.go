@@ -485,7 +485,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		eventlog.ZernioSend(message.ID, conversationID, dur, err)
 		if err != nil {
 			if errors.Is(err, zernio.ErrRateLimited) {
-				// Keep as pending — RetryStuckMessages will retry after the window resets.
+				// Keep as pending — RetryPendingOnce / StartRetryLoop will retry after the window resets.
 				log.Printf("[chat] rate limited sending msg %s — left as pending for retry", message.ID)
 				s.hub.BroadcastToAll(websocket.MessageStatusEvent{
 					Event:     websocket.EventMessageStatus,
@@ -568,9 +568,10 @@ func (s *ChatService) MarkConversationUnread(ctx context.Context, conversationID
 }
 
 
-// RetryStuckMessages finds outbound messages stuck in "pending" (from a
+// RetryPendingOnce finds outbound messages stuck in "pending" (from a
 // killed goroutine during deploy) and retries their Zernio delivery.
-func (s *ChatService) RetryStuckMessages(ctx context.Context) {
+// Called once at startup.
+func (s *ChatService) RetryPendingOnce(ctx context.Context) {
 	msgs, err := s.msgRepo.ListStuckPending(ctx, 30)
 	if err != nil {
 		log.Printf("[startup] retry stuck messages: %v", err)
@@ -579,13 +580,13 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 	if len(msgs) == 0 {
 		return
 	}
-	log.Printf("[startup] retrying %d stuck pending messages", len(msgs))
+	log.Printf("[retry-pending] retrying %d stuck pending messages", len(msgs))
 
 	accountID := s.zernioAccountID(ctx, "")
 	for _, msg := range msgs {
 		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, msg.ConversationID)
 		if err != nil || zernioConvID == "" {
-			log.Printf("[startup] retry: skip msg %s — no zernio conv id", msg.ID)
+			log.Printf("[retry-pending] skip msg %s — no zernio conv id", msg.ID)
 			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
 			continue
 		}
@@ -612,7 +613,7 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 
 		sent, err := s.zernioClient.SendMessage(ctx, zernioConvID, payload)
 		if err != nil {
-			log.Printf("[startup] retry: msg %s failed: %v", msg.ID, err)
+			log.Printf("[retry-pending] msg %s failed: %v", msg.ID, err)
 			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
 			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
 				Event:     websocket.EventMessageStatus,
@@ -627,18 +628,22 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 			MessageID: msg.ID,
 			Status:    string(domain.StatusSent),
 		})
-		log.Printf("[startup] retry: msg %s sent ok", msg.ID)
+		log.Printf("[retry-pending] msg %s sent ok", msg.ID)
 	}
 }
 
 // RetryFailedMessages finds outbound messages with status "failed" from the
-// last 24 hours, resets them to pending, and retries delivery. Returns
+// last 2 hours, resets them to pending, and retries delivery. Processes at
+// most 20 messages per call to avoid hammering the rate limit. Returns
 // (sent, failed, total) counts.
 func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, total int) {
-	msgs, err := s.msgRepo.ListRecentFailed(ctx, 24)
+	msgs, err := s.msgRepo.ListRecentFailed(ctx, 2)
 	if err != nil {
 		log.Printf("[retry-failed] list failed messages: %v", err)
 		return
+	}
+	if len(msgs) > 20 {
+		msgs = msgs[:20]
 	}
 	total = len(msgs)
 	if total == 0 {
@@ -700,6 +705,27 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 		log.Printf("[retry-failed] sent %d/%d messages", sent, total)
 	}
 	return
+}
+
+// StartRetryLoop runs the full retry lifecycle:
+//   - On startup: calls RetryPendingOnce to recover messages stuck in "pending".
+//   - Every 5 minutes: calls RetryFailedMessages to re-attempt recently failed messages.
+//
+// The loop exits when ctx is cancelled. Call as a goroutine.
+func (s *ChatService) StartRetryLoop(ctx context.Context) {
+	// Immediate startup recovery.
+	s.RetryPendingOnce(ctx)
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.RetryFailedMessages(ctx)
+		}
+	}
 }
 
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
