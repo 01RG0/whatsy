@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -483,6 +484,16 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		dur := time.Since(start).Milliseconds()
 		eventlog.ZernioSend(message.ID, conversationID, dur, err)
 		if err != nil {
+			if errors.Is(err, zernio.ErrRateLimited) {
+				// Keep as pending — RetryStuckMessages will retry after the window resets.
+				log.Printf("[chat] rate limited sending msg %s — left as pending for retry", message.ID)
+				s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+					Event:     websocket.EventMessageStatus,
+					MessageID: message.ID,
+					Status:    string(domain.StatusPending),
+				})
+				return
+			}
 			_ = s.msgRepo.UpdateZernioIDAndStatus(context.Background(), message.ID, "", domain.StatusFailed)
 			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
 				Event:     websocket.EventMessageStatus,

@@ -4,13 +4,22 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
+
+// ErrRateLimited is returned when Zernio responds with 429 and the retry
+// did not succeed within the allowed wait. The caller should persist the
+// message as pending and retry later.
+var ErrRateLimited = errors.New("zernio: rate limited")
 
 const (
 	defaultBaseURL = "https://zernio.com/api/v1"
@@ -23,6 +32,7 @@ type Client struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
+	limiter    *rate.Limiter
 }
 
 // NewClient constructs a Client that talks to https://zernio.com/api/v1.
@@ -36,6 +46,9 @@ func NewClient(apiKey string) *Client {
 				return http.ErrUseLastResponse
 			},
 		},
+		// Stay under Zernio's 60 req/min limit proactively; burst of 10 absorbs
+		// short spikes without hitting 429.
+		limiter: rate.NewLimiter(rate.Every(time.Minute/60), 10),
 	}
 }
 
@@ -151,6 +164,9 @@ func (c *Client) MarkReadWithKey(ctx context.Context, conversationID, accountID,
 }
 
 // SendMessage posts a message to an inbox conversation.
+// On 429 it waits for the Retry-After window and retries once; if still
+// rate-limited it returns ErrRateLimited so the caller can save the message
+// as pending and let RetryStuckMessages handle it.
 func (c *Client) SendMessage(ctx context.Context, conversationID string, payload SendMessagePayload) (*SentMessage, error) {
 	if conversationID == "" {
 		return nil, fmt.Errorf("zernio: conversation id is required")
@@ -158,19 +174,43 @@ func (c *Client) SendMessage(ctx context.Context, conversationID string, payload
 	if payload.ConversationID == "" {
 		payload.ConversationID = conversationID
 	}
-
 	path := "/inbox/conversations/" + url.PathEscape(conversationID) + "/messages"
 
-	var envelope sendMessageResponse
-	if err := c.doJSON(ctx, http.MethodPost, path, payload, &envelope); err != nil {
+	for attempt := 0; attempt < 2; attempt++ {
+		var envelope sendMessageResponse
+		err := c.doJSON(ctx, http.MethodPost, path, payload, &envelope)
+		if err == nil {
+			msg := envelope.toSentMessage()
+			if msg.ID == "" {
+				return nil, fmt.Errorf("zernio: send message: response missing message id")
+			}
+			return msg, nil
+		}
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+			wait := zernioRetryAfter(apiErr)
+			log.Printf("[zernio] rate limited on send, waiting %s before retry (attempt %d/2)", wait, attempt+1)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(wait):
+			}
+			continue
+		}
 		return nil, err
 	}
+	return nil, ErrRateLimited
+}
 
-	msg := envelope.toSentMessage()
-	if msg.ID == "" {
-		return nil, fmt.Errorf("zernio: send message: response missing message id")
+// zernioRetryAfter reads the retryAfter field from the error body, defaulting to 65s.
+func zernioRetryAfter(e *APIError) time.Duration {
+	var body struct {
+		RetryAfter int `json:"retryAfter"`
 	}
-	return msg, nil
+	if err := json.Unmarshal([]byte(e.Body), &body); err == nil && body.RetryAfter > 0 {
+		return time.Duration(body.RetryAfter+1) * time.Second
+	}
+	return 65 * time.Second
 }
 
 // MarkRead marks all unread incoming messages in a conversation as read.
@@ -304,6 +344,9 @@ func (c *Client) PatchContactTags(ctx context.Context, zernioContactID string, t
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, body any, dest any) error {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return fmt.Errorf("zernio: rate limiter: %w", err)
+	}
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
