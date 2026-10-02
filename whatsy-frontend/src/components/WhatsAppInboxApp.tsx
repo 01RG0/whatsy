@@ -423,6 +423,20 @@ export const WhatsAppInboxApp: React.FC = () => {
     [setActiveConversation, openChatOnMobile]
   );
 
+  const handleContactMessage = useCallback(
+    (phone: string) => {
+      const normalized = phone.replace(/\D/g, '')
+      const conv = conversations.find((c) => {
+        const pid = (c.participant?.phoneNumber || c.participant?.id || c.participant?.username || '').replace(/\D/g, '')
+        return pid === normalized
+      })
+      if (conv) {
+        handleSelectConversation(conv)
+      }
+    },
+    [conversations, handleSelectConversation]
+  );
+
   const handleSendMessage = useCallback(
     async (payload: Partial<SendMessagePayload>) => {
       if (!activeConversationId) return;
@@ -612,6 +626,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           onClearInitialTargetMessageId={() => setTargetMessageId(null)}
           onSendMessage={handleSendMessage}
           onRetryMessage={handleRetryMessage}
+          onContactMessage={handleContactMessage}
           viewers={activeViewers}
           typingLock={activeLock}
           onInputFocus={onInputFocus}

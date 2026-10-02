@@ -49,6 +49,7 @@ interface ChatWindowProps {
   isLoadingMessages?: boolean;
   onSendMessage: (payload: Partial<SendMessagePayload>) => void;
   onRetryMessage?: (message: ZernioMessage) => void;
+  onContactMessage?: (phone: string) => void;
   onSendVoiceNote?: (audioBlob: Blob) => void;
   onBack?: () => void;
   onViewContactInfo?: (participantId: string) => void;
@@ -74,6 +75,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isLoadingMessages = false,
   onSendMessage,
   onRetryMessage,
+  onContactMessage,
   onSendVoiceNote,
   onBack,
   onViewContactInfo,
@@ -622,6 +624,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         })}
                         onButtonClick={(_btnId, btnText) => !isViewerMode && onSendMessage({ message: btnText, replyTo: msg.id })}
                         onRetry={isViewerMode ? undefined : onRetryMessage}
+                        onContactMessage={onContactMessage}
                         onNavigateToMessage={handleNavigateToMessage}
                         highlight={chatSearchActive && inChatSearchQuery.trim() ? inChatSearchQuery.trim() : undefined}
                       />

@@ -102,6 +102,7 @@ interface MessageBubbleProps {
   onImageClick?: (url: string) => void;
   onButtonClick?: (buttonId: string, buttonText: string) => void;
   onReply?: (message: ZernioMessage) => void;
+  onContactMessage?: (phone: string) => void;
   onRetry?: (message: ZernioMessage) => void;
   onEditImage?: (url: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
@@ -118,6 +119,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReply,
   onRetry,
   onEditImage,
+  onContactMessage,
   onNavigateToMessage,
   isConsecutive,
   isNew = false,
@@ -552,15 +554,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
             <div className="border-t border-black/10 dark:border-white/10">
               {message.contactPhone ? (
-                <a
-                  href={`https://wa.me/${message.contactPhone.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full py-2.5 text-center text-sm font-medium text-[#00a884] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
+                <button
+                  type="button"
+                  className="block w-full py-2.5 text-center text-sm font-medium text-[#00a884] hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); onContactMessage?.(message.contactPhone!); }}
                 >
                   Message
-                </a>
+                </button>
               ) : (
                 <div className="py-2.5 text-center text-sm font-medium text-[#8696a0] cursor-default">Contact</div>
               )}
