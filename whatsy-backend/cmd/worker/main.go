@@ -42,10 +42,11 @@ func main() {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	// Token bucket: 1 token every 1.5s = 40 req/min, buffer of 3.
-	rl := make(chan struct{}, 3)
+	// Token bucket: 1 token every 3s = 20 req/min, burst of 2.
+	// Leaves ~40 req/min headroom for the backend (sends, reads, webhooks).
+	rl := make(chan struct{}, 2)
 	go func() {
-		tk := time.NewTicker(1500 * time.Millisecond)
+		tk := time.NewTicker(3 * time.Second)
 		defer tk.Stop()
 		for range tk.C {
 			select {
@@ -121,7 +122,7 @@ type worker struct {
 	db          *sql.DB
 	zernioKey   string
 	zernioBase  string
-	rateLimiter chan struct{} // token-bucket: 40 req/min to Zernio
+	rateLimiter chan struct{} // token-bucket: 20 req/min to Zernio
 }
 
 type zernioConv struct {
@@ -285,8 +286,15 @@ func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) 
 				log.Printf("upsert conv %s: %v", conv.ID, err)
 				continue
 			}
-			if err := w.syncMessages(ctx, conv.ID, conv.AccountID, dbConvID); err != nil {
-				log.Printf("sync messages %s: %v", conv.ID, err)
+			// Only sync messages for conversations active in the last 48h.
+			// Older conversations have their metadata updated via upsertConversation;
+			// full message history is fetched on-demand when an agent opens the chat.
+			if conv.UpdatedTime != "" {
+				if t, err := time.Parse(time.RFC3339, conv.UpdatedTime); err == nil && time.Since(t) < 48*time.Hour {
+					if err := w.syncMessages(ctx, conv.ID, conv.AccountID, dbConvID); err != nil {
+						log.Printf("sync messages %s: %v", conv.ID, err)
+					}
+				}
 			}
 			total++
 		}
