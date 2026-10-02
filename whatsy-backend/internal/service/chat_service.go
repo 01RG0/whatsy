@@ -631,6 +631,77 @@ func (s *ChatService) RetryStuckMessages(ctx context.Context) {
 	}
 }
 
+// RetryFailedMessages finds outbound messages with status "failed" from the
+// last 24 hours, resets them to pending, and retries delivery. Returns
+// (sent, failed, total) counts.
+func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, total int) {
+	msgs, err := s.msgRepo.ListRecentFailed(ctx, 24)
+	if err != nil {
+		log.Printf("[retry-failed] list failed messages: %v", err)
+		return
+	}
+	total = len(msgs)
+	if total == 0 {
+		return
+	}
+	log.Printf("[retry-failed] retrying %d failed messages", total)
+
+	accountID := s.zernioAccountID(ctx, "")
+	for _, msg := range msgs {
+		_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusPending)
+
+		zernioConvID, err := s.convRepo.GetZernioIDByLocalID(ctx, msg.ConversationID)
+		if err != nil || zernioConvID == "" {
+			log.Printf("[retry-failed] skip msg %s — no zernio conv id", msg.ID)
+			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
+			failed++
+			continue
+		}
+
+		payload := zernio.SendMessagePayload{
+			AccountID: accountID,
+			Message:   msg.Content,
+		}
+		if len(msg.Attachments) > 0 {
+			att := msg.Attachments[0]
+			payload.AttachmentURL = att.URL
+			payload.AttachmentType = att.MimeType
+			payload.AttachmentName = att.Name
+			if msg.Type == domain.ContentTypeVoiceNote || payload.AttachmentType == "audio" || payload.AttachmentType == "voice_note" {
+				payload.VoiceNote = true
+				payload.AttachmentType = "audio"
+			} else if payload.AttachmentType == "document" {
+				payload.AttachmentType = "file"
+			}
+			if payload.AttachmentType == "file" && payload.AttachmentName == "" {
+				payload.AttachmentName = "Document"
+			}
+		}
+
+		sentMsg, err := s.zernioClient.SendMessage(ctx, zernioConvID, payload)
+		if err != nil {
+			log.Printf("[retry-failed] msg %s failed: %v", msg.ID, err)
+			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
+			s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+				Event:     websocket.EventMessageStatus,
+				MessageID: msg.ID,
+				Status:    string(domain.StatusFailed),
+			})
+			failed++
+			continue
+		}
+		_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, sentMsg.ID, domain.StatusSent)
+		s.hub.BroadcastToAll(websocket.MessageStatusEvent{
+			Event:     websocket.EventMessageStatus,
+			MessageID: msg.ID,
+			Status:    string(domain.StatusSent),
+		})
+		sent++
+		log.Printf("[retry-failed] sent %d/%d messages", sent, total)
+	}
+	return
+}
+
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
 	if payload.VoiceNote {
 		return domain.ContentTypeVoiceNote

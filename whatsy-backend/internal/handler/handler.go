@@ -371,6 +371,17 @@ func queryLimit(r *http.Request, defaultLimit int) int {
 
 // requireConversationTenant prevents direct-ID access to another workspace's
 // messages or state-changing conversation endpoints.
+// RetryFailedMessages resets all outbound messages failed in the last 24h
+// back to pending and retries delivery. Returns sent/failed/total counts.
+func (h *Handler) RetryFailedMessages(w http.ResponseWriter, r *http.Request) {
+	sent, failed, total := h.chatService.RetryFailedMessages(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":  total,
+		"sent":   sent,
+		"failed": failed,
+	})
+}
+
 func (h *Handler) requireConversationTenant(w http.ResponseWriter, r *http.Request, conversationID string) bool {
 	tenantID, ok := TenantIDFromContext(r.Context())
 	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return false }

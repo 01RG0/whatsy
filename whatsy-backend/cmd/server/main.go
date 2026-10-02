@@ -273,6 +273,9 @@ func main() {
 		// Analytics
 		r.With(handler.RequireAdmin).Get("/v1/analytics/overview", analyticsHandler.Overview)
 		r.With(handler.RequireAdmin).Get("/v1/analytics/agents", analyticsHandler.AgentStats)
+
+		// One-time admin utility: retry all failed outbound messages from the last 24h
+		r.With(handler.RequireAdmin).Post("/v1/admin/retry-failed", h.RetryFailedMessages)
 	})
 
 	// Serve React SPA from ./public if it exists (production Docker image).

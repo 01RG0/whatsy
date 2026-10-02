@@ -184,6 +184,28 @@ func (r *MessageRepo) ListStuckPending(ctx context.Context, olderThanSeconds int
 	return msgs, rows.Err()
 }
 
+// ListRecentFailed returns outbound messages with status "failed" created
+// within the last hoursBack hours, for one-time retry purposes.
+func (r *MessageRepo) ListRecentFailed(ctx context.Context, hoursBack int) ([]domain.Message, error) {
+	query := "SELECT " + messageColumns + messageFrom +
+		"WHERE m.status = 'failed' AND m.direction = 'outbound' " +
+		"AND m.timestamp > NOW() - ($1 * INTERVAL '1 hour') ORDER BY m.timestamp ASC LIMIT 500"
+	rows, err := r.db.QueryContext(ctx, query, hoursBack)
+	if err != nil {
+		return nil, fmt.Errorf("list recent failed messages: %w", err)
+	}
+	defer rows.Close()
+	var msgs []domain.Message
+	for rows.Next() {
+		msg, err := scanMessage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan recent failed message: %w", err)
+		}
+		msgs = append(msgs, msg)
+	}
+	return msgs, rows.Err()
+}
+
 func (r *MessageRepo) DeleteByZernioID(ctx context.Context, zernioMsgID string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM messages WHERE zernio_message_id = $1", zernioMsgID)
 	if err != nil {
