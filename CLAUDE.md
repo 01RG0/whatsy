@@ -46,3 +46,11 @@ When invoking CLI agents directly or through dispatch.py, use these paths:
   - Send Approved Template: `POST /v1/whatsapp/broadcasts` or `/v1/whatsapp/messages`
   - Mark Conversation as Read: `POST /v1/inbox/conversations/{id}/read`
   - Typing Indicator: `POST /v1/inbox/conversations/{id}/typing`
+
+## Deployment Rules
+
+- **After every `git push`, verify the Railway deploy succeeded** before reporting the task as done.
+  - Use `railway logs --service whatsy-backend` (or `whatsy-frontend`) to check for build/runtime errors.
+  - Look for `go.mod` Go version vs Dockerfile Go version mismatch — local `go mod tidy` sets the version to the local Go (currently 1.27); Dockerfile must match (`golang:1.26-alpine` or higher).
+  - A deploy is only "done" when Railway shows the service healthy (no build failure, no crash loop in logs).
+- **Never push Supabase auth migration commits** — would corrupt live Railway deployment.
