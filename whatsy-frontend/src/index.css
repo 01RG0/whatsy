@@ -89,7 +89,41 @@ html:not(.dark) .placeholder-gray-400::placeholder { color: var(--light-text-mut
 .safe-left   { padding-left:   env(safe-area-inset-left); }
 .safe-right  { padding-right:  env(safe-area-inset-right); }
 
-/* Quoted reply highlight flash (WhatsApp style) */
+/* Quoted reply row background flash (WhatsApp Web style full-row highlight) */
+@keyframes replyRowHighlightLight {
+  0% {
+    background-color: rgba(0, 168, 132, 0.24);
+  }
+  40% {
+    background-color: rgba(0, 168, 132, 0.18);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes replyRowHighlightDark {
+  0% {
+    background-color: rgba(0, 168, 132, 0.32);
+  }
+  40% {
+    background-color: rgba(0, 168, 132, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.reply-row-highlight {
+  animation: replyRowHighlightLight 2s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+html.dark .reply-row-highlight,
+.dark .reply-row-highlight {
+  animation: replyRowHighlightDark 2s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+/* Quoted reply bubble highlight flash */
 @keyframes replyHighlightLight {
   0% {
     filter: brightness(0.85);

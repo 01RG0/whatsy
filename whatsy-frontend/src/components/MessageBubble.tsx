@@ -309,7 +309,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       data-message-id={message.id}
       {...(message.zernioMessageId ? { 'data-zernio-id': message.zernioMessageId } : {})}
       ref={rowRef}
-      className={`group relative flex w-full ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+      className={`group relative flex w-full reply-row-target ${isConsecutive ? 'mt-0.5 mb-1' : 'my-1'} px-4 ${isOutbound ? 'justify-end' : 'justify-start'}`}
     >
       {/* Swipe-to-reply indicator — always in DOM, driven by native touch handler */}
       <div
@@ -345,11 +345,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   document.getElementById('msg-' + replyId);
                 if (target) {
                   (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  const row = ((target as HTMLElement).classList.contains('reply-row-target')
+                    ? target
+                    : (target.querySelector('.reply-row-target') || target.closest('.reply-row-target') || target)) as HTMLElement;
                   const bubble = (target.querySelector('.reply-bubble-target') as HTMLElement) || (target as HTMLElement);
+                  row.classList.remove('reply-row-highlight');
                   bubble.classList.remove('reply-highlight');
-                  void bubble.offsetWidth;
+                  void row.offsetWidth;
+                  row.classList.add('reply-row-highlight');
                   bubble.classList.add('reply-highlight');
-                  setTimeout(() => bubble.classList.remove('reply-highlight'), 1800);
+                  setTimeout(() => {
+                    row.classList.remove('reply-row-highlight');
+                    bubble.classList.remove('reply-highlight');
+                  }, 2000);
                 }
               }
             }}

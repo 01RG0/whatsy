@@ -218,14 +218,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const targetEl = findEl();
     if (targetEl) {
       targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Find the full-width row element
+      const rowEl =
+        (targetEl.classList.contains('reply-row-target')
+          ? targetEl
+          : (targetEl.closest('.reply-row-target') as HTMLElement)) ||
+        (targetEl.querySelector('.reply-row-target') as HTMLElement) ||
+        targetEl;
+
       const bubbleEl =
         (targetEl.classList.contains('reply-bubble-target')
           ? targetEl
-          : (targetEl.querySelector('.reply-bubble-target') as HTMLElement)) || targetEl;
-      bubbleEl.classList.remove('reply-highlight');
-      void bubbleEl.offsetWidth;
-      bubbleEl.classList.add('reply-highlight');
-      setTimeout(() => bubbleEl.classList.remove('reply-highlight'), 1800);
+          : (targetEl.querySelector('.reply-bubble-target') as HTMLElement)) || null;
+
+      rowEl.classList.remove('reply-row-highlight');
+      if (bubbleEl) bubbleEl.classList.remove('reply-highlight');
+
+      void rowEl.offsetWidth;
+
+      rowEl.classList.add('reply-row-highlight');
+      if (bubbleEl) bubbleEl.classList.add('reply-highlight');
+
+      setTimeout(() => {
+        rowEl.classList.remove('reply-row-highlight');
+        if (bubbleEl) bubbleEl.classList.remove('reply-highlight');
+      }, 2000);
     } else if (onLoadMoreMessages && !isLoadingMoreMessages) {
       onLoadMoreMessages();
     }
@@ -656,7 +674,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </span>
                       </div>
                     )}
-                    <div data-message-id={msg.id} {...(msg.zernioMessageId ? { 'data-zernio-id': msg.zernioMessageId } : {})}>
+                    <div
+                      data-message-id={msg.id}
+                      className="w-full reply-row-target rounded py-0.5 transition-colors"
+                      {...(msg.zernioMessageId ? { 'data-zernio-id': msg.zernioMessageId } : {})}
+                    >
                       <MessageBubble
                         message={msg}
                         isConsecutive={isConsecutive}
