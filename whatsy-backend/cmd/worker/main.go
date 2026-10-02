@@ -336,17 +336,15 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 
 	var studentID string
 	err := w.db.QueryRowContext(ctx,
-		`INSERT INTO students (name, phone, avatar_url, tenant_id, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4::uuid, NOW(), NOW())
+		`INSERT INTO students (name, phone, avatar_url, created_at, updated_at)
+		 VALUES ($1, $2, $3, NOW(), NOW())
 		 ON CONFLICT (phone) DO UPDATE
 		   SET name = EXCLUDED.name,
 		       avatar_url = CASE WHEN EXCLUDED.avatar_url IS NOT NULL AND EXCLUDED.avatar_url != '' THEN EXCLUDED.avatar_url ELSE students.avatar_url END,
-		       tenant_id = COALESCE(students.tenant_id, EXCLUDED.tenant_id),
 		       updated_at = NOW()
 		 RETURNING id`,
 		name, phone,
 		sql.NullString{String: conv.ParticipantPicture, Valid: conv.ParticipantPicture != ""},
-		defaultTenantID,
 	).Scan(&studentID)
 	if err != nil {
 		return "", fmt.Errorf("upsert student: %w", err)
@@ -362,15 +360,14 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 	var dbConvID string
 	err = w.db.QueryRowContext(ctx,
 		`INSERT INTO conversations
-		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, tenant_id, created_at, updated_at)
-		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, $6::uuid, NOW(), NOW())
+		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
+		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, NOW(), NOW())
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
 		    SET last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
-		        tenant_id       = COALESCE(conversations.tenant_id, EXCLUDED.tenant_id),
 		        updated_at      = NOW()
 		 RETURNING id`,
-		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID, defaultTenantID,
+		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID,
 	).Scan(&dbConvID)
 	return dbConvID, err
 }
