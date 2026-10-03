@@ -630,80 +630,82 @@ export default function AnalysisPage() {
             <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef]">{t.analysis_team_performance}</h2>
           </div>
           <div className="overflow-x-auto">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-[#222e35]">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_agent}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_msgs_sent}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_chats}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_active_time}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_working_hours}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_start_time}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_end_time}</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_total_time}</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-[#222e35]">
-              {agents.map((agent) => {
-                const isWhatsAppApp = agent.id === 'whatsapp-app'
-                return (
-                <React.Fragment key={agent.id}>
-                  <tr
-                    onClick={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
-                    className="transition-colors hover:bg-gray-50 dark:hover:bg-[#182229] cursor-pointer"
-                  >
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        {isWhatsAppApp ? (
-                          <div className="w-8 h-8 rounded-full bg-[#25d366]/10 flex items-center justify-center shrink-0 text-base">📱</div>
-                        ) : agent.avatar ? (
-                          <img src={agent.avatar} alt={agent.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
-                        ) : (
-                          <AgentInitials name={agent.name} />
-                        )}
-                        <div>
-                          <span className={`font-medium ${isWhatsAppApp ? 'italic text-gray-500 dark:text-[#8696a0]' : 'text-gray-900 dark:text-[#e9edef]'}`}>
-                            {agent.name}
-                          </span>
-                          {isWhatsAppApp && (
-                            <p className="text-xs text-gray-400 dark:text-[#8696a0]">{t.analysis_sent_from_app}</p>
+            <table className="w-full min-w-[700px] text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-[#222e35]">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_agent}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_msgs_sent}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_chats}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_active_time}</th>
+                  <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_working_hours}</th>
+                  <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_start_time}</th>
+                  <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_end_time}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_total_time}</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-[#222e35]">
+                {agents.map((agent) => {
+                  const isWhatsAppApp = agent.id === 'whatsapp-app'
+                  return (
+                  <React.Fragment key={agent.id}>
+                    <tr
+                      onClick={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
+                      className="transition-colors hover:bg-gray-50 dark:hover:bg-[#182229] cursor-pointer"
+                    >
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          {isWhatsAppApp ? (
+                            <div className="w-8 h-8 rounded-full bg-[#25d366]/10 flex items-center justify-center shrink-0 text-base">📱</div>
+                          ) : agent.avatar ? (
+                            <img src={agent.avatar} alt={agent.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <AgentInitials name={agent.name} />
                           )}
+                          <div>
+                            <span className={`font-medium ${isWhatsAppApp ? 'italic text-gray-500 dark:text-[#8696a0]' : 'text-gray-900 dark:text-[#e9edef]'}`}>
+                              {agent.name}
+                            </span>
+                            {isWhatsAppApp && (
+                              <p className="text-xs text-gray-400 dark:text-[#8696a0]">{t.analysis_sent_from_app}</p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.messagesSent.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{agent.conversationsHandled.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatActiveTime(agent.activeTimeSeconds)}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{getWorkingHours(agent.activeHours ?? [])}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{formatWorkTimestamp(agent.startWorkTime)}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{formatWorkTimestamp(agent.endWorkTime)}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{isWhatsAppApp ? '—' : formatWorkTime(agent.startWorkTime, agent.endWorkTime)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {(
-                        <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
-                          <svg
-                            className={`w-4 h-4 transition-transform ${expandedAgent === agent.id ? 'rotate-180' : ''}`}
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                          >
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  {expandedAgent === agent.id && (
-                    <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
-                      <td colSpan={9} className="px-5 py-3">
-                        <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">{t.analysis_hourly_activity}</p>
-                        <HourlyChart activeHours={agent.activeHours ?? []} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 dark:text-[#e9edef]">{agent.messagesSent.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{agent.conversationsHandled.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0]">{isWhatsAppApp ? '—' : formatActiveTime(agent.activeTimeSeconds)}</td>
+                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{getWorkingHours(agent.activeHours ?? [])}</td>
+                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{formatWorkTimestamp(agent.startWorkTime)}</td>
+                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{formatWorkTimestamp(agent.endWorkTime)}</td>
+                      <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] whitespace-nowrap">{isWhatsAppApp ? '—' : formatWorkTime(agent.startWorkTime, agent.endWorkTime)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {(
+                          <button className="text-gray-400 dark:text-[#8696a0] hover:text-[#00a884] transition-colors p-1">
+                            <svg
+                              className={`w-4 h-4 transition-transform ${expandedAgent === agent.id ? 'rotate-180' : ''}`}
+                              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </button>
+                        )}
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+                    {expandedAgent === agent.id && (
+                      <tr key={`${agent.id}-hours`} className="bg-gray-50 dark:bg-[#0d1a20]">
+                        <td colSpan={9} className="px-5 py-3">
+                          <p className="text-xs text-gray-500 dark:text-[#8696a0] mb-2">{t.analysis_hourly_activity}</p>
+                          <HourlyChart activeHours={agent.activeHours ?? []} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
