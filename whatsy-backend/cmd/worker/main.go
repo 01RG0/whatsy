@@ -61,7 +61,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	interval := 5 * time.Minute
+	interval := 30 * time.Minute
 	log.Printf("sync worker started — interval %s", interval)
 
 	// Startup lock: skip full sync if completed less than 2 hours ago.
@@ -105,7 +105,7 @@ func main() {
 			log.Println("worker shutting down")
 			return
 		case <-ticker.C:
-			since := time.Now().Add(-(interval + time.Minute))
+			since := time.Now().Add(-(interval + 5*time.Minute))
 			ctx, cancel := context.WithTimeout(context.Background(), interval-30*time.Second)
 			n, err := w.sync(ctx, since, "")
 			cancel()
@@ -282,15 +282,16 @@ func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) 
 		}
 
 		reachedEnd := false
+		pageHitWindow := 0
 		for _, conv := range page.Data {
 			if conv.UpdatedTime != "" {
 				t, err := time.Parse(time.RFC3339, conv.UpdatedTime)
 				if err == nil && t.Before(cutoff) {
-					reachedEnd = true
-					break
+					continue
 				}
 			}
-			dbConvID, err := w.upsertConversation(ctx, conv)
+			pageHitWindow++
+			dbConvID, err := w.upsertConversation(ctx, defaultTenantID, conv)
 			if err != nil {
 				log.Printf("upsert conv %s: %v", conv.ID, err)
 				continue
@@ -307,6 +308,9 @@ func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) 
 			}
 			total++
 		}
+		if pageHitWindow == 0 {
+			reachedEnd = true
+		}
 
 		if reachedEnd || !page.Pagination.HasMore || page.Pagination.NextCursor == "" {
 			break
@@ -321,10 +325,10 @@ func (w *worker) sync(ctx context.Context, since time.Time, startCursor string) 
 	return total, nil
 }
 
-func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (string, error) {
+func (w *worker) upsertConversation(ctx context.Context, tenantID string, conv zernioConv) (string, error) {
 	phone := strings.ReplaceAll(conv.ParticipantUsername, " ", "")
 	if phone == "" {
-		phone = "+" + conv.ParticipantID
+		phone = "+unknown-" + conv.ID
 	}
 	if !strings.HasPrefix(phone, "+") {
 		phone = "+" + phone
@@ -336,8 +340,8 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 
 	var studentID string
 	err := w.db.QueryRowContext(ctx,
-		`INSERT INTO students (name, phone, avatar_url, created_at, updated_at)
-		 VALUES ($1, $2, $3, NOW(), NOW())
+		`INSERT INTO students (name, phone, avatar_url, tenant_id, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4::uuid, NOW(), NOW())
 		 ON CONFLICT (phone) DO UPDATE
 		   SET name = EXCLUDED.name,
 		       avatar_url = CASE WHEN EXCLUDED.avatar_url IS NOT NULL AND EXCLUDED.avatar_url != '' THEN EXCLUDED.avatar_url ELSE students.avatar_url END,
@@ -345,6 +349,7 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 		 RETURNING id`,
 		name, phone,
 		sql.NullString{String: conv.ParticipantPicture, Valid: conv.ParticipantPicture != ""},
+		tenantID,
 	).Scan(&studentID)
 	if err != nil {
 		return "", fmt.Errorf("upsert student: %w", err)
@@ -360,14 +365,17 @@ func (w *worker) upsertConversation(ctx context.Context, conv zernioConv) (strin
 	var dbConvID string
 	err = w.db.QueryRowContext(ctx,
 		`INSERT INTO conversations
-		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
-		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, NOW(), NOW())
+		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, tenant_id, created_at, updated_at)
+		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, $6::uuid, NOW(), NOW())
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
-		    SET last_message    = EXCLUDED.last_message,
+		    SET student_id      = EXCLUDED.student_id,
+		        last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
+		        unread_count    = EXCLUDED.unread_count,
+		        tenant_id       = EXCLUDED.tenant_id,
 		        updated_at      = NOW()
 		 RETURNING id`,
-		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID,
+		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID, tenantID,
 	).Scan(&dbConvID)
 	return dbConvID, err
 }

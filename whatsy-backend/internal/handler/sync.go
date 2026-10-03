@@ -300,15 +300,15 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			estimated = len(pageData.Data)
 		}
 
-		reachedEnd := false
+		pageHitWindow := 0
 		for _, conv := range pageData.Data {
 			if conv.UpdatedTime != "" {
 				t, err := time.Parse(time.RFC3339, conv.UpdatedTime)
 				if err == nil && t.Before(cutoff) {
-					reachedEnd = true
-					break
+					continue
 				}
 			}
+			pageHitWindow++
 			if err := h.upsertConversation(ctx, tenantID, conv); err != nil {
 				log.Printf("sync conv %s: %v", conv.ID, err)
 				continue
@@ -334,6 +334,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 				})
 			}
 		}
+		reachedEnd := pageHitWindow == 0
 
 		if reachedEnd || !pageData.Pagination.HasMore || pageData.Pagination.NextCursor == "" {
 			break
