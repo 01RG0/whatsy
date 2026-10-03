@@ -401,6 +401,9 @@ func (s *ChatService) HandleMessageStatus(ctx context.Context, payload zernio.Me
 		return nil
 	}
 	if err := s.msgRepo.UpdateStatusByZernioID(ctx, dedupeID, domain.DeliveryStatus(payload.Status)); err != nil {
+		if strings.Contains(err.Error(), "no message with zernio_message_id") {
+			return nil
+		}
 		return fmt.Errorf("update message status: %w", err)
 	}
 	return nil
