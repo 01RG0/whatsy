@@ -1058,12 +1058,17 @@ func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio
 }
 
 func (s *ChatService) resolveTenantID(ctx context.Context, accountID string) string {
-	s.tc.mu.RLock()
-	if time.Now().Before(s.tc.expiresAt) {
+	lookupFromCache := func() string {
 		tid := s.tc.byAccount[accountID]
-		if tid == "" {
+		if tid == "" && accountID == "" {
 			tid = s.tc.fallback
 		}
+		return tid
+	}
+
+	s.tc.mu.RLock()
+	if time.Now().Before(s.tc.expiresAt) {
+		tid := lookupFromCache()
 		s.tc.mu.RUnlock()
 		return tid
 	}
@@ -1072,35 +1077,38 @@ func (s *ChatService) resolveTenantID(ctx context.Context, accountID string) str
 	s.tc.mu.Lock()
 	defer s.tc.mu.Unlock()
 	if time.Now().Before(s.tc.expiresAt) {
-		tid := s.tc.byAccount[accountID]
-		if tid == "" {
-			tid = s.tc.fallback
-		}
-		return tid
+		return lookupFromCache()
 	}
+
 	rows, err := s.db.QueryContext(ctx, `SELECT account_id, tenant_id FROM whatsapp_connections WHERE status = 'connected'`)
-	if err == nil {
-		m := make(map[string]string)
-		var fallback string
-		for rows.Next() {
-			var acc, tid string
-			if rows.Scan(&acc, &tid) == nil {
-				m[acc] = tid
-				if fallback == "" {
-					fallback = tid
-				}
+	if err != nil {
+		// Clear stale cache on error so we return empty string, not stale data.
+		s.tc.byAccount = nil
+		s.tc.fallback = ""
+		return ""
+	}
+	defer rows.Close()
+	m := make(map[string]string)
+	var fallback string
+	for rows.Next() {
+		var acc, tid string
+		if rows.Scan(&acc, &tid) == nil {
+			m[acc] = tid
+			if fallback == "" {
+				fallback = tid
 			}
 		}
-		rows.Close()
-		s.tc.byAccount = m
-		s.tc.fallback = fallback
-		s.tc.expiresAt = time.Now().Add(5 * time.Minute)
 	}
-	tid := s.tc.byAccount[accountID]
-	if tid == "" {
-		tid = s.tc.fallback
+	if rows.Err() != nil {
+		// Partial scan — do not commit to cache.
+		s.tc.byAccount = nil
+		s.tc.fallback = ""
+		return ""
 	}
-	return tid
+	s.tc.byAccount = m
+	s.tc.fallback = fallback
+	s.tc.expiresAt = time.Now().Add(5 * time.Minute)
+	return lookupFromCache()
 }
 
 func firstNonEmpty(values ...string) string {
