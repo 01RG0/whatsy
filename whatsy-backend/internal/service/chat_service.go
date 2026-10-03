@@ -1012,6 +1012,22 @@ func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio
 		name = phone
 	}
 
+	// Resolve tenant_id from the WhatsApp account that received this message.
+	// Without this the row gets tenant_id = NULL and ListForTenant can never see it.
+	var tenantID string
+	if payload.AccountID != "" {
+		_ = s.db.QueryRowContext(ctx,
+			`SELECT tenant_id FROM whatsapp_connections WHERE account_id = $1 AND status = 'connected' LIMIT 1`,
+			payload.AccountID,
+		).Scan(&tenantID)
+	}
+	if tenantID == "" {
+		// Fallback: use the first connected tenant (single-tenant deployments).
+		_ = s.db.QueryRowContext(ctx,
+			`SELECT tenant_id FROM whatsapp_connections WHERE status = 'connected' LIMIT 1`,
+		).Scan(&tenantID)
+	}
+
 	var studentID string
 	err := s.db.QueryRowContext(ctx,
 		`INSERT INTO students (name, phone, created_at, updated_at)
@@ -1029,11 +1045,13 @@ func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio
 	var convID string
 	err = s.db.QueryRowContext(ctx,
 		`INSERT INTO conversations
-		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, created_at, updated_at)
-		 VALUES ($1, 'whatsapp', '', NOW(), 0, $2, NOW(), NOW())
-		 ON CONFLICT (zernio_conversation_id) DO UPDATE SET updated_at = NOW()
+		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, tenant_id, created_at, updated_at)
+		 VALUES ($1, 'whatsapp', '', NOW(), 0, $2, $3::uuid, NOW(), NOW())
+		 ON CONFLICT (zernio_conversation_id) DO UPDATE SET
+		     tenant_id = COALESCE(conversations.tenant_id, EXCLUDED.tenant_id),
+		     updated_at = NOW()
 		 RETURNING id`,
-		studentID, payload.ConversationID,
+		studentID, payload.ConversationID, sql.NullString{String: tenantID, Valid: tenantID != ""},
 	).Scan(&convID)
 	if err != nil {
 		return "", fmt.Errorf("upsert conversation: %w", err)
