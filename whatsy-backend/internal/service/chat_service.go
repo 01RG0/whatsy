@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/whatsy/backend/internal/domain"
@@ -45,6 +46,13 @@ type WSBroadcaster interface {
 	BroadcastToAll(event interface{})
 }
 
+type tenantCache struct {
+	mu        sync.RWMutex
+	byAccount map[string]string
+	fallback  string
+	expiresAt time.Time
+}
+
 // ChatService coordinates persistence, Zernio calls, and live chat updates.
 type ChatService struct {
 	db                  *sql.DB
@@ -54,6 +62,7 @@ type ChatService struct {
 	hub           WSBroadcaster
 	autoReplier   AutoReplier
 	zernioAPIKey  string
+	tc            tenantCache
 }
 
 func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, zernioClient ZernioSender, hub WSBroadcaster, zernioAPIKey string) *ChatService {
@@ -1015,21 +1024,7 @@ func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio
 		name = phone
 	}
 
-	// Resolve tenant_id from the WhatsApp account that received this message.
-	// Without this the row gets tenant_id = NULL and ListForTenant can never see it.
-	var tenantID string
-	if payload.AccountID != "" {
-		_ = s.db.QueryRowContext(ctx,
-			`SELECT tenant_id FROM whatsapp_connections WHERE account_id = $1 AND status = 'connected' LIMIT 1`,
-			payload.AccountID,
-		).Scan(&tenantID)
-	}
-	if tenantID == "" {
-		// Fallback: use the first connected tenant (single-tenant deployments).
-		_ = s.db.QueryRowContext(ctx,
-			`SELECT tenant_id FROM whatsapp_connections WHERE status = 'connected' LIMIT 1`,
-		).Scan(&tenantID)
-	}
+	tenantID := s.resolveTenantID(ctx, payload.AccountID)
 
 	var studentID string
 	err := s.db.QueryRowContext(ctx,
@@ -1060,6 +1055,52 @@ func (s *ChatService) autoCreateConversation(ctx context.Context, payload zernio
 		return "", fmt.Errorf("upsert conversation: %w", err)
 	}
 	return convID, nil
+}
+
+func (s *ChatService) resolveTenantID(ctx context.Context, accountID string) string {
+	s.tc.mu.RLock()
+	if time.Now().Before(s.tc.expiresAt) {
+		tid := s.tc.byAccount[accountID]
+		if tid == "" {
+			tid = s.tc.fallback
+		}
+		s.tc.mu.RUnlock()
+		return tid
+	}
+	s.tc.mu.RUnlock()
+
+	s.tc.mu.Lock()
+	defer s.tc.mu.Unlock()
+	if time.Now().Before(s.tc.expiresAt) {
+		tid := s.tc.byAccount[accountID]
+		if tid == "" {
+			tid = s.tc.fallback
+		}
+		return tid
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT account_id, tenant_id FROM whatsapp_connections WHERE status = 'connected'`)
+	if err == nil {
+		m := make(map[string]string)
+		var fallback string
+		for rows.Next() {
+			var acc, tid string
+			if rows.Scan(&acc, &tid) == nil {
+				m[acc] = tid
+				if fallback == "" {
+					fallback = tid
+				}
+			}
+		}
+		rows.Close()
+		s.tc.byAccount = m
+		s.tc.fallback = fallback
+		s.tc.expiresAt = time.Now().Add(5 * time.Minute)
+	}
+	tid := s.tc.byAccount[accountID]
+	if tid == "" {
+		tid = s.tc.fallback
+	}
+	return tid
 }
 
 func firstNonEmpty(values ...string) string {
