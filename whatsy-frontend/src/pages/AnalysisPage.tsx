@@ -435,7 +435,7 @@ export default function AnalysisPage() {
   )
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0b141a] p-6">
+    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0b141a] p-3 sm:p-6">
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
@@ -443,7 +443,7 @@ export default function AnalysisPage() {
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Range pills */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {(['today', 'week', 'month', 'custom'] as RangeOption[]).map((r) => (
               <button
                 key={r}
@@ -461,7 +461,7 @@ export default function AnalysisPage() {
 
           {/* Custom date inputs */}
           {range === 'custom' && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <input
                 type="date"
                 value={customFrom}
@@ -629,7 +629,7 @@ export default function AnalysisPage() {
           <div className="px-5 py-4 border-b border-gray-100 dark:border-[#222e35]">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-[#e9edef]">{t.analysis_team_performance}</h2>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
             <thead>
               <tr className="border-b border-gray-100 dark:border-[#222e35]">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">{t.analysis_col_agent}</th>

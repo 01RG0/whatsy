@@ -210,7 +210,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Header */}
       <header className="relative h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] px-4 flex items-center justify-between shrink-0 border-b border-[#e9edef] dark:border-[#222e35]">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-base text-[#111b21] dark:text-[#e9edef] tracking-tight">{t.sidebar_chats}</span>
+          {/* Profile avatar — replaces "Chats" text; opens account switcher */}
+          {currentAgent && (
+            <button
+              type="button"
+              onClick={() => setShowAccountSwitcher(true)}
+              title={currentAgent.name}
+              className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center text-white text-sm font-bold transition hover:opacity-90 hover:ring-2 hover:ring-[#00a884]/40 active:scale-95 shadow-sm shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00a884]/40"
+            >
+              {agentInitials}
+            </button>
+          )}
           {/* Dark/Light + Language toggles — mobile only */}
           <div className="flex items-center gap-1 md:hidden">
             <button
@@ -240,17 +250,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               {lang === 'en' ? 'ع' : 'EN'}
             </button>
-            {/* Mobile User Profile Button */}
-            {currentAgent && (
-              <button
-                type="button"
-                onClick={() => setShowAccountSwitcher(true)}
-                title={currentAgent.name}
-                className="w-7 h-7 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold transition hover:opacity-90 active:scale-95 shadow-sm shrink-0 ms-0.5 cursor-pointer"
-              >
-                {agentInitials}
-              </button>
-            )}
           </div>
         </div>
 

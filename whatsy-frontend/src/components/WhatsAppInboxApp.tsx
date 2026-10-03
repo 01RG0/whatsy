@@ -9,6 +9,7 @@ import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 import { useT } from '../i18n/translations';
 import { useLabelStore } from '../store/useLabelStore';
+import { getSavedAccounts } from '../lib/auth';
 
 export const WhatsAppInboxApp: React.FC = () => {
   const t = useT();
@@ -83,6 +84,12 @@ export const WhatsAppInboxApp: React.FC = () => {
     window.addEventListener('popstate', handler);
     return () => window.removeEventListener('popstate', handler);
   }, [showChatOnMobile, closeChatOnMobile]);
+  // Eagerly persist the current user to whatsy_accounts on mount so the account
+  // switcher is never empty on first open (no-op if already saved).
+  useEffect(() => {
+    getSavedAccounts();
+  }, []);
+
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [showConnected, setShowConnected] = useState(false);

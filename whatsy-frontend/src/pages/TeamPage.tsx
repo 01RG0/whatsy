@@ -202,7 +202,7 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0b141a] p-6 relative">
+    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0b141a] p-3 sm:p-6 relative">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -253,7 +253,7 @@ export default function TeamPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-[#8696a0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
@@ -261,7 +261,7 @@ export default function TeamPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by name or email…"
-            className="pl-9 pr-3 py-2 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00a884] w-60"
+            className="pl-9 pr-3 py-2 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-[#374151] text-gray-900 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00a884] w-full sm:w-60"
           />
         </div>
         <div className="flex items-center gap-1.5">
@@ -283,7 +283,7 @@ export default function TeamPage() {
       </div>
 
       {/* Agents Table */}
-      <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] overflow-hidden">
+      <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] overflow-x-auto">
         {loading ? (
           <div className="flex items-center gap-3 text-gray-400 dark:text-[#8696a0] text-sm p-8">
             <svg className="animate-spin w-5 h-5 text-[#00a884]" viewBox="0 0 24 24" fill="none">
@@ -303,14 +303,14 @@ export default function TeamPage() {
             <p className="text-gray-400 dark:text-[#8696a0] text-sm mt-1">Try a different filter or invite your first agent</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="border-b border-gray-100 dark:border-[#222e35]">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Agent</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Role</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Active Convs</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide">Last Active</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide hidden sm:table-cell">Active Convs</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 dark:text-[#8696a0] uppercase tracking-wide hidden sm:table-cell">Last Active</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -347,11 +347,11 @@ export default function TeamPage() {
                       <span className="text-xs text-gray-500 dark:text-[#8696a0]">{agent.isOnline ? 'Online' : 'Offline'}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="text-gray-700 dark:text-[#e9edef] font-medium">{agent.activeConversations}</span>
                     <span className="text-gray-400 dark:text-[#8696a0] text-xs ml-1">active</span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] text-xs">{timeAgo(agent.lastSeen)}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-[#8696a0] text-xs hidden sm:table-cell">{timeAgo(agent.lastSeen)}</td>
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -496,7 +496,7 @@ export default function TeamPage() {
       {selectedAgent && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setSelectedAgent(null)} />
-          <div className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-[#111b21] border-l border-gray-200 dark:border-[#222e35] shadow-2xl z-50 overflow-y-auto flex flex-col">
+          <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-white dark:bg-[#111b21] border-l border-gray-200 dark:border-[#222e35] shadow-2xl z-50 overflow-y-auto flex flex-col">
             {/* Panel header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-[#222e35] shrink-0">
               <span className="font-semibold text-gray-900 dark:text-[#e9edef] text-sm">Agent Profile</span>

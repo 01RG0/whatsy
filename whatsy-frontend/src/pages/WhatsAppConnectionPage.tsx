@@ -671,7 +671,7 @@ export default function WhatsAppConnectionPage() {
       )}
 
       {/* ── Page header ── */}
-      <div className="px-6 pt-6 pb-0 flex items-end justify-between">
+      <div className="px-4 sm:px-6 pt-6 pb-0 flex items-end justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-[#e9edef]">WhatsApp</h1>
           <p className="text-gray-400 dark:text-[#8696a0] text-sm mt-0.5">live senders</p>
@@ -686,10 +686,10 @@ export default function WhatsAppConnectionPage() {
       </div>
 
       {/* ── Senders table ── */}
-      <div className="px-6 mt-5">
+      <div className="px-4 sm:px-6 mt-5">
         {/* Search + filters bar */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="relative flex-1 max-w-xs">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative min-w-0 flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             <input placeholder="Search senders..." className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#111b21] border border-gray-200 dark:border-[#222e35] rounded-lg text-sm text-gray-700 dark:text-[#e9edef] placeholder-gray-400 dark:placeholder-[#8696a0] outline-none focus:ring-2 focus:ring-[#00a884]" />
           </div>
