@@ -206,6 +206,29 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := TenantIDFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"})
+		return
+	}
+	defer r.Body.Close()
+	var body struct {
+		Since *time.Time `json:"since"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && err.Error() != "EOF" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	count, err := h.convRepo.MarkAllReadSince(r.Context(), tenantID, body.Since)
+	if err != nil {
+		log.Printf("[error] mark all read: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark all read"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"count": count})
+}
+
 func (h *Handler) MarkUnread(w http.ResponseWriter, r *http.Request) {
 	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
 	if err := h.chatService.MarkConversationUnread(r.Context(), chi.URLParam(r, "id")); err != nil {

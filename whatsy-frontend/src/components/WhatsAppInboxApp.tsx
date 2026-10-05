@@ -4,7 +4,7 @@ import { ChatWindow } from './ChatWindow';
 import { ForwardModal } from './ForwardModal';
 import { useInboxStore } from '../store/useInboxStore';
 import { useWebSocket } from '../store/useWebSocket'
-import { getMessages, getConversations, sendMessage, markRead, markUnread, assignConversation, getAgents, addConversationLabel } from '../api/inbox';
+import { getMessages, getConversations, sendMessage, markRead, markUnread, markAllReadSince, assignConversation, getAgents, addConversationLabel } from '../api/inbox';
 import type { AgentSummary } from '../api/inbox';
 import type { ZernioConversation, ZernioMessage, ConversationFilter, SendMessagePayload } from './types';
 import { useT } from '../i18n/translations';
@@ -51,6 +51,9 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState<ZernioMessage | null>(null);
+  const [showMarkAllReadModal, setShowMarkAllReadModal] = useState(false);
+  const [customFromDate, setCustomFromDate] = useState('');
+  const [customToDate, setCustomToDate] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -317,14 +320,39 @@ export const WhatsAppInboxApp: React.FC = () => {
   );
 
   const handleMarkAllRead = useCallback(() => {
-    const unread = conversations.filter((conversation) => conversation.unreadCount > 0 || conversation.isMarkedUnread);
-    if (unread.length === 0) return;
-    const count = unread.length;
-    if (!window.confirm(t.mark_all_read_confirm(count))) return;
-    Promise.all(unread.map((conversation) => markRead(conversation.id)))
-      .then(() => unread.forEach((conversation) => updateConversation({ id: conversation.id, unreadCount: 0, isMarkedUnread: false })))
-      .catch((err) => console.error('[WhatsAppInboxApp] mark all read:', err));
-  }, [conversations, updateConversation]);
+    const hasUnread = conversations.some((c) => c.unreadCount > 0 || c.isMarkedUnread);
+    if (!hasUnread) return;
+    setShowMarkAllReadModal(true);
+  }, [conversations]);
+
+  const handleMarkAllReadWithRange = useCallback(
+    (range: '1h' | '24h' | '7d' | 'all' | 'custom') => {
+      let since: Date | null = null;
+      if (range === '1h') {
+        since = new Date(Date.now() - 1 * 60 * 60 * 1000);
+      } else if (range === '24h') {
+        since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      } else if (range === '7d') {
+        since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      } else if (range === 'all') {
+        since = null;
+      } else if (range === 'custom') {
+        since = customFromDate ? new Date(customFromDate) : null;
+      }
+      setShowMarkAllReadModal(false);
+      markAllReadSince(since)
+        .then(() => {
+          const sinceTime = since ? since.getTime() : 0;
+          useInboxStore.getState().conversations.forEach((c) => {
+            if ((c.unreadCount > 0 || c.isMarkedUnread) && new Date(c.updatedAt).getTime() >= sinceTime) {
+              updateConversation({ id: c.id, unreadCount: 0, isMarkedUnread: false });
+            }
+          });
+        })
+        .catch((err) => console.error('[WhatsAppInboxApp] mark all read:', err));
+    },
+    [customFromDate, updateConversation]
+  );
 
   const handleMarkUnread = useCallback(
     (conversationId: string) => {
@@ -771,6 +799,108 @@ export const WhatsAppInboxApp: React.FC = () => {
         onClose={() => setForwardingMessage(null)}
         onForward={handleForwardSubmit}
       />
+
+      {showMarkAllReadModal && (() => {
+        const ranges: Array<{ key: '1h' | '24h' | '7d' | 'all'; label: string }> = [
+          { key: '1h', label: t.mark_all_read_last_hour },
+          { key: '24h', label: t.mark_all_read_last_24h },
+          { key: '7d', label: t.mark_all_read_last_7d },
+          { key: 'all', label: t.mark_all_read_all_time },
+        ];
+        const getCutoff = (key: '1h' | '24h' | '7d' | 'all') => {
+          if (key === '1h') return Date.now() - 1 * 60 * 60 * 1000;
+          if (key === '24h') return Date.now() - 24 * 60 * 60 * 1000;
+          if (key === '7d') return Date.now() - 7 * 24 * 60 * 60 * 1000;
+          return 0;
+        };
+        const customFromMs = customFromDate ? new Date(customFromDate).getTime() : 0;
+        const customToMs = customToDate ? new Date(customToDate).getTime() : Date.now();
+        const countForRange = (key: '1h' | '24h' | '7d' | 'all') => {
+          const cutoff = getCutoff(key);
+          return conversations.filter((c) =>
+            (c.unreadCount > 0 || c.isMarkedUnread) && new Date(c.updatedAt).getTime() >= cutoff
+          ).length;
+        };
+        const customCount = conversations.filter((c) =>
+          (c.unreadCount > 0 || c.isMarkedUnread) &&
+          new Date(c.updatedAt).getTime() >= customFromMs &&
+          new Date(c.updatedAt).getTime() <= customToMs
+        ).length;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowMarkAllReadModal(false)}>
+            <div
+              className="bg-white dark:bg-[#202c33] rounded-xl shadow-2xl w-80 mx-4 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 pt-5 pb-3 border-b border-gray-200 dark:border-gray-700/50">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                  {t.mark_all_read_modal_title}
+                </h2>
+              </div>
+              <div className="p-3 flex flex-col gap-1.5">
+                {ranges.map(({ key, label }) => {
+                  const count = countForRange(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => handleMarkAllReadWithRange(key)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-[#00a884]/10 dark:hover:bg-[#00a884]/20 transition-colors text-start"
+                    >
+                      <span>{label}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ms-2 shrink-0">
+                        {count === 0 ? t.mark_all_read_none : t.mark_all_read_conversations(count)}
+                      </span>
+                    </button>
+                  );
+                })}
+                <div className="mt-1 rounded-lg border border-gray-200 dark:border-gray-700/50 p-3">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Custom range</p>
+                  <div className="flex gap-2 mb-2">
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 dark:text-gray-500 mb-1">From</label>
+                      <input
+                        type="datetime-local"
+                        value={customFromDate}
+                        onChange={(e) => setCustomFromDate(e.target.value)}
+                        className="w-full text-xs bg-gray-100 dark:bg-[#111b21] text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-[#00a884]"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs text-gray-500 dark:text-gray-500 mb-1">To</label>
+                      <input
+                        type="datetime-local"
+                        value={customToDate}
+                        onChange={(e) => setCustomToDate(e.target.value)}
+                        className="w-full text-xs bg-gray-100 dark:bg-[#111b21] text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-[#00a884]"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleMarkAllReadWithRange('custom')}
+                    disabled={!customFromDate}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-[#00a884]/10 dark:hover:bg-[#00a884]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-start"
+                  >
+                    <span>Apply custom range</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 ms-2 shrink-0">
+                      {customFromDate
+                        ? (customCount === 0 ? t.mark_all_read_none : t.mark_all_read_conversations(customCount))
+                        : ''}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div className="px-4 pb-4">
+                <button
+                  onClick={() => setShowMarkAllReadModal(false)}
+                  className="w-full py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  {t.cancel}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {toastMessage && (
         <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#111b21] dark:bg-[#202c33] text-white text-sm px-4 py-2.5 rounded-lg shadow-xl border border-gray-700/50 animate-in fade-in slide-in-from-bottom-2 duration-200">

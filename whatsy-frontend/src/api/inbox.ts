@@ -107,6 +107,16 @@ export async function markRead(conversationId: string): Promise<void> {
   }).catch(() => undefined)
 }
 
+export async function markAllReadSince(since: Date | null): Promise<{ count: number }> {
+  const res = await fetch(`${API_BASE}/v1/inbox/conversations/mark-all-read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ since: since?.toISOString() ?? null }),
+  })
+  await throwIfError(res)
+  return res.json() as Promise<{ count: number }>
+}
+
 export async function markUnread(conversationId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/v1/inbox/conversations/${conversationId}/unread`, {
     method: 'POST',

@@ -202,6 +202,7 @@ func main() {
 		r.Get("/v1/inbox/search", h.SearchMessages)
 		r.Get("/v1/inbox/conversations/{id}/messages", h.GetMessages)
 		r.With(handler.RequireNotViewer).Post("/v1/inbox/conversations/{id}/messages", h.SendMessage)
+		r.With(handler.RequireNotViewer).Post("/v1/inbox/conversations/mark-all-read", h.MarkAllRead)
 		r.With(handler.RequireNotViewer).Post("/v1/inbox/conversations/{id}/read", h.MarkRead)
 		r.With(handler.RequireNotViewer).Post("/v1/inbox/conversations/{id}/unread", h.MarkUnread)
 		r.With(handler.RequireNotViewer).Post("/v1/inbox/conversations/{id}/assign", h.AssignConversation)

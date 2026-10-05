@@ -183,6 +183,25 @@ func (r *ConversationRepo) MarkUnread(ctx context.Context, conversationID string
 	return nil
 }
 
+// MarkAllReadSince marks all unread conversations for a tenant as read where
+// updated_at >= since. If since is nil, all unread conversations are marked.
+// Returns the number of rows affected.
+func (r *ConversationRepo) MarkAllReadSince(ctx context.Context, tenantID string, since *time.Time) (int, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE conversations
+		    SET unread_count = 0, is_marked_unread = FALSE
+		  WHERE tenant_id = $1
+		    AND (unread_count > 0 OR is_marked_unread = TRUE)
+		    AND ($2::timestamptz IS NULL OR updated_at >= $2)`,
+		tenantID, since,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("mark all read since: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // AssignAgent assigns a conversation to an agent and reports whether it existed.
 // An empty agentID clears the assignment (sets NULL).
 func (r *ConversationRepo) AssignAgent(ctx context.Context, conversationID, agentID string) (bool, error) {

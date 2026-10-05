@@ -104,6 +104,13 @@ type Translations = {
   reconnecting: string
   connected: string
   mark_all_read_confirm: (count: number) => string
+  mark_all_read_modal_title: string
+  mark_all_read_last_hour: string
+  mark_all_read_last_24h: string
+  mark_all_read_last_7d: string
+  mark_all_read_all_time: string
+  mark_all_read_conversations: (n: number) => string
+  mark_all_read_none: string
   signed_in_elsewhere: string
   signed_in_elsewhere_body: string
   access_denied: string
@@ -272,6 +279,13 @@ export const en: Translations = {
   reconnecting: 'Reconnecting…',
   connected: 'Connected',
   mark_all_read_confirm: (count) => `Mark all ${count} conversation${count === 1 ? '' : 's'} as read?`,
+  mark_all_read_modal_title: 'Mark conversations as read',
+  mark_all_read_last_hour: 'Last 1 hour',
+  mark_all_read_last_24h: 'Last 24 hours',
+  mark_all_read_last_7d: 'Last 7 days',
+  mark_all_read_all_time: 'All time',
+  mark_all_read_conversations: (n) => `(${n} conversation${n === 1 ? '' : 's'})`,
+  mark_all_read_none: 'No unread conversations in this range',
   signed_in_elsewhere: 'Signed in elsewhere',
   signed_in_elsewhere_body: 'Your account was signed in from another device. Redirecting to login…',
   access_denied: 'Access Denied',
@@ -435,6 +449,13 @@ export const ar: Translations = {
   reconnecting: 'جارٍ إعادة الاتصال…',
   connected: 'متصل',
   mark_all_read_confirm: (count) => `تحديد ${count} محادثة كمقروءة؟`,
+  mark_all_read_modal_title: 'تحديد المحادثات كمقروءة',
+  mark_all_read_last_hour: 'آخر ساعة',
+  mark_all_read_last_24h: 'آخر 24 ساعة',
+  mark_all_read_last_7d: 'آخر 7 أيام',
+  mark_all_read_all_time: 'كل الوقت',
+  mark_all_read_conversations: (n) => `(${n} محادثة)`,
+  mark_all_read_none: 'لا توجد محادثات غير مقروءة في هذه الفترة',
   signed_in_elsewhere: 'تم تسجيل الدخول في مكان آخر',
   signed_in_elsewhere_body: 'تم تسجيل الدخول إلى حسابك من جهاز آخر. جارٍ التوجيه إلى صفحة تسجيل الدخول…',
   access_denied: 'تم رفض الوصول',
