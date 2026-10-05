@@ -15,9 +15,9 @@ func (s *ChatService) BackfillMediaToR2(ctx context.Context) {
 	if s.r2 == nil {
 		return
 	}
-	// Brief startup delay so the server can fully initialize first.
+	// Wait for the server and connection pool to fully settle before starting.
 	select {
-	case <-time.After(30 * time.Second):
+	case <-time.After(2 * time.Minute):
 	case <-ctx.Done():
 		return
 	}
@@ -30,7 +30,7 @@ func (s *ChatService) BackfillMediaToR2(ctx context.Context) {
 }
 
 func (s *ChatService) backfillTable(ctx context.Context, table, prefix string) int {
-	const batchSize = 50
+	const batchSize = 10
 	migrated := 0
 
 	for {
@@ -87,9 +87,10 @@ func (s *ChatService) backfillTable(ctx context.Context, table, prefix string) i
 			migrated++
 		}
 
-		// Yield between batches to avoid saturating the DB pool.
+		// Long pause between batches — keeps DB connection pressure minimal
+		// so normal webhook writes and worker syncs are never starved.
 		select {
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(5 * time.Second):
 		case <-ctx.Done():
 			return migrated
 		}
