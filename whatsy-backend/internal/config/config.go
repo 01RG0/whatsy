@@ -29,9 +29,13 @@ func Load() (Config, error) {
 		port = "8080"
 	}
 
+	dbURL := os.Getenv("DIRECT_DATABASE_URL")
+	if dbURL == "" {
+		dbURL = os.Getenv("DATABASE_URL")
+	}
 	config := Config{
 		Port:                port,
-		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		DatabaseURL:         dbURL,
 		JWTSecret:           os.Getenv("JWT_SECRET"),
 		ZernioAPIKey:        os.Getenv("ZERNIO_API_KEY"),
 		ZernioWebhookSecret: os.Getenv("ZERNIO_WEBHOOK_SECRET"),
@@ -51,11 +55,6 @@ func Load() (Config, error) {
 		} else {
 			config.DatabaseURL += "?prepare=false"
 		}
-	}
-	// Force read-write mode on every connection so Supabase's pooler never
-	// routes an INSERT to a read replica.
-	if !strings.Contains(config.DatabaseURL, "default_transaction_read_only") {
-		config.DatabaseURL += "&options=-c+default_transaction_read_only%3Doff"
 	}
 	if config.JWTSecret == "" {
 		return Config{}, errors.New("JWT_SECRET is required")
