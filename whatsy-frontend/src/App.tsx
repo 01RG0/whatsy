@@ -53,9 +53,21 @@ function Router() {
       .then(async (res) => {
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) {
+            // Remove expired account from saved list, try next saved account
+            const raw = localStorage.getItem('whatsy_agent')
+            const currentId = raw ? JSON.parse(raw)?.id : null
+            const accounts: { id: string; token: string }[] = JSON.parse(localStorage.getItem('whatsy_accounts') || '[]')
+            const remaining = accounts.filter(a => a.id !== currentId)
+            localStorage.setItem('whatsy_accounts', JSON.stringify(remaining))
             localStorage.removeItem('whatsy_jwt')
             localStorage.removeItem('whatsy_agent')
-            window.location.href = '/login'
+            if (remaining.length > 0) {
+              localStorage.setItem('whatsy_jwt', remaining[0].token)
+              localStorage.setItem('whatsy_agent', JSON.stringify(remaining[0]))
+              window.location.href = '/'
+            } else {
+              window.location.href = '/login'
+            }
           }
           return
         }
@@ -64,6 +76,10 @@ function Router() {
           if (data.token) {
             localStorage.setItem('whatsy_jwt', data.token)
             setValidatedToken(data.token)
+            // Keep saved accounts tokens fresh so switching never uses expired tokens
+            const accounts: { id: string }[] = JSON.parse(localStorage.getItem('whatsy_accounts') || '[]')
+            const updated = accounts.map((a: any) => a.id === data.id ? { ...a, token: data.token } : a)
+            localStorage.setItem('whatsy_accounts', JSON.stringify(updated))
           }
           const raw = localStorage.getItem('whatsy_agent')
           const current = raw ? JSON.parse(raw) : {}
