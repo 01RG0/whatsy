@@ -120,10 +120,10 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT direction, COUNT(*) FROM messages
-			 WHERE timestamp >= $1 AND timestamp < $2
-			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-			 GROUP BY direction`,
+			`SELECT m.direction, COUNT(*) FROM messages m
+			 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+			 WHERE m.timestamp >= $1 AND m.timestamp < $2
+			 GROUP BY m.direction`,
 			from, to, tenantID,
 		)
 		if err != nil {
@@ -176,9 +176,9 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		var cnt int
 		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(DISTINCT conversation_id) FROM messages
-			 WHERE timestamp >= $1 AND timestamp < $2
-			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+			`SELECT COUNT(DISTINCT m.conversation_id) FROM messages m
+			 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+			 WHERE m.timestamp >= $1 AND m.timestamp < $2`,
 			from, to, tenantID,
 		).Scan(&cnt)
 		if err != nil {
@@ -218,10 +218,10 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT content_type, COUNT(*) FROM messages
-			 WHERE timestamp >= $1 AND timestamp < $2
-			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-			 GROUP BY content_type ORDER BY COUNT(*) DESC`,
+			`SELECT m.content_type, COUNT(*) FROM messages m
+			 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+			 WHERE m.timestamp >= $1 AND m.timestamp < $2
+			 GROUP BY m.content_type ORDER BY COUNT(*) DESC`,
 			from, to, tenantID,
 		)
 		if err != nil {
@@ -254,10 +254,10 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		rows, err := h.db.QueryContext(r.Context(),
-			`SELECT DATE_TRUNC('day', timestamp) AS day, COUNT(*) AS cnt
-			 FROM messages
-			 WHERE timestamp >= $1 AND timestamp < $2
-			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+			`SELECT DATE_TRUNC('day', m.timestamp) AS day, COUNT(*) AS cnt
+			 FROM messages m
+			 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+			 WHERE m.timestamp >= $1 AND m.timestamp < $2
 			 GROUP BY day ORDER BY day`,
 			from, to, tenantID,
 		)
@@ -308,10 +308,10 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer prevWg.Done()
 			rows, err := h.db.QueryContext(r.Context(),
-				`SELECT direction, COUNT(*) FROM messages
-				 WHERE timestamp >= $1 AND timestamp < $2
-				   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-				 GROUP BY direction`,
+				`SELECT m.direction, COUNT(*) FROM messages m
+				 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+				 WHERE m.timestamp >= $1 AND m.timestamp < $2
+				 GROUP BY m.direction`,
 				prevFrom, prevTo, tenantID,
 			)
 			if err != nil {
@@ -346,9 +346,9 @@ func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer prevWg.Done()
 			h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(DISTINCT conversation_id) FROM messages
-				 WHERE timestamp >= $1 AND timestamp < $2
-				   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+				`SELECT COUNT(DISTINCT m.conversation_id) FROM messages m
+				 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+				 WHERE m.timestamp >= $1 AND m.timestamp < $2`,
 				prevFrom, prevTo, tenantID,
 			).Scan(&prevActive) //nolint:errcheck — zero is a safe default
 		}()
@@ -379,18 +379,18 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		        COALESCE(c.convs, 0) AS conversations_handled
 		 FROM agents a
 		 LEFT JOIN (
-		   SELECT sent_by_agent_id, COUNT(*) AS cnt FROM messages
-		   WHERE direction='outbound' AND sent_by_agent_id IS NOT NULL
-		     AND timestamp >= $1 AND timestamp < $2
-		     AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-		   GROUP BY sent_by_agent_id
+		   SELECT msg.sent_by_agent_id, COUNT(*) AS cnt FROM messages msg
+		   JOIN conversations cv ON cv.id = msg.conversation_id AND cv.tenant_id = $3::uuid
+		   WHERE msg.direction='outbound' AND msg.sent_by_agent_id IS NOT NULL
+		     AND msg.timestamp >= $1 AND msg.timestamp < $2
+		   GROUP BY msg.sent_by_agent_id
 		 ) m ON m.sent_by_agent_id = a.id
 		 LEFT JOIN (
-		   SELECT sent_by_agent_id, COUNT(DISTINCT conversation_id) AS convs FROM messages
-		   WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
-		     AND timestamp >= $1 AND timestamp < $2
-		     AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-		   GROUP BY sent_by_agent_id
+		   SELECT msg.sent_by_agent_id, COUNT(DISTINCT msg.conversation_id) AS convs FROM messages msg
+		   JOIN conversations cv ON cv.id = msg.conversation_id AND cv.tenant_id = $3::uuid
+		   WHERE msg.direction = 'outbound' AND msg.sent_by_agent_id IS NOT NULL
+		     AND msg.timestamp >= $1 AND msg.timestamp < $2
+		   GROUP BY msg.sent_by_agent_id
 		 ) c ON c.sent_by_agent_id = a.id
 		 WHERE a.tenant_id = $3::uuid
 		 ORDER BY a.name`,
@@ -422,13 +422,13 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 	rows2, err := h.db.QueryContext(r.Context(),
 		`WITH agent_messages AS (
 		   SELECT
-		     sent_by_agent_id,
-		     timestamp,
-		     LAG(timestamp) OVER (PARTITION BY sent_by_agent_id ORDER BY timestamp) AS prev_ts
-		   FROM messages
-		   WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
-		     AND timestamp >= $1 AND timestamp < $2
-		     AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+		     m.sent_by_agent_id,
+		     m.timestamp,
+		     LAG(m.timestamp) OVER (PARTITION BY m.sent_by_agent_id ORDER BY m.timestamp) AS prev_ts
+		   FROM messages m
+		   JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+		   WHERE m.direction = 'outbound' AND m.sent_by_agent_id IS NOT NULL
+		     AND m.timestamp >= $1 AND m.timestamp < $2
 		 ),
 		 session_labeled AS (
 		   SELECT
@@ -475,13 +475,13 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 
 	// Q3: active hours per agent
 	rows3, err := h.db.QueryContext(r.Context(),
-		`SELECT sent_by_agent_id::text, EXTRACT(HOUR FROM timestamp)::int AS hour, COUNT(*) AS cnt
-		 FROM messages
-		 WHERE direction='outbound' AND sent_by_agent_id IS NOT NULL
-		   AND timestamp >= $1 AND timestamp < $2
-		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-		 GROUP BY sent_by_agent_id, hour
-		 ORDER BY sent_by_agent_id, hour`,
+		`SELECT m.sent_by_agent_id::text, EXTRACT(HOUR FROM m.timestamp)::int AS hour, COUNT(*) AS cnt
+		 FROM messages m
+		 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+		 WHERE m.direction='outbound' AND m.sent_by_agent_id IS NOT NULL
+		   AND m.timestamp >= $1 AND m.timestamp < $2
+		 GROUP BY m.sent_by_agent_id, hour
+		 ORDER BY m.sent_by_agent_id, hour`,
 		from, to, tenantID,
 	)
 	if err != nil {
@@ -507,12 +507,12 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 
 	// Q4: start and end work time per agent
 	rows4, err := h.db.QueryContext(r.Context(),
-		`SELECT sent_by_agent_id::text, MIN(timestamp) AS start_time, MAX(timestamp) AS end_time
-		 FROM messages
-		 WHERE direction = 'outbound' AND sent_by_agent_id IS NOT NULL
-		   AND timestamp >= $1 AND timestamp < $2
-		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
-		 GROUP BY sent_by_agent_id`,
+		`SELECT m.sent_by_agent_id::text, MIN(m.timestamp) AS start_time, MAX(m.timestamp) AS end_time
+		 FROM messages m
+		 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+		 WHERE m.direction = 'outbound' AND m.sent_by_agent_id IS NOT NULL
+		   AND m.timestamp >= $1 AND m.timestamp < $2
+		 GROUP BY m.sent_by_agent_id`,
 		from, to, tenantID,
 	)
 	if err != nil {
@@ -543,37 +543,37 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		result = append(result, *statsMap[id])
 	}
 
-	// Q4: unattributed outbound messages (sent from WhatsApp app, not via Whatsy inbox)
+	// Q5: unattributed outbound messages (sent from WhatsApp app, not via Whatsy inbox)
 	// Also compute distinct conversations touched and hourly distribution for full stats.
 	var unattributed, unattribConvs int
 	h.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*), COUNT(DISTINCT conversation_id) FROM messages
-		 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
-		   AND timestamp >= $1 AND timestamp < $2
-		   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+		`SELECT COUNT(*), COUNT(DISTINCT m.conversation_id) FROM messages m
+		 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+		 WHERE m.direction = 'outbound' AND m.sent_by_agent_id IS NULL
+		   AND m.timestamp >= $1 AND m.timestamp < $2`,
 		from, to, tenantID,
 	).Scan(&unattributed, &unattribConvs) //nolint:errcheck — zero is a safe default
 
 	if unattributed > 0 {
 		// Build hourly breakdown for WhatsApp App messages
 		var waHours []activeHour
-		rows2, err2 := h.db.QueryContext(r.Context(),
-			`SELECT EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS h, COUNT(*) AS cnt
-			 FROM messages
-			 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
-			   AND timestamp >= $1 AND timestamp < $2
-			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)
+		waRows, err2 := h.db.QueryContext(r.Context(),
+			`SELECT EXTRACT(HOUR FROM m.timestamp AT TIME ZONE 'UTC')::int AS h, COUNT(*) AS cnt
+			 FROM messages m
+			 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+			 WHERE m.direction = 'outbound' AND m.sent_by_agent_id IS NULL
+			   AND m.timestamp >= $1 AND m.timestamp < $2
 			 GROUP BY h ORDER BY h`,
 			from, to, tenantID,
 		)
 		if err2 == nil {
-			for rows2.Next() {
+			for waRows.Next() {
 				var ah activeHour
-				if rows2.Scan(&ah.Hour, &ah.Count) == nil {
+				if waRows.Scan(&ah.Hour, &ah.Count) == nil {
 					waHours = append(waHours, ah)
 				}
 			}
-			rows2.Close()
+			waRows.Close()
 		}
 		if waHours == nil {
 			waHours = []activeHour{}
@@ -581,10 +581,10 @@ func (h *AnalyticsHandler) AgentStats(w http.ResponseWriter, r *http.Request) {
 		var waStart, waEnd *time.Time
 		var waStartT, waEndT time.Time
 		errWaTime := h.db.QueryRowContext(r.Context(),
-			`SELECT MIN(timestamp), MAX(timestamp) FROM messages
-			 WHERE direction = 'outbound' AND sent_by_agent_id IS NULL
-			   AND timestamp >= $1 AND timestamp < $2
-			   AND conversation_id IN (SELECT id FROM conversations WHERE tenant_id = $3::uuid)`,
+			`SELECT MIN(m.timestamp), MAX(m.timestamp) FROM messages m
+			 JOIN conversations c ON c.id = m.conversation_id AND c.tenant_id = $3::uuid
+			 WHERE m.direction = 'outbound' AND m.sent_by_agent_id IS NULL
+			   AND m.timestamp >= $1 AND m.timestamp < $2`,
 			from, to, tenantID,
 		).Scan(&waStartT, &waEndT)
 		if errWaTime == nil && !waStartT.IsZero() {

@@ -704,7 +704,8 @@ export default function WhatsAppConnectionPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] overflow-hidden">
+        <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] overflow-x-auto">
+          <div className="min-w-[700px]">
           {/* Header */}
           <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.2fr_0.8fr_1fr_1fr] gap-4 px-5 py-3 border-b border-gray-100 dark:border-[#222e35] text-xs font-medium text-gray-500 dark:text-[#8696a0]">
             <span>Sender</span>
@@ -845,12 +846,13 @@ export default function WhatsAppConnectionPage() {
               </div>
             ))
           )}
+          </div>
         </div>
       </div>
 
       {/* ── Sync bar ── */}
       {senders.length > 0 && (
-        <div className="px-6 mt-4">
+        <div className="px-4 sm:px-6 mt-4">
           <div className="bg-white dark:bg-[#111b21] rounded-xl border border-gray-200 dark:border-[#222e35] p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
