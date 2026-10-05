@@ -362,46 +362,52 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		}
 	}
 
-	if message.Direction == "outbound" {
-		// Message sent from WA Business app (outbound echo) — agent already saw and
-		// replied, so clear unread rather than increment it.
-		if err := s.convRepo.ResetUnread(ctx, message.ConversationID); err != nil {
-			log.Printf("reset unread on outbound echo: %v", err)
-		}
-	} else {
-		if err := s.convRepo.IncrementUnread(ctx, message.ConversationID); err != nil {
-			return fmt.Errorf("increment conversation unread count: %w", err)
-		}
-	}
-	if err := s.convRepo.UpdateLastMessage(ctx, message.ConversationID, message.Content); err != nil {
-		return fmt.Errorf("update conversation last message: %w", err)
-	}
+	// Unread update, sidebar broadcast, and auto-reply run off the critical path
+	// so Zernio receives its 200 ACK as soon as the message is saved and the
+	// bubble is broadcast. Uses context.Background() — the request context is
+	// cancelled the moment the HTTP handler returns.
+	go func(msg domain.Message) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[inbound] post-save goroutine panic: %v", r)
+			}
+		}()
+		bgCtx := context.Background()
 
-	conversation, err := s.convRepo.GetByID(ctx, message.ConversationID)
-	if err != nil {
-		return fmt.Errorf("get updated conversation: %w", err)
-	}
-	if conversation == nil {
-		return fmt.Errorf("get updated conversation: conversation %q not found", message.ConversationID)
-	}
-
-	// Push the updated conversation to every connected client so all
-	// agents' sidebars reorder and show the new unread count without refresh.
-	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
-		Event:        websocket.EventConversationUpdated,
-		Conversation: *conversation,
-	})
-
-	// Fire the database-driven auto-reply rules (best-effort).
-	if s.autoReplier != nil && message.Direction == "inbound" {
-		if replied, err := s.autoReplier.CheckAndReply(ctx, message, message.ConversationID, s); err != nil {
-			log.Printf("auto-reply: %v", err)
-		} else if replied {
-			if err := s.convRepo.ResetUnread(ctx, message.ConversationID); err != nil {
-				log.Printf("auto-reply: reset unread: %v", err)
+		if msg.Direction == "outbound" {
+			if err := s.convRepo.ResetUnread(bgCtx, msg.ConversationID); err != nil {
+				log.Printf("[inbound] reset unread on outbound echo: %v", err)
+			}
+		} else {
+			if err := s.convRepo.IncrementUnread(bgCtx, msg.ConversationID); err != nil {
+				log.Printf("[inbound] increment unread: %v", err)
 			}
 		}
-	}
+		if err := s.convRepo.UpdateLastMessage(bgCtx, msg.ConversationID, msg.Content); err != nil {
+			log.Printf("[inbound] update last message: %v", err)
+		}
+
+		conversation, err := s.convRepo.GetByID(bgCtx, msg.ConversationID)
+		if err != nil || conversation == nil {
+			log.Printf("[inbound] get conversation for broadcast: %v", err)
+			return
+		}
+		s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
+			Event:        websocket.EventConversationUpdated,
+			Conversation: *conversation,
+		})
+
+		if s.autoReplier != nil && msg.Direction == "inbound" {
+			if replied, err := s.autoReplier.CheckAndReply(bgCtx, msg, msg.ConversationID, s); err != nil {
+				log.Printf("[inbound] auto-reply: %v", err)
+			} else if replied {
+				if err := s.convRepo.ResetUnread(bgCtx, msg.ConversationID); err != nil {
+					log.Printf("[inbound] auto-reply reset unread: %v", err)
+				}
+			}
+		}
+	}(message)
+
 	return nil
 }
 
