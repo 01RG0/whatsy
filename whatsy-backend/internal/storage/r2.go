@@ -57,3 +57,8 @@ func (r *R2Client) Exists(ctx context.Context, key string) bool {
 	})
 	return err == nil
 }
+
+// PublicURL returns the public URL for a given object key.
+func (r *R2Client) PublicURL(key string) string {
+	return r.publicURL + "/" + key
+}

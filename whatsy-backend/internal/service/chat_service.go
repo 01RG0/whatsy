@@ -895,6 +895,14 @@ func (s *ChatService) cacheSticker(rawURL string) {
 
 	if s.r2 != nil {
 		key := "sticker/" + hash
+		if s.r2.Exists(ctx, key) {
+			storageURL := s.r2.PublicURL(key)
+			_, _ = s.db.ExecContext(ctx,
+				`INSERT INTO sticker_cache (url_hash, original_url, storage_url, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+				hash, rawURL, storageURL, mimeType,
+			)
+			return
+		}
 		if storageURL, uploadErr := s.r2.Upload(ctx, key, data, mimeType); uploadErr == nil {
 			_, _ = s.db.ExecContext(ctx,
 				`INSERT INTO sticker_cache (url_hash, original_url, storage_url, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
@@ -969,6 +977,15 @@ func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType) 
 
 	if s.r2 != nil {
 		key := "media/" + hash
+		if s.r2.Exists(ctx, key) {
+			// Already in R2 from a previous attempt — just record the URL row if missing.
+			storageURL := s.r2.PublicURL(key)
+			_, _ = s.db.ExecContext(ctx,
+				`INSERT INTO media_cache (url_hash, original_url, storage_url, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+				hash, rawURL, storageURL, mimeType,
+			)
+			return
+		}
 		if storageURL, uploadErr := s.r2.Upload(ctx, key, data, mimeType); uploadErr == nil {
 			_, _ = s.db.ExecContext(ctx,
 				`INSERT INTO media_cache (url_hash, original_url, storage_url, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
