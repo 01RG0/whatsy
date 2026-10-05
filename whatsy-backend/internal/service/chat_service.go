@@ -18,6 +18,7 @@ import (
 	"github.com/whatsy/backend/internal/domain"
 	"github.com/whatsy/backend/internal/eventlog"
 	"github.com/whatsy/backend/internal/repository"
+	"github.com/whatsy/backend/internal/storage"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
@@ -55,14 +56,15 @@ type tenantCache struct {
 
 // ChatService coordinates persistence, Zernio calls, and live chat updates.
 type ChatService struct {
-	db                  *sql.DB
-	convRepo            *repository.ConversationRepo
-	msgRepo             *repository.MessageRepo
-	zernioClient  ZernioSender
-	hub           WSBroadcaster
-	autoReplier   AutoReplier
-	zernioAPIKey  string
-	tc            tenantCache
+	db           *sql.DB
+	convRepo     *repository.ConversationRepo
+	msgRepo      *repository.MessageRepo
+	zernioClient ZernioSender
+	hub          WSBroadcaster
+	autoReplier  AutoReplier
+	r2           *storage.R2Client
+	zernioAPIKey string
+	tc           tenantCache
 }
 
 func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *repository.MessageRepo, zernioClient ZernioSender, hub WSBroadcaster, zernioAPIKey string) *ChatService {
@@ -79,6 +81,11 @@ func NewChatService(db *sql.DB, convRepo *repository.ConversationRepo, msgRepo *
 // SetAutoReplier wires the database-driven auto-reply evaluator.
 func (s *ChatService) SetAutoReplier(ar AutoReplier) {
 	s.autoReplier = ar
+}
+
+// SetR2 wires the Cloudflare R2 storage client for media caching.
+func (s *ChatService) SetR2(r2 *storage.R2Client) {
+	s.r2 = r2
 }
 
 // zernioAccountID resolves the connected WhatsApp account id for the given
@@ -885,6 +892,20 @@ func (s *ChatService) cacheSticker(rawURL string) {
 	if mimeType == "" {
 		mimeType = "image/webp"
 	}
+
+	if s.r2 != nil {
+		key := "sticker/" + hash
+		if storageURL, uploadErr := s.r2.Upload(ctx, key, data, mimeType); uploadErr == nil {
+			_, _ = s.db.ExecContext(ctx,
+				`INSERT INTO sticker_cache (url_hash, original_url, storage_url, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+				hash, rawURL, storageURL, mimeType,
+			)
+			return
+		} else {
+			log.Printf("[sticker-cache] r2 upload failed, falling back to DB: %v", uploadErr)
+		}
+	}
+
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO sticker_cache (url_hash, original_url, data, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
 		hash, rawURL, data, mimeType,
@@ -945,6 +966,20 @@ func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType) 
 	if mimeType == "" {
 		mimeType = defaultMimeType(rawURL, contentType)
 	}
+
+	if s.r2 != nil {
+		key := "media/" + hash
+		if storageURL, uploadErr := s.r2.Upload(ctx, key, data, mimeType); uploadErr == nil {
+			_, _ = s.db.ExecContext(ctx,
+				`INSERT INTO media_cache (url_hash, original_url, storage_url, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+				hash, rawURL, storageURL, mimeType,
+			)
+			return
+		} else {
+			log.Printf("[media-cache] r2 upload failed, falling back to DB: %v", uploadErr)
+		}
+	}
+
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO media_cache (url_hash, original_url, data, mime_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
 		hash, rawURL, data, mimeType,

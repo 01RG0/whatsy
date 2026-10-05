@@ -26,6 +26,7 @@ import (
 	"github.com/whatsy/backend/internal/redispub"
 	"github.com/whatsy/backend/internal/repository"
 	"github.com/whatsy/backend/internal/service"
+	"github.com/whatsy/backend/internal/storage"
 	"github.com/whatsy/backend/internal/websocket"
 	"github.com/whatsy/backend/internal/zernio"
 )
@@ -136,10 +137,16 @@ func main() {
 		}
 	}()
 
+	r2 := storage.NewR2Client(cfg.R2AccountID, cfg.R2AccessKeyID, cfg.R2SecretAccessKey, cfg.R2Bucket, cfg.R2PublicURL)
+	if r2 != nil {
+		log.Printf("[startup] R2 storage enabled (bucket: %s)", cfg.R2Bucket)
+	}
+
 	convRepo := repository.NewConversationRepo(db)
 	msgRepo := repository.NewMessageRepo(db)
 	chatService := service.NewChatService(db, convRepo, msgRepo, zernioClient, hub, cfg.ZernioAPIKey)
 	chatService.SetAutoReplier(service.NewAutoReplyService(db))
+	chatService.SetR2(r2)
 
 	// On startup: recover pending messages; then every 5 min: retry recent failures.
 	go chatService.StartRetryLoop(context.Background())
@@ -148,7 +155,7 @@ func main() {
 	labelHandler := handler.NewLabelHandler(tagService)
 	cannedResponseHandler := handler.NewCannedResponseHandler(db)
 	agentHandler := handler.NewAgentHandler(db, cfg.JWTSecret, hub)
-	mediaHandler := handler.NewMediaHandler(cfg.ZernioAPIKey, db)
+	mediaHandler := handler.NewMediaHandler(cfg.ZernioAPIKey, db, r2)
 	uploadHandler := handler.NewUploadHandler(cfg.ZernioAPIKey)
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
 	studentHandler := handler.NewStudentHandler(db)

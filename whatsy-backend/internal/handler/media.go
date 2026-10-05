@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/whatsy/backend/internal/storage"
 )
 
 // GetProxy proxies any Zernio media URL through our backend, adding the API key.
@@ -40,11 +41,16 @@ func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 
 	// Check sticker cache.
 	if h.db != nil {
+		var storageURL sql.NullString
 		var data []byte
 		var mimeType string
 		if err := h.db.QueryRowContext(r.Context(),
-			`SELECT data, mime_type FROM sticker_cache WHERE url_hash=$1`, hash,
-		).Scan(&data, &mimeType); err == nil {
+			`SELECT storage_url, data, mime_type FROM sticker_cache WHERE url_hash=$1`, hash,
+		).Scan(&storageURL, &data, &mimeType); err == nil {
+			if storageURL.Valid && storageURL.String != "" {
+				http.Redirect(w, r, storageURL.String, http.StatusFound)
+				return
+			}
 			w.Header().Set("Content-Type", mimeType)
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			w.WriteHeader(http.StatusOK)
@@ -55,11 +61,16 @@ func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 
 	// Check media cache (voice notes, images, video cached on webhook arrival).
 	if h.db != nil {
+		var storageURL sql.NullString
 		var data []byte
 		var mimeType string
 		if err := h.db.QueryRowContext(r.Context(),
-			`SELECT data, mime_type FROM media_cache WHERE url_hash=$1`, hash,
-		).Scan(&data, &mimeType); err == nil {
+			`SELECT storage_url, data, mime_type FROM media_cache WHERE url_hash=$1`, hash,
+		).Scan(&storageURL, &data, &mimeType); err == nil {
+			if storageURL.Valid && storageURL.String != "" {
+				http.Redirect(w, r, storageURL.String, http.StatusFound)
+				return
+			}
 			w.Header().Set("Content-Type", mimeType)
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			w.WriteHeader(http.StatusOK)
@@ -134,13 +145,15 @@ func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 type MediaHandler struct {
 	zernioAPIKey string
 	db           *sql.DB
+	r2           *storage.R2Client
 }
 
-// NewMediaHandler creates a MediaHandler using the supplied Zernio API key and database.
-func NewMediaHandler(zernioAPIKey string, db *sql.DB) *MediaHandler {
+// NewMediaHandler creates a MediaHandler using the supplied Zernio API key, database, and optional R2 client.
+func NewMediaHandler(zernioAPIKey string, db *sql.DB, r2 *storage.R2Client) *MediaHandler {
 	return &MediaHandler{
 		zernioAPIKey: zernioAPIKey,
 		db:           db,
+		r2:           r2,
 	}
 }
 
@@ -158,11 +171,16 @@ func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Check media cache before hitting Zernio.
 	if h.db != nil {
+		var storageURL sql.NullString
 		var data []byte
 		var mimeType string
 		if err := h.db.QueryRowContext(r.Context(),
-			`SELECT data, mime_type FROM media_cache WHERE url_hash=$1`, hash,
-		).Scan(&data, &mimeType); err == nil {
+			`SELECT storage_url, data, mime_type FROM media_cache WHERE url_hash=$1`, hash,
+		).Scan(&storageURL, &data, &mimeType); err == nil {
+			if storageURL.Valid && storageURL.String != "" {
+				http.Redirect(w, r, storageURL.String, http.StatusFound)
+				return
+			}
 			w.Header().Set("Content-Type", mimeType)
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			w.WriteHeader(http.StatusOK)

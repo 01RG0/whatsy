@@ -14,6 +14,11 @@ type Config struct {
 	ZernioAPIKey        string
 	ZernioWebhookSecret string
 	RedisURL            string
+	R2AccountID         string
+	R2AccessKeyID       string
+	R2SecretAccessKey   string
+	R2Bucket            string
+	R2PublicURL         string
 }
 
 // Load reads configuration from environment variables.
@@ -31,6 +36,11 @@ func Load() (Config, error) {
 		ZernioAPIKey:        os.Getenv("ZERNIO_API_KEY"),
 		ZernioWebhookSecret: os.Getenv("ZERNIO_WEBHOOK_SECRET"),
 		RedisURL:            os.Getenv("REDIS_URL"),
+		R2AccountID:         os.Getenv("R2_ACCOUNT_ID"),
+		R2AccessKeyID:       os.Getenv("R2_ACCESS_KEY_ID"),
+		R2SecretAccessKey:   os.Getenv("R2_SECRET_ACCESS_KEY"),
+		R2Bucket:            os.Getenv("R2_BUCKET"),
+		R2PublicURL:         os.Getenv("R2_PUBLIC_URL"),
 	}
 	if config.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
