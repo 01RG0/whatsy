@@ -52,6 +52,11 @@ func Load() (Config, error) {
 			config.DatabaseURL += "?prepare=false"
 		}
 	}
+	// Force read-write mode on every connection so Supabase's pooler never
+	// routes an INSERT to a read replica.
+	if !strings.Contains(config.DatabaseURL, "default_transaction_read_only") {
+		config.DatabaseURL += "&options=-c+default_transaction_read_only%3Doff"
+	}
 	if config.JWTSecret == "" {
 		return Config{}, errors.New("JWT_SECRET is required")
 	}

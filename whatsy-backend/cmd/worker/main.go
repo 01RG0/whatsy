@@ -31,6 +31,16 @@ func main() {
 		log.Fatal("DATABASE_URL and ZERNIO_API_KEY are required")
 	}
 
+	// Supabase's transaction pooler can route connections to read replicas.
+	// Force read-write mode on every connection so INSERTs never hit a replica.
+	if !strings.Contains(dbURL, "default_transaction_read_only") {
+		sep := "?"
+		if strings.Contains(dbURL, "?") {
+			sep = "&"
+		}
+		dbURL += sep + "options=-c+default_transaction_read_only%3Doff"
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("open db: %v", err)
