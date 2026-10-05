@@ -822,12 +822,6 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 	return
 }
 
-// StartRetryLoop recovers messages stuck in "pending" at startup.
-// RetryFailedMessages is disabled (causes duplicate sends on rate-limit failures).
-func (s *ChatService) StartRetryLoop(ctx context.Context) {
-	s.RetryPendingOnce(ctx)
-}
-
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {
 	if len(payload.Contacts) > 0 {
 		return domain.ContentTypeContacts

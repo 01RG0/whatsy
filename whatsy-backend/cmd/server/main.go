@@ -148,8 +148,8 @@ func main() {
 	chatService.SetAutoReplier(service.NewAutoReplyService(db))
 	chatService.SetR2(r2)
 
-	// On startup: recover pending messages; then every 5 min: retry recent failures.
-	go chatService.StartRetryLoop(context.Background())
+	// On startup: recover messages stuck in "pending" state.
+	go chatService.RetryPendingOnce(context.Background())
 	// R2 backfill disabled — re-enable once DB connection routing is stable.
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	tagService := service.NewTagService(db)
