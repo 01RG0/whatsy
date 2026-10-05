@@ -122,6 +122,13 @@ function connect() {
     if (_ws.activeId) {
       _ws.sendFn({ action: 'SUBSCRIBE_STUDENT', studentId: _ws.activeId });
     }
+    // Catch up on conversations/messages that arrived while disconnected.
+    import('../api/inbox').then(({ getConversations }) => {
+      const { currentFilter, currentSearch } = useInboxStore.getState();
+      getConversations(currentFilter, currentSearch)
+        .then((convs) => useInboxStore.getState().setConversations(convs))
+        .catch(() => undefined);
+    });
   };
 
   ws.onmessage = (evt) => {
