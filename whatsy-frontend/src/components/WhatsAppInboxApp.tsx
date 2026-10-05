@@ -54,6 +54,7 @@ export const WhatsAppInboxApp: React.FC = () => {
   const [showMarkAllReadModal, setShowMarkAllReadModal] = useState(false);
   const [customFromDate, setCustomFromDate] = useState('');
   const [customToDate, setCustomToDate] = useState('');
+  const [showCustomRange, setShowCustomRange] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -801,11 +802,57 @@ export const WhatsAppInboxApp: React.FC = () => {
       />
 
       {showMarkAllReadModal && (() => {
-        const ranges: Array<{ key: '1h' | '24h' | '7d' | 'all'; label: string }> = [
-          { key: '1h', label: t.mark_all_read_last_hour },
-          { key: '24h', label: t.mark_all_read_last_24h },
-          { key: '7d', label: t.mark_all_read_last_7d },
-          { key: 'all', label: t.mark_all_read_all_time },
+        const ranges: Array<{ key: '1h' | '24h' | '7d' | 'all'; label: string; icon: React.ReactNode }> = [
+          {
+            key: '1h',
+            label: t.mark_all_read_last_hour,
+            icon: (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            ),
+          },
+          {
+            key: '24h',
+            label: t.mark_all_read_last_24h,
+            icon: (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="4" />
+                <line x1="12" y1="2" x2="12" y2="5" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+                <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
+                <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
+                <line x1="2" y1="12" x2="5" y2="12" />
+                <line x1="19" y1="12" x2="22" y2="12" />
+                <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
+                <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
+              </svg>
+            ),
+          },
+          {
+            key: '7d',
+            label: t.mark_all_read_last_7d,
+            icon: (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            ),
+          },
+          {
+            key: 'all',
+            label: t.mark_all_read_all_time,
+            icon: (
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z" />
+                <path d="M6.34 6.34C4.29 8.39 3 11.05 3 14c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.95-1.29-5.61-3.34-7.66" />
+                <path d="M17.66 6.34C15.61 4.29 12.95 3 10 3" />
+              </svg>
+            ),
+          },
         ];
         const getCutoff = (key: '1h' | '24h' | '7d' | 'all') => {
           if (key === '1h') return Date.now() - 1 * 60 * 60 * 1000;
@@ -814,7 +861,7 @@ export const WhatsAppInboxApp: React.FC = () => {
           return 0;
         };
         const customFromMs = customFromDate ? new Date(customFromDate).getTime() : 0;
-        const customToMs = customToDate ? new Date(customToDate).getTime() : Date.now();
+        const customToMs = customToDate ? new Date(customToDate + 'T23:59:59').getTime() : Date.now();
         const countForRange = (key: '1h' | '24h' | '7d' | 'all') => {
           const cutoff = getCutoff(key);
           return conversations.filter((c) =>
@@ -827,72 +874,116 @@ export const WhatsAppInboxApp: React.FC = () => {
           new Date(c.updatedAt).getTime() <= customToMs
         ).length;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowMarkAllReadModal(false)}>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
+            onClick={() => setShowMarkAllReadModal(false)}
+          >
             <div
-              className="bg-white dark:bg-[#202c33] rounded-xl shadow-2xl w-80 mx-4 overflow-hidden"
+              className="bg-white dark:bg-[#1f2c34] rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 pt-5 pb-3 border-b border-gray-200 dark:border-gray-700/50">
+              {/* Header */}
+              <div className="pt-6 pb-2 px-5 text-center">
                 <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                   {t.mark_all_read_modal_title}
                 </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Select a time range</p>
               </div>
-              <div className="p-3 flex flex-col gap-1.5">
-                {ranges.map(({ key, label }) => {
+
+              {/* Range options */}
+              <div className="mt-2">
+                {ranges.map(({ key, label, icon }, idx) => {
                   const count = countForRange(key);
                   return (
-                    <button
-                      key={key}
-                      onClick={() => handleMarkAllReadWithRange(key)}
-                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-[#00a884]/10 dark:hover:bg-[#00a884]/20 transition-colors text-start"
-                    >
-                      <span>{label}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 ms-2 shrink-0">
-                        {count === 0 ? t.mark_all_read_none : t.mark_all_read_conversations(count)}
-                      </span>
-                    </button>
+                    <div key={key}>
+                      {idx > 0 && <div className="mx-4 h-px bg-gray-100 dark:bg-white/5" />}
+                      <button
+                        onClick={() => handleMarkAllReadWithRange(key)}
+                        className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-start"
+                      >
+                        <span className="text-gray-500 dark:text-gray-400">{icon}</span>
+                        <span className="flex-1">{label}</span>
+                        {count > 0 ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-[#00a884]/15 text-[#00a884] font-semibold shrink-0">
+                            {count}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/8 text-gray-400 dark:text-gray-500 font-semibold shrink-0">
+                            0
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   );
                 })}
-                <div className="mt-1 rounded-lg border border-gray-200 dark:border-gray-700/50 p-3">
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Custom range</p>
-                  <div className="flex gap-2 mb-2">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 dark:text-gray-500 mb-1">From</label>
-                      <input
-                        type="datetime-local"
-                        value={customFromDate}
-                        onChange={(e) => setCustomFromDate(e.target.value)}
-                        className="w-full text-xs bg-gray-100 dark:bg-[#111b21] text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-[#00a884]"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 dark:text-gray-500 mb-1">To</label>
-                      <input
-                        type="datetime-local"
-                        value={customToDate}
-                        onChange={(e) => setCustomToDate(e.target.value)}
-                        className="w-full text-xs bg-gray-100 dark:bg-[#111b21] text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-[#00a884]"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleMarkAllReadWithRange('custom')}
-                    disabled={!customFromDate}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-[#00a884]/10 dark:hover:bg-[#00a884]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-start"
+
+                {/* Custom range toggle row */}
+                <div className="mx-4 h-px bg-gray-100 dark:bg-white/5" />
+                <button
+                  onClick={() => setShowCustomRange(!showCustomRange)}
+                  className="w-full flex items-center gap-3 px-5 py-3.5 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-start"
+                >
+                  <span className="text-gray-500 dark:text-gray-400">
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6" />
+                      <line x1="8" y1="12" x2="21" y2="12" />
+                      <line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" />
+                      <line x1="3" y1="12" x2="3.01" y2="12" />
+                      <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                  </span>
+                  <span className="flex-1">Custom range</span>
+                  <svg
+                    className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${showCustomRange ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   >
-                    <span>Apply custom range</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ms-2 shrink-0">
-                      {customFromDate
-                        ? (customCount === 0 ? t.mark_all_read_none : t.mark_all_read_conversations(customCount))
-                        : ''}
-                    </span>
-                  </button>
-                </div>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {/* Custom range expanded panel */}
+                {showCustomRange && (
+                  <div className="px-5 pb-4">
+                    <div className="flex gap-3 mb-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">From</label>
+                        <input
+                          type="date"
+                          value={customFromDate}
+                          onChange={(e) => setCustomFromDate(e.target.value)}
+                          className="w-full text-sm bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-[#00a884] focus:ring-1 focus:ring-[#00a884]/30 transition-colors"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">To</label>
+                        <input
+                          type="date"
+                          value={customToDate}
+                          onChange={(e) => setCustomToDate(e.target.value)}
+                          className="w-full text-sm bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-[#00a884] focus:ring-1 focus:ring-[#00a884]/30 transition-colors"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleMarkAllReadWithRange('custom')}
+                      disabled={!customFromDate}
+                      className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#00a884] text-white hover:bg-[#00a884]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {customFromDate && customCount > 0
+                        ? `Mark ${customCount} as read`
+                        : 'Apply custom range'}
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="px-4 pb-4">
+
+              {/* Cancel */}
+              <div className="px-5 pt-1 pb-5">
+                <div className="h-px bg-gray-100 dark:bg-white/5 mb-3" />
                 <button
                   onClick={() => setShowMarkAllReadModal(false)}
-                  className="w-full py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                  className="w-full text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 transition-colors py-1"
                 >
                   {t.cancel}
                 </button>
