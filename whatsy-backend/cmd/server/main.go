@@ -150,6 +150,8 @@ func main() {
 
 	// On startup: recover pending messages; then every 5 min: retry recent failures.
 	go chatService.StartRetryLoop(context.Background())
+	// Backfill old BYTEA media rows to R2 in the background (30s delay then batched).
+	go chatService.BackfillMediaToR2(context.Background())
 	h := handler.New(db, convRepo, msgRepo, chatService, hub, presenceMgr, &cfg)
 	tagService := service.NewTagService(db)
 	labelHandler := handler.NewLabelHandler(tagService)
