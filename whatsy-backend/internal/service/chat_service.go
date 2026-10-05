@@ -809,26 +809,10 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 	return
 }
 
-// StartRetryLoop runs the full retry lifecycle:
-//   - On startup: calls RetryPendingOnce to recover messages stuck in "pending".
-//   - Every 5 minutes: calls RetryFailedMessages to re-attempt recently failed messages.
-//
-// The loop exits when ctx is cancelled. Call as a goroutine.
+// StartRetryLoop recovers messages stuck in "pending" at startup.
+// RetryFailedMessages is disabled (causes duplicate sends on rate-limit failures).
 func (s *ChatService) StartRetryLoop(ctx context.Context) {
-	// Immediate startup recovery.
 	s.RetryPendingOnce(ctx)
-
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			// RetryFailedMessages disabled — causes duplicate sends when messages
-			// were already delivered but marked failed due to rate limiting.
-		}
-	}
 }
 
 func outboundContentType(payload zernio.SendMessagePayload) domain.ContentType {

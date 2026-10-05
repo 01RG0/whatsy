@@ -65,14 +65,6 @@ func main() {
 			time.Sleep(3 * time.Second)
 		}
 	}
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			_ = db.PingContext(context.Background())
-		}
-	}()
-
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
