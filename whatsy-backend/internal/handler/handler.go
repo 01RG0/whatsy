@@ -214,13 +214,18 @@ func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 	var body struct {
-		Since *time.Time `json:"since"`
+		Since *int64 `json:"since"` // Unix milliseconds; nil = all time
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && err.Error() != "EOF" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
-	count, err := h.convRepo.MarkAllReadSince(r.Context(), tenantID, body.Since)
+	var since *time.Time
+	if body.Since != nil {
+		t := time.UnixMilli(*body.Since).UTC()
+		since = &t
+	}
+	count, err := h.convRepo.MarkAllReadSince(r.Context(), tenantID, since)
 	if err != nil {
 		log.Printf("[error] mark all read: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark all read"})

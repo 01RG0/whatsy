@@ -111,7 +111,7 @@ export async function markAllReadSince(since: Date | null): Promise<{ count: num
   const res = await fetch(`${API_BASE}/v1/inbox/conversations/mark-all-read`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-    body: JSON.stringify({ since: since?.toISOString() ?? null }),
+    body: JSON.stringify({ since: since ? since.getTime() : null }),
   })
   await throwIfError(res)
   return res.json() as Promise<{ count: number }>
