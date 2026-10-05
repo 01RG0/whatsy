@@ -145,7 +145,18 @@ function connect() {
       case 'NEW_MESSAGE': {
         const msg = data.message;
         const conversationId = msg.conversationId || data.studentId;
-        store().receiveMessage(conversationId, { ...msg, conversationId });
+
+        // If this is our own outbound message and the HTTP response is still in flight
+        // (there's a pending optimistic temp- message), skip adding the WS duplicate.
+        // The HTTP response's replaceMessage() handles the final state.
+        // We still fall through to bumpConversation for sidebar update.
+        const hasPendingTemp =
+          msg.direction === 'outbound' &&
+          (useInboxStore.getState().messages[conversationId] ?? []).some((m) => m.id.startsWith('temp-'));
+
+        if (!hasPendingTemp) {
+          store().receiveMessage(conversationId, { ...msg, conversationId });
+        }
 
         const activeId = useInboxStore.getState().activeConversationId;
         const isViewingActive =

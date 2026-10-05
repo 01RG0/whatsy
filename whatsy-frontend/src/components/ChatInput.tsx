@@ -58,6 +58,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
   const [waveformBars, setWaveformBars] = useState<number[]>([0.3, 0.5, 0.8, 0.6, 0.4, 0.7, 0.5, 0.3]);
   const waveformAnimRef = useRef<number | null>(null);
   const [annotatorFile, setAnnotatorFile] = useState<File | null>(null);
@@ -281,6 +282,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     setIsUploading(true);
+    setUploadingFileName(file.name);
     try {
       const url = await uploadToBackend(file, file.name);
       onSendMessage({
@@ -296,6 +298,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       console.error('File upload failed:', err);
     } finally {
       setIsUploading(false);
+      setUploadingFileName(null);
     }
   };
 
@@ -450,6 +453,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <input ref={docFileInputRef} type="file" accept="application/*,text/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.zip,.rar,.7z" onChange={handleFileUpload} className="hidden" />
       <input ref={audioFileInputRef} type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
 
+      {/* Upload progress banner */}
+      {isUploading && uploadingFileName && (
+        <div className="animate-in slide-in-from-top-1 fade-in duration-75 flex items-center gap-2 bg-white dark:bg-[#182229] border-s-4 border-[#00a884] px-3 py-2 mb-2 rounded text-xs shadow-sm">
+          <svg className="w-4 h-4 animate-spin shrink-0 text-[#00a884]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+            <path d="M12 2a10 10 0 0 1 10 10" />
+          </svg>
+          <span className="text-gray-500 dark:text-[#8696a0] truncate">
+            Uploading <span className="font-medium text-gray-700 dark:text-[#e9edef]">{uploadingFileName}</span>…
+          </span>
+        </div>
+      )}
+
       {/* Input Row */}
       <div className="flex items-end gap-2">
         {isRecording ? (
@@ -600,9 +616,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 className="animate-in zoom-in-75 duration-75 w-11 h-11 rounded-full bg-[#00a884] flex items-center justify-center text-white hover:opacity-90 transition shrink-0 shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 title={disabled && disabledTooltip ? disabledTooltip : t.send_message}
               >
-                <svg className="w-5 h-5 ltr:translate-x-0.5 rtl:-translate-x-0.5 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
+                {isUploading ? (
+                  <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 ltr:translate-x-0.5 rtl:-translate-x-0.5 rtl:scale-x-[-1]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                  </svg>
+                )}
               </button>
             ) : (
               <button
