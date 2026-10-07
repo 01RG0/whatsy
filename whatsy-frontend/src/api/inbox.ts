@@ -42,6 +42,7 @@ export async function getConversations(
   })
   const res = await fetch(`${API_BASE}/v1/inbox/conversations?${params}`, {
     headers: getAuthHeader(),
+    cache: 'no-store',
   })
   await throwIfError(res)
   const json = await res.json() as { conversations?: ZernioConversation[] } | ZernioConversation[]
