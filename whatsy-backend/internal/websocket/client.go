@@ -32,6 +32,7 @@ type Client struct {
 	agentID     string
 	agentName   string
 	agentAvatar string
+	TenantID    string
 
 	subMu sync.RWMutex
 	// subscriptions keeps track of studentIDs subscribed by this client
@@ -39,7 +40,7 @@ type Client struct {
 }
 
 // NewClient creates a new Client instance.
-func NewClient(hub *Hub, conn *websocket.Conn, agentID, agentName, agentAvatar string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, agentID, agentName, agentAvatar, tenantID string) *Client {
 	return &Client{
 		hub:           hub,
 		conn:          conn,
@@ -47,6 +48,7 @@ func NewClient(hub *Hub, conn *websocket.Conn, agentID, agentName, agentAvatar s
 		agentID:       agentID,
 		agentName:     agentName,
 		agentAvatar:   agentAvatar,
+		TenantID:      tenantID,
 		subscriptions: make(map[string]bool),
 	}
 }

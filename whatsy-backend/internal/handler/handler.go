@@ -236,7 +236,8 @@ func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) MarkUnread(w http.ResponseWriter, r *http.Request) {
 	if !h.requireConversationTenant(w, r, chi.URLParam(r, "id")) { return }
-	if err := h.chatService.MarkConversationUnread(r.Context(), chi.URLParam(r, "id")); err != nil {
+	tenantID, _ := TenantIDFromContext(r.Context())
+	if err := h.chatService.MarkConversationUnread(r.Context(), chi.URLParam(r, "id"), tenantID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "mark conversation unread"})
 		return
 	}
@@ -277,7 +278,8 @@ func (h *Handler) AssignConversation(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "conversation not found"})
 		return
 	}
-	h.hub.BroadcastToAll(ws.ConversationUpdatedEvent{Event: ws.EventConversationUpdated, Conversation: *conversation})
+	tenantID, _ := TenantIDFromContext(r.Context())
+	h.hub.BroadcastToAll(ws.ConversationUpdatedEvent{Event: ws.EventConversationUpdated, Conversation: *conversation, TenantID: tenantID})
 	writeJSON(w, http.StatusOK, conversation)
 }
 
@@ -339,7 +341,14 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			eventlog.WebhookError(event.Type, err)
 		} else {
 			eventlog.Webhook(event.Type, "")
-			h.hub.BroadcastToAll(payload)
+			type tenantedConvPayload struct {
+				zernio.ConversationUpdatedPayload
+				TenantID string `json:"tenant_id"`
+			}
+			h.hub.BroadcastToAll(tenantedConvPayload{
+				ConversationUpdatedPayload: payload,
+				TenantID:                  h.tenantForZernioConv(r.Context(), payload.ConversationID),
+			})
 		}
 	case zernio.EventMessageDeleted:
 		var payload zernio.MessageDeletedPayload
@@ -359,6 +368,7 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				Event:          ws.EventMessageDeleted,
 				MessageID:      localMsgID,
 				ConversationID: payload.ConversationID,
+				TenantID:       h.tenantForMsg(r.Context(), localMsgID),
 			})
 		}
 	case zernio.EventReactionReceived:
@@ -377,6 +387,7 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				MessageID:      localMsgID,
 				ConversationID: payload.ConversationID,
 				Emoji:          payload.Emoji,
+				TenantID:       h.tenantForMsg(r.Context(), localMsgID),
 			})
 		}
 	default:
@@ -401,6 +412,7 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 					Event:     ws.EventMessageStatus,
 					MessageID: localMsgID,
 					Status:    payload.Status,
+					TenantID:  h.tenantForMsg(r.Context(), localMsgID),
 				})
 			}
 		} else {
@@ -425,7 +437,7 @@ func (h *Handler) ServeWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("websocket upgrade: %v", err)
 		return
 	}
-	client := ws.NewClient(h.hub, conn, claims.AgentID, claims.Name, claims.Avatar)
+	client := ws.NewClient(h.hub, conn, claims.AgentID, claims.Name, claims.Avatar, claims.TenantID)
 	h.hub.Register(client)
 	eventlog.WSConnect(claims.AgentID)
 	// The HTTP request context is canceled when this handler returns, which is
@@ -634,6 +646,34 @@ func (h *Handler) syncConversationOnDemand(ctx context.Context, tenantID, dbConv
 			dbConvID, direction, contentType, content, status, msg.ID, attachmentsJSON, ts, replyToJSON, contactPhone,
 		)
 	}
+}
+
+// tenantForMsg looks up the tenant_id for a local message UUID.
+// Returns "" when the message is not found or the ID is not a valid UUID.
+func (h *Handler) tenantForMsg(ctx context.Context, localMsgID string) string {
+	if localMsgID == "" {
+		return ""
+	}
+	var tenantID string
+	_ = h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(c.tenant_id::text,'') FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=$1::uuid`,
+		localMsgID,
+	).Scan(&tenantID)
+	return tenantID
+}
+
+// tenantForZernioConv looks up the tenant_id from a Zernio conversation ID.
+// Returns "" when no matching conversation is found.
+func (h *Handler) tenantForZernioConv(ctx context.Context, zernioConvID string) string {
+	if zernioConvID == "" {
+		return ""
+	}
+	var tenantID string
+	_ = h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(tenant_id::text,'') FROM conversations WHERE zernio_conversation_id=$1`,
+		zernioConvID,
+	).Scan(&tenantID)
+	return tenantID
 }
 
 func firstNonEmpty(values ...string) string {

@@ -165,6 +165,12 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		log.Printf("[chat] auto-created conversation %s for zernio id %q (from %s)", localConvID, payload.ConversationID, masked)
 	}
 
+	// Resolve the tenant for this conversation so WebSocket events are scoped correctly.
+	var convTenantID string
+	if localConvID != "" {
+		_ = s.db.QueryRowContext(ctx, "SELECT COALESCE(tenant_id::text,'') FROM conversations WHERE id=$1", localConvID).Scan(&convTenantID)
+	}
+
 	// Prefer the platform message id (WhatsApp wamid): it is the same id
 	// delivered on message.delivered/.read/.failed status updates.
 	dedupeID := firstNonEmpty(payload.PlatformMessageID, payload.MessageID)
@@ -207,6 +213,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 				Event:     websocket.EventMessageStatus,
 				MessageID: claimedID,
 				Status:    string(domain.StatusSent),
+				TenantID:  convTenantID,
 			})
 			return nil
 		}
@@ -338,6 +345,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		Event:     websocket.EventNewMessage,
 		StudentID: message.ConversationID,
 		Message:   message,
+		TenantID:  convTenantID,
 	})
 
 	if message.Type == domain.ContentTypeSticker && len(message.Attachments) > 0 {
@@ -395,6 +403,7 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 		s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
 			Event:        websocket.EventConversationUpdated,
 			Conversation: *conversation,
+			TenantID:     convTenantID,
 		})
 
 		if s.autoReplier != nil && msg.Direction == "inbound" {
@@ -572,6 +581,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 			s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
 				Event:        websocket.EventConversationUpdated,
 				Conversation: *conversation,
+				TenantID:     tenantID,
 			})
 		}
 	}()
@@ -581,6 +591,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 		Event:     websocket.EventNewMessage,
 		StudentID: conversationID,
 		Message:   message,
+		TenantID:  tenantID,
 	})
 
 	// Deliver to Zernio in background, then push status update to frontend.
@@ -598,6 +609,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 					Event:     websocket.EventMessageStatus,
 					MessageID: message.ID,
 					Status:    string(domain.StatusPending),
+					TenantID:  tenantID,
 				})
 				return
 			}
@@ -606,6 +618,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 				Event:     websocket.EventMessageStatus,
 				MessageID: message.ID,
 				Status:    string(domain.StatusFailed),
+				TenantID:  tenantID,
 			})
 			return
 		}
@@ -614,6 +627,7 @@ func (s *ChatService) SendOutboundMessage(ctx context.Context, conversationID st
 			Event:     websocket.EventMessageStatus,
 			MessageID: message.ID,
 			Status:    string(domain.StatusSent),
+			TenantID:  tenantID,
 		})
 	}()
 
@@ -649,13 +663,14 @@ func (s *ChatService) MarkConversationRead(ctx context.Context, conversationID s
 	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
+		TenantID:     tenantID,
 	})
 	return nil
 }
 
 // MarkConversationUnread flags the conversation as manually unread, sets unread_count to at least 1,
 // and notifies connected clients of the updated conversation state via WebSocket.
-func (s *ChatService) MarkConversationUnread(ctx context.Context, conversationID string) error {
+func (s *ChatService) MarkConversationUnread(ctx context.Context, conversationID string, tenantID string) error {
 	if err := s.convRepo.MarkUnread(ctx, conversationID); err != nil {
 		return fmt.Errorf("mark conversation unread: %w", err)
 	}
@@ -670,6 +685,7 @@ func (s *ChatService) MarkConversationUnread(ctx context.Context, conversationID
 	s.hub.BroadcastToAll(websocket.ConversationUpdatedEvent{
 		Event:        websocket.EventConversationUpdated,
 		Conversation: *conversation,
+		TenantID:     tenantID,
 	})
 	return nil
 }
@@ -701,6 +717,8 @@ func (s *ChatService) RetryPendingOnce(ctx context.Context) {
 			_ = s.msgRepo.UpdateZernioIDAndStatus(ctx, msg.ID, "", domain.StatusFailed)
 			continue
 		}
+		var msgTenantID string
+		_ = s.db.QueryRowContext(ctx, "SELECT COALESCE(tenant_id::text,'') FROM conversations WHERE id=$1", msg.ConversationID).Scan(&msgTenantID)
 
 		payload := zernio.SendMessagePayload{
 			AccountID: accountID,
@@ -730,6 +748,7 @@ func (s *ChatService) RetryPendingOnce(ctx context.Context) {
 				Event:     websocket.EventMessageStatus,
 				MessageID: msg.ID,
 				Status:    string(domain.StatusFailed),
+				TenantID:  msgTenantID,
 			})
 			continue
 		}
@@ -738,6 +757,7 @@ func (s *ChatService) RetryPendingOnce(ctx context.Context) {
 			Event:     websocket.EventMessageStatus,
 			MessageID: msg.ID,
 			Status:    string(domain.StatusSent),
+			TenantID:  msgTenantID,
 		})
 		log.Printf("[retry-pending] msg %s sent ok", msg.ID)
 	}
@@ -777,6 +797,8 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 			failed++
 			continue
 		}
+		var msgTenantID string
+		_ = s.db.QueryRowContext(ctx, "SELECT COALESCE(tenant_id::text,'') FROM conversations WHERE id=$1", msg.ConversationID).Scan(&msgTenantID)
 
 		payload := zernio.SendMessagePayload{
 			AccountID: accountID,
@@ -806,6 +828,7 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 				Event:     websocket.EventMessageStatus,
 				MessageID: msg.ID,
 				Status:    string(domain.StatusFailed),
+				TenantID:  msgTenantID,
 			})
 			failed++
 			continue
@@ -815,6 +838,7 @@ func (s *ChatService) RetryFailedMessages(ctx context.Context) (sent, failed, to
 			Event:     websocket.EventMessageStatus,
 			MessageID: msg.ID,
 			Status:    string(domain.StatusSent),
+			TenantID:  msgTenantID,
 		})
 		sent++
 		log.Printf("[retry-failed] sent %d/%d messages", sent, total)

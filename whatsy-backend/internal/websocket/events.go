@@ -37,6 +37,7 @@ type NewMessageEvent struct {
 	Event     EventType      `json:"event"`
 	StudentID string         `json:"studentId"`
 	Message   domain.Message `json:"message"`
+	TenantID  string         `json:"tenant_id"`
 }
 
 // MessageStatusEvent: {event:'MESSAGE_STATUS', messageId:string, status:string}
@@ -44,6 +45,7 @@ type MessageStatusEvent struct {
 	Event     EventType `json:"event"`
 	MessageID string    `json:"messageId"`
 	Status    string    `json:"status"`
+	TenantID  string    `json:"tenant_id"`
 }
 
 // StudentViewersChangedEvent: {event:'STUDENT_VIEWERS_CHANGED', studentId:string, viewers:[{agentId,name,avatar}]}
@@ -59,12 +61,14 @@ type AgentTypingLockEvent struct {
 	StudentID   string            `json:"studentId"`
 	LockedBy    domain.ViewerInfo `json:"lockedBy"`
 	ExpiresInMs int64             `json:"expiresInMs"`
+	TenantID    string            `json:"tenant_id"`
 }
 
 // TypingLockReleasedEvent: {event:'TYPING_LOCK_RELEASED', studentId:string}
 type TypingLockReleasedEvent struct {
 	Event     EventType `json:"event"`
 	StudentID string    `json:"studentId"`
+	TenantID  string    `json:"tenant_id"`
 }
 
 // ReactionEvent: {event:'REACTION', messageId:string, conversationId:string, emoji:string}
@@ -73,6 +77,7 @@ type ReactionEvent struct {
 	MessageID      string    `json:"messageId"`
 	ConversationID string    `json:"conversationId"`
 	Emoji          string    `json:"emoji"`
+	TenantID       string    `json:"tenant_id"`
 }
 
 // MessageDeletedEvent: {event:'MESSAGE_DELETED', messageId:string, conversationId:string}
@@ -80,12 +85,14 @@ type MessageDeletedEvent struct {
 	Event          EventType `json:"event"`
 	MessageID      string    `json:"messageId"`
 	ConversationID string    `json:"conversationId"`
+	TenantID       string    `json:"tenant_id"`
 }
 
 // ConversationUpdatedEvent: {event:'CONVERSATION_UPDATED', conversation:{...}}
 type ConversationUpdatedEvent struct {
 	Event        EventType           `json:"event"`
 	Conversation domain.Conversation `json:"conversation"`
+	TenantID     string              `json:"tenant_id"`
 }
 
 // Client → Server action payloads

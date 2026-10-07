@@ -21,8 +21,9 @@ const (
 
 // catchUpEntry is one entry in the in-memory replay ring buffer.
 type catchUpEntry struct {
-	data []byte
-	ts   time.Time
+	data     []byte
+	ts       time.Time
+	tenantID string
 }
 
 type roomMessage struct {
@@ -159,7 +160,7 @@ func (h *Hub) BroadcastToRoom(studentID string, event interface{}) {
 // appendToCatchUpBuf appends a broadcast entry to the ring buffer.
 // Entries older than catchUpWindow are pruned first, then the slice is capped
 // at catchUpMaxEntries. Must be called with h.mu held for writing.
-func (h *Hub) appendToCatchUpBuf(data []byte) {
+func (h *Hub) appendToCatchUpBuf(data []byte, tenantID string) {
 	now := time.Now()
 	cutoff := now.Add(-catchUpWindow)
 
@@ -170,7 +171,7 @@ func (h *Hub) appendToCatchUpBuf(data []byte) {
 	}
 	h.catchUpBuf = h.catchUpBuf[start:]
 
-	h.catchUpBuf = append(h.catchUpBuf, catchUpEntry{data: data, ts: now})
+	h.catchUpBuf = append(h.catchUpBuf, catchUpEntry{data: data, ts: now, tenantID: tenantID})
 
 	// Hard-cap at catchUpMaxEntries by dropping the oldest.
 	if len(h.catchUpBuf) > catchUpMaxEntries {
@@ -211,11 +212,17 @@ func (h *Hub) BroadcastToAll(event interface{}) {
 		return
 	}
 
+	// Extract tenant_id from the marshaled JSON for ring buffer tagging.
+	var envelope struct {
+		TenantID string `json:"tenant_id"`
+	}
+	_ = json.Unmarshal(data, &envelope)
+
 	if ev, ok := event.(NewMessageEvent); ok {
 		eventlog.TraceStep3BroadcastQueued("NEW_MESSAGE", ev.Message.ID, ev.StudentID)
 		// Store in ring buffer so reconnecting clients can catch up.
 		h.mu.Lock()
-		h.appendToCatchUpBuf(data)
+		h.appendToCatchUpBuf(data, envelope.TenantID)
 		h.mu.Unlock()
 	}
 
@@ -254,6 +261,7 @@ func (h *Hub) HandleTypingStart(client *Client, studentID string) {
 		StudentID:   studentID,
 		LockedBy:    viewer,
 		ExpiresInMs: expiresInMs,
+		TenantID:    client.TenantID,
 	})
 }
 
@@ -270,6 +278,7 @@ func (h *Hub) HandleTypingStop(client *Client, studentID string) {
 	h.BroadcastToAll(TypingLockReleasedEvent{
 		Event:     EventTypingLockReleased,
 		StudentID: studentID,
+		TenantID:  client.TenantID,
 	})
 }
 
@@ -346,17 +355,22 @@ func (h *Hub) Run() {
 			// Run in a goroutine so hub registration is never blocked.
 			go func(c *Client) {
 				entries := h.recentCatchUpEntries()
+				replayed := 0
 				for _, e := range entries {
+					if e.tenantID != c.TenantID {
+						continue
+					}
 					select {
 					case c.send <- e.data:
+						replayed++
 					default:
 						// Client send buffer full; skip remaining catch-up entries.
 						log.Printf("websocket hub: catch-up buffer full for agent %s, skipping remaining entries", c.agentID)
 						return
 					}
 				}
-				if len(entries) > 0 {
-					log.Printf("websocket hub: replayed %d catch-up message(s) to agent %s", len(entries), c.agentID)
+				if replayed > 0 {
+					log.Printf("websocket hub: replayed %d catch-up message(s) to agent %s", replayed, c.agentID)
 				}
 			}(client)
 
@@ -389,10 +403,21 @@ func (h *Hub) Run() {
 			h.mu.RUnlock()
 
 		case data := <-h.broadcastAll:
+			var envelope struct {
+				TenantID string `json:"tenant_id"`
+			}
+			if jerr := json.Unmarshal(data, &envelope); jerr != nil || envelope.TenantID == "" {
+				log.Printf("websocket hub: broadcast event missing tenant_id, skipping delivery")
+				eventlog.TraceStep4HubDelivered(0, 0)
+				continue
+			}
 			h.mu.RLock()
 			delivered := 0
 			dropped := 0
 			for client := range h.clients {
+				if client.TenantID != envelope.TenantID {
+					continue
+				}
 				select {
 				case client.send <- data:
 					delivered++
