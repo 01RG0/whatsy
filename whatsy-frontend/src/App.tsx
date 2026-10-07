@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { WhatsAppInboxApp } from './components/WhatsAppInboxApp'
 import NavBar from './components/NavBar'
 import LoginPage from './pages/LoginPage'
@@ -10,10 +10,9 @@ import AnalysisPage from './pages/AnalysisPage'
 import { isAdmin } from './lib/auth'
 import { API_BASE, getAuthHeader } from './api/inbox'
 import { useT } from './i18n/translations'
-import { useWebSocket, decodeAgentId } from './store/useWebSocket'
+import { useWebSocket } from './store/useWebSocket'
 import { useSettingsStore } from './store/useSettingsStore'
 import { useInboxStore } from './store/useInboxStore'
-import { useLabelStore } from './store/useLabelStore'
 
 // Keeps the WebSocket alive on every authenticated page, not just the inbox.
 function WebSocketMount({ token, onTokenRefresh }: { token?: string | null; onTokenRefresh?: (token: string) => void }) {
@@ -47,25 +46,6 @@ function Router() {
   const path = usePath()
   const jwt = localStorage.getItem('whatsy_jwt')
   const [validatedToken, setValidatedToken] = useState<string | null>(jwt)
-
-  // Detect workspace/account switches: when the agent ID embedded in the
-  // validated token changes, clear all workspace-scoped in-memory state so
-  // the previous tenant's conversations/messages/labels are never shown to
-  // the new account.  The WebSocket reconnect is handled in useWebSocket.ts.
-  const prevAgentIdRef = useRef<string>(decodeAgentId(jwt ?? ''))
-  useEffect(() => {
-    if (!validatedToken) return
-    const newAgentId = decodeAgentId(validatedToken)
-    const prevAgentId = prevAgentIdRef.current
-    if (prevAgentId && newAgentId && prevAgentId !== newAgentId) {
-      useInboxStore.getState().reset()
-      useLabelStore.getState().reset()
-      useSettingsStore.getState().reset()
-    }
-    if (newAgentId) {
-      prevAgentIdRef.current = newAgentId
-    }
-  }, [validatedToken])
 
   useEffect(() => {
     if (!jwt) return

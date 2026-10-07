@@ -3,6 +3,8 @@ import { navigate } from '../App'
 import { getCurrentAgent, getSavedAccounts, switchAccount, logoutCurrentAccount } from '../lib/auth'
 import ChangePasswordModal from './ChangePasswordModal'
 import { useInboxStore } from '../store/useInboxStore'
+import { useLabelStore } from '../store/useLabelStore'
+import { useSettingsStore } from '../store/useSettingsStore'
 import { useLanguageStore } from '../store/useLanguageStore'
 import { useT } from '../i18n/translations'
 import { useDarkModeStore } from '../store/useDarkModeStore'
@@ -266,7 +268,7 @@ export default function NavBar({ path }: { path: string }) {
                       <button
                         key={acc.id}
                         type="button"
-                        onClick={() => { if (!isActive) switchAccount(acc); else setShowAccountMenu(false) }}
+                        onClick={() => { if (!isActive) { useInboxStore.getState().reset(); useLabelStore.getState().reset(); useSettingsStore.getState().reset(); switchAccount(acc) } else setShowAccountMenu(false) }}
                         className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
                       >
                         <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white text-xs font-bold shrink-0">
