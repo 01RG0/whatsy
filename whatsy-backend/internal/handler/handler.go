@@ -364,11 +364,15 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				}
 				_ = h.msgRepo.MarkRevokedByZernioID(r.Context(), zernioMsgID)
 			}
+			deleteTenantID := h.tenantForMsg(r.Context(), localMsgID)
+			if deleteTenantID == "" {
+				deleteTenantID = h.tenantForZernioConv(r.Context(), payload.ConversationID)
+			}
 			h.hub.BroadcastToAll(ws.MessageDeletedEvent{
 				Event:          ws.EventMessageDeleted,
 				MessageID:      localMsgID,
 				ConversationID: payload.ConversationID,
-				TenantID:       h.tenantForMsg(r.Context(), localMsgID),
+				TenantID:       deleteTenantID,
 			})
 		}
 	case zernio.EventReactionReceived:
@@ -382,12 +386,16 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			if msg, err := h.msgRepo.GetByZernioID(r.Context(), zernioMsgID); err == nil && msg != nil {
 				localMsgID = msg.ID
 			}
+			reactionTenantID := h.tenantForMsg(r.Context(), localMsgID)
+			if reactionTenantID == "" {
+				reactionTenantID = h.tenantForZernioConv(r.Context(), payload.ConversationID)
+			}
 			h.hub.BroadcastToAll(ws.ReactionEvent{
 				Event:          ws.EventReaction,
 				MessageID:      localMsgID,
 				ConversationID: payload.ConversationID,
 				Emoji:          payload.Emoji,
-				TenantID:       h.tenantForMsg(r.Context(), localMsgID),
+				TenantID:       reactionTenantID,
 			})
 		}
 	default:
@@ -408,11 +416,15 @@ func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				if msg, err := h.msgRepo.GetByZernioID(r.Context(), zernioMsgID); err == nil && msg != nil {
 					localMsgID = msg.ID
 				}
+				statusTenantID := h.tenantForMsg(r.Context(), localMsgID)
+				if statusTenantID == "" {
+					statusTenantID = h.tenantForZernioConv(r.Context(), payload.ConversationID)
+				}
 				h.hub.BroadcastToAll(ws.MessageStatusEvent{
 					Event:     ws.EventMessageStatus,
 					MessageID: localMsgID,
 					Status:    payload.Status,
-					TenantID:  h.tenantForMsg(r.Context(), localMsgID),
+					TenantID:  statusTenantID,
 				})
 			}
 		} else {
@@ -649,17 +661,31 @@ func (h *Handler) syncConversationOnDemand(ctx context.Context, tenantID, dbConv
 }
 
 // tenantForMsg looks up the tenant_id for a local message UUID.
-// Returns "" when the message is not found or the ID is not a valid UUID.
+// Falls back to a zernio_message_id lookup when localMsgID is not a valid UUID
+// (e.g. it is still a Zernio wamid string), so that real-time broadcasts are
+// not silently dropped due to a Postgres ::uuid cast failure.
 func (h *Handler) tenantForMsg(ctx context.Context, localMsgID string) string {
 	if localMsgID == "" {
 		return ""
 	}
 	var tenantID string
-	_ = h.db.QueryRowContext(ctx,
+	// Step 1: try local UUID lookup.
+	err := h.db.QueryRowContext(ctx,
 		`SELECT COALESCE(c.tenant_id::text,'') FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=$1::uuid`,
 		localMsgID,
 	).Scan(&tenantID)
-	return tenantID
+	if err == nil && tenantID != "" {
+		return tenantID
+	}
+	// Step 2: fallback — try zernio_message_id (for when localMsgID is still a wamid).
+	err = h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(c.tenant_id::text,'') FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.zernio_message_id=$1`,
+		localMsgID,
+	).Scan(&tenantID)
+	if err == nil && tenantID != "" {
+		return tenantID
+	}
+	return ""
 }
 
 // tenantForZernioConv looks up the tenant_id from a Zernio conversation ID.
