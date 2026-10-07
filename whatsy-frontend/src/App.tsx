@@ -64,7 +64,7 @@ function Router() {
             if (remaining.length > 0) {
               localStorage.setItem('whatsy_jwt', remaining[0].token)
               localStorage.setItem('whatsy_agent', JSON.stringify(remaining[0]))
-              window.location.reload()
+              window.location.href = '/'
             } else {
               window.location.href = '/login'
             }
