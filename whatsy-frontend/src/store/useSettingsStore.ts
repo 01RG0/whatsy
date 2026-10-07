@@ -23,6 +23,7 @@ interface SettingsStore {
   loading: boolean
   saving: boolean
   loaded: boolean
+  reset: () => void
   fetch: () => Promise<void>
   update: (patch: Partial<WorkspaceSettings>) => Promise<void>
 }
@@ -32,6 +33,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   loading: false,
   saving: false,
   loaded: false,
+
+  reset: () => set({ settings: { ...DEFAULTS }, loaded: false, loading: false }),
 
   fetch: async () => {
     if (get().loading) return

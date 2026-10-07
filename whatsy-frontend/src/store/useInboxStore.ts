@@ -30,6 +30,7 @@ interface InboxState {
   currentSearch: string;
   isMobileChatOpen: boolean;
 
+  reset: () => void;
   setConversations: (convs: ZernioConversation[]) => void;
   appendConversations: (convs: ZernioConversation[]) => void;
   setActiveConversation: (id: string) => void;
@@ -67,6 +68,21 @@ export const useInboxStore = create<InboxState>((set) => ({
   currentFilter: 'all',
   currentSearch: '',
   isMobileChatOpen: false,
+
+  reset: () =>
+    set({
+      conversations: [],
+      totalUnread: 0,
+      activeConversationId: null,
+      messages: {},
+      viewers: {},
+      typingLock: {},
+      wsConnected: false,
+      lastWsEventAt: 0,
+      currentFilter: 'all',
+      currentSearch: '',
+      isMobileChatOpen: false,
+    }),
 
   setConversations: (convs) =>
     set((state) => {

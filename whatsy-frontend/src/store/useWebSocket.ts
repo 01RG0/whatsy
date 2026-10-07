@@ -83,9 +83,8 @@ function getAuthHeader(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function getMyAgentId(): string {
+function decodeAgentId(token: string): string {
   try {
-    const token = getToken();
     if (!token) return '';
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.agent_id ?? payload.sub ?? '';
@@ -93,6 +92,12 @@ function getMyAgentId(): string {
     return '';
   }
 }
+
+function getMyAgentId(): string {
+  return decodeAgentId(getToken());
+}
+
+export { decodeAgentId };
 
 // Module-level singleton so multiple hook calls share one WS connection.
 const _ws = {
@@ -340,10 +345,32 @@ interface UseWebSocketOptions {
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const { token, onTokenRefresh } = options;
   
-  // Update module-level state when options change
+  // Update module-level state when options change.
+  // If the agent ID embedded in the token changes (account switch), force the
+  // WebSocket to close so it reconnects with the new tenant-scoped token.
   useEffect(() => {
+    const prevToken = _externalToken;
     _externalToken = token || null;
     _onTokenRefresh = onTokenRefresh || null;
+
+    if (prevToken && token && prevToken !== token) {
+      const prevAgentId = decodeAgentId(prevToken);
+      const newAgentId = decodeAgentId(token);
+      if (prevAgentId && newAgentId && prevAgentId !== newAgentId) {
+        // Different account — close the current connection so the onclose handler
+        // reconnects with the new token (and therefore the correct tenant scope).
+        if (_ws.retryTimeout) {
+          clearTimeout(_ws.retryTimeout);
+          _ws.retryTimeout = null;
+        }
+        _ws.backoff = 1000;
+        if (_ws.socket) {
+          _ws.socket.close();
+        } else if (_ws.refCount > 0) {
+          connect();
+        }
+      }
+    }
   }, [token, onTokenRefresh]);
 
   const sendAction = useCallback((action: WSAction) => {

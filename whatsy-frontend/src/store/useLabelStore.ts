@@ -5,6 +5,7 @@ import { API_BASE, getAuthHeader, createLabel, updateLabel, deleteLabel } from '
 interface LabelState {
   labels: Label[]
 
+  reset: () => void
   fetch: () => Promise<void>
   add: (name: string, color: string) => Promise<Label>
   update: (id: string, name: string, color: string) => Promise<void>
@@ -15,6 +16,8 @@ interface LabelState {
 
 export const useLabelStore = create<LabelState>((set, get) => ({
   labels: [],
+
+  reset: () => set({ labels: [] }),
 
   fetch: async () => {
     try {
