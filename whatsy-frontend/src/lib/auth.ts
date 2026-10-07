@@ -81,7 +81,7 @@ export function switchAccount(acc: SavedAccount) {
     avatar: acc.avatar,
     role: acc.role,
   }))
-  window.location.href = '/'
+  window.location.reload()
 }
 
 export function logoutCurrentAccount() {
