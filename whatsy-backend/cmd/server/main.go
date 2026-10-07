@@ -74,6 +74,7 @@ func main() {
 		"http://localhost:5173":                                  true,
 		"http://localhost:3000":                                  true,
 		"https://whatsy-frontend-production-4584.up.railway.app": true,
+		"https://whatsy.pages.dev":                               true,
 	}
 	for _, env := range []string{"FRONTEND_URL", "FRONTEND_URL_2"} {
 		if v := os.Getenv(env); v != "" {
