@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -72,6 +73,7 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
 	allowedOrigins := map[string]bool{
 		"http://localhost:5173":                                  true,
 		"http://localhost:3000":                                  true,
@@ -182,6 +184,31 @@ func main() {
 
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
 
+	// Client-side log relay — unauthenticated, rate-limited, logs to stdout for Railway
+	clientLogLimiter := handler.NewRateLimiter(30) // 30 req/min per IP
+	r.With(clientLogLimiter.Middleware).Post("/api/client-log", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Level   string `json:"level"`
+			Tag     string `json:"tag"`
+			Message string `json:"msg"`
+			AgentID string `json:"agentId,omitempty"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if body.Level == "" || body.Tag == "" || body.Message == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if body.AgentID != "" {
+			log.Printf("[client] level=%s tag=%s agent=%s msg=%s", body.Level, body.Tag, body.AgentID, body.Message)
+		} else {
+			log.Printf("[client] level=%s tag=%s msg=%s", body.Level, body.Tag, body.Message)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	var syncMu sync.Mutex
 	r.Post("/internal/sync", func(w http.ResponseWriter, r *http.Request) {
 		secret := os.Getenv("WORKER_SECRET")
@@ -205,6 +232,7 @@ func main() {
 			return
 		}
 		defer syncMu.Unlock()
+		log.Printf("[internal/sync] triggered by CF Worker")
 		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Minute)
 		defer cancel()
 		count, err := syncHandler.SyncSince(ctx, time.Now().Add(-35*time.Minute))
@@ -215,6 +243,7 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]string{"error": "sync failed"})
 			return
 		}
+		log.Printf("[internal/sync] done — synced %d conversations", count)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"synced": count})
 	})

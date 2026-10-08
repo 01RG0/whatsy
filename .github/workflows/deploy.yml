@@ -23,7 +23,8 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
-      - name: Deploy worker
-        run: railway up -s whatsy-worker --detach
+      - name: Deploy CF Worker
+        run: npx wrangler deploy
+        working-directory: whatsy-cf-worker
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

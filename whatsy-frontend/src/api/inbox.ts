@@ -69,7 +69,7 @@ export async function searchMessages(
 
 export async function getMessages(
   conversationId: string,
-  limit = 100,
+  limit = 80,
   before?: string,
 ): Promise<ZernioMessage[]> {
   const params = new URLSearchParams({ limit: String(limit), _t: String(Date.now()) })

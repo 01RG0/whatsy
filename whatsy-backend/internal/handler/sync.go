@@ -15,13 +15,34 @@ import (
 
 // SyncHandler pulls conversations from Zernio and seeds the local DB.
 type SyncHandler struct {
-	db         *sql.DB
-	zernioKey  string
-	zernioBase string
+	db          *sql.DB
+	zernioKey   string
+	zernioBase  string
+	rateLimiter chan struct{} // token bucket: 1 token/3s = 20 req/min
 }
 
 func NewSyncHandler(db *sql.DB, zernioKey string) *SyncHandler {
-	return &SyncHandler{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1"}
+	rl := make(chan struct{}, 2)
+	go func() {
+		tk := time.NewTicker(3 * time.Second)
+		defer tk.Stop()
+		for range tk.C {
+			select {
+			case rl <- struct{}{}:
+			default:
+			}
+		}
+	}()
+	return &SyncHandler{db: db, zernioKey: zernioKey, zernioBase: "https://zernio.com/api/v1", rateLimiter: rl}
+}
+
+func (h *SyncHandler) acquireToken(ctx context.Context) error {
+	select {
+	case <-h.rateLimiter:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // getZernioKey returns the Zernio API key for the given tenant.
@@ -181,6 +202,9 @@ func parseSince(s string) time.Time {
 
 // fetchPage fetches a single Zernio API page with retry on 429, 5xx, and network errors.
 func (h *SyncHandler) fetchPage(ctx context.Context, url, key string) ([]byte, int, error) {
+	if err := h.acquireToken(ctx); err != nil {
+		return nil, 0, err
+	}
 	const max429 = 5
 	const max5xx = 3
 	const maxNet = 3
@@ -340,12 +364,6 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 			break
 		}
 		cursor = pageData.Pagination.NextCursor
-		// Pace requests to stay within Zernio rate limits.
-		select {
-		case <-ctx.Done():
-			return total, ctx.Err()
-		case <-time.After(200 * time.Millisecond):
-		}
 	}
 	log.Printf("[sync] done — synced %d conversations across %d pages (tenant=%s, mode=%s)", total, page, tenantID, syncMode)
 	return total, nil

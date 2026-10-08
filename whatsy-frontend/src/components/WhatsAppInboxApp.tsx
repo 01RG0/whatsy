@@ -138,10 +138,12 @@ export const WhatsAppInboxApp: React.FC = () => {
     const id = activeConversationId;
     const hasCached = (useInboxStore.getState().messages[id]?.length ?? 0) > 0;
     if (!hasCached) setIsLoadingMessages(true);
-    getMessages(id, 100)
+    getMessages(id, 80)
       .then((msgs) => {
         mergeMessages(id, [...msgs].reverse());
-        setHasMoreMessages((prev) => ({ ...prev, [id]: msgs.length >= 100 }));
+        const hasMore = msgs.length >= 80;
+        console.log(`[inbox] loaded ${msgs.length} messages for conv=${id} hasMore=${hasMore}`);
+        setHasMoreMessages((prev) => ({ ...prev, [id]: hasMore }));
       })
       .catch((err) => console.error('[WhatsAppInboxApp] getMessages:', err))
       .finally(() => {
@@ -160,7 +162,10 @@ export const WhatsAppInboxApp: React.FC = () => {
       if (messages[conv.id]?.length) return; // already cached
       setTimeout(() => {
         getMessages(conv.id)
-          .then((msgs) => setMessages(conv.id, [...msgs].reverse()))
+          .then((msgs) => {
+            setMessages(conv.id, [...msgs].reverse());
+            setHasMoreMessages((prev) => ({ ...prev, [conv.id]: msgs.length >= 80 }));
+          })
           .catch(() => undefined);
       }, (i + 1) * 300); // stagger by 300ms to avoid hammering
     });
@@ -271,6 +276,7 @@ export const WhatsAppInboxApp: React.FC = () => {
     const msgs = messages[activeConversationId] ?? [];
     if (msgs.length === 0) return;
     const oldestId = msgs[0].id;
+    console.log(`[inbox] load more — conv=${activeConversationId} before=${oldestId}`);
     setIsLoadingMoreMessages(true);
     try {
       const olderMsgs = await getMessages(activeConversationId, 50, oldestId);

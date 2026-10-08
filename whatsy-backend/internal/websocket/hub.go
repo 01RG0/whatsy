@@ -87,8 +87,8 @@ func NewHub(presence ...PresenceManager) *Hub {
 		rooms:         make(map[string]map[*Client]bool),
 		register:      make(chan *Client),
 		unregister:    make(chan *Client),
-		broadcastAll:  make(chan []byte, 256),
-		broadcastRoom: make(chan roomMessage, 256),
+		broadcastAll:  make(chan []byte, 64),
+		broadcastRoom: make(chan roomMessage, 64),
 		presence:      pm,
 	}
 }
@@ -348,6 +348,7 @@ func (h *Hub) Run() {
 			h.clients[client] = true
 			count := len(h.clients)
 			h.mu.Unlock()
+			eventlog.WSConnect(client.agentID)
 			eventlog.WSClientCount(count)
 
 			// Replay any NEW_MESSAGE events from the last 5 minutes so the

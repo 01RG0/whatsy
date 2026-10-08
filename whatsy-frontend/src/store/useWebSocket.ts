@@ -10,6 +10,15 @@ const WS_URL = _apiBase
 const MAX_BACKOFF_MS = 30_000;
 const API_BASE = _apiBase || `${location.protocol}//${location.host}`;
 
+function remoteLog(level: 'info' | 'warn' | 'error', tag: string, msg: string, agentId?: string) {
+  console[level](`[${tag}] ${msg}`);
+  fetch(`${API_BASE}/api/client-log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level, tag, msg, agentId }),
+  }).catch(() => undefined); // fire-and-forget, never throw
+}
+
 type WSAction =
   | { action: 'SUBSCRIBE_STUDENT'; studentId: string }
   | { action: 'UNSUBSCRIBE_STUDENT'; studentId: string }
@@ -123,6 +132,7 @@ function connect() {
 
   ws.onopen = () => {
     _ws.backoff = 1000;
+    remoteLog('info', 'WS', 'connected', getMyAgentId());
     store().setWsConnected(true);
     if (_ws.activeId) {
       _ws.sendFn({ action: 'SUBSCRIBE_STUDENT', studentId: _ws.activeId });
@@ -271,11 +281,13 @@ function connect() {
   };
 
   ws.onclose = (event) => {
+    remoteLog('warn', 'WS', `disconnected code=${event.code} reason="${event.reason || 'none'}"`, getMyAgentId());
     store().setWsConnected(false);
     _ws.socket = null;
-    
+
     // Code 4001 = auth rejected; try to refresh token before giving up
     if (event.code === 4001) {
+      remoteLog('warn', 'WS', 'auth rejected (4001) — refreshing token', getMyAgentId());
       // Attempt to refresh the token via /v1/agents/me
       fetch(`${API_BASE}/v1/agents/me`, { headers: getAuthHeader() })
         .then(async (res) => {
@@ -328,11 +340,13 @@ function connect() {
     if (_ws.refCount > 0) {
       const delay = Math.min(_ws.backoff, MAX_BACKOFF_MS);
       _ws.backoff = Math.min(_ws.backoff * 2, MAX_BACKOFF_MS);
+      remoteLog('info', 'WS', `reconnecting in ${delay}ms`);
       _ws.retryTimeout = setTimeout(connect, delay);
     }
   };
 
   ws.onerror = () => {
+    remoteLog('error', 'WS', 'socket error — closing');
     ws.close();
   };
 }

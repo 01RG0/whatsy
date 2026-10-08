@@ -44,7 +44,7 @@ func NewClient(hub *Hub, conn *websocket.Conn, agentID, agentName, agentAvatar, 
 	return &Client{
 		hub:           hub,
 		conn:          conn,
-		send:          make(chan []byte, 256),
+		send:          make(chan []byte, 128),
 		agentID:       agentID,
 		agentName:     agentName,
 		agentAvatar:   agentAvatar,

@@ -239,11 +239,10 @@ func (h *SyncHandler) syncAllMessages(ctx context.Context, tenantID, key string,
 		}
 		syncMsgMu.Unlock()
 
-		// Pace to stay within Zernio rate limits.
 		select {
 		case <-ctx.Done():
 			return totalInserted, convNum, ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		default:
 		}
 	}
 
@@ -366,11 +365,10 @@ func (h *SyncHandler) syncConversationMessages(ctx context.Context, localConvID,
 		}
 		cursor = pageData.Pagination.NextCursor
 
-		// Pace between pages of the same conversation.
 		select {
 		case <-ctx.Done():
 			return inserted, ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		default:
 		}
 	}
 

@@ -66,7 +66,7 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := TenantIDFromContext(r.Context())
 	if !ok { writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "workspace missing"}); return }
 	convID := chi.URLParam(r, "id")
-	messages, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, convID, queryLimit(r, 100), r.URL.Query().Get("before"))
+	messages, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, convID, msgQueryLimit(r), r.URL.Query().Get("before"))
 	if err != nil {
 		log.Printf("list messages for conversation %s: %v", convID, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list messages"})
@@ -89,7 +89,7 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 		if zernioConvID != "" {
 			h.syncConversationOnDemand(r.Context(), tenantID, convID, zernioConvID, accountID)
-			if reloaded, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, convID, queryLimit(r, 100), ""); err == nil && len(reloaded) > 0 {
+			if reloaded, err := h.msgRepo.ListByConversationForTenant(r.Context(), tenantID, convID, msgQueryLimit(r), ""); err == nil && len(reloaded) > 0 {
 				messages = reloaded
 			}
 		}
@@ -467,6 +467,17 @@ func queryLimit(r *http.Request, defaultLimit int) int {
 	}
 	if limit > 200 {
 		return 200
+	}
+	return limit
+}
+
+func msgQueryLimit(r *http.Request) int {
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		return 80
+	}
+	if limit > 80 {
+		return 80
 	}
 	return limit
 }

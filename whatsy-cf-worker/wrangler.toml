@@ -4,3 +4,11 @@ compatibility_date = "2024-01-01"
 
 [triggers]
 crons = ["*/30 * * * *"]
+
+# Public vars — set these here or in the CF dashboard
+[vars]
+BACKEND_URL = "https://whatsy-backend-production-ea94.up.railway.app"
+
+# Secret vars — run once before deploying:
+#   npx wrangler secret put WORKER_SECRET
+# Then enter the same value as WORKER_SECRET in your Railway backend env.
