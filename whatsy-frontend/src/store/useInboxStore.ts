@@ -86,6 +86,11 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   setConversations: (convs) =>
     set((state) => {
+      // Hide Facebook/non-WhatsApp contacts: PSIDs are > 15 digits, real phone numbers aren't.
+      convs = convs.filter((c) => {
+        const digits = (c.participant.phoneNumber ?? '').replace(/\D/g, '');
+        return digits.length <= 15;
+      });
       const locallyRead = new Set(
         state.conversations
           .filter((c) => c.unreadCount === 0 && !c.isMarkedUnread)
