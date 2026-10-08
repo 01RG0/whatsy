@@ -312,7 +312,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
     )}
     <div
-      className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#e9edef] dark:border-[#222e35] px-3 pt-2 pb-2 relative flex flex-col"
+      className="bg-[#f0f2f5]/80 dark:bg-[#202c33]/80 backdrop-blur-md border-t border-[#e9edef]/60 dark:border-[#222e35]/60 px-3 pt-2 pb-2 relative flex flex-col"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
       {/* Reply Preview */}
