@@ -138,11 +138,30 @@ function connect() {
       _ws.sendFn({ action: 'SUBSCRIBE_STUDENT', studentId: _ws.activeId });
     }
     // Catch up on conversations/messages that arrived while disconnected.
-    import('../api/inbox').then(({ getConversations }) => {
-      const { currentFilter, currentSearch } = useInboxStore.getState();
+    import('../api/inbox').then(({ getConversations, getMessages }) => {
+      const { currentFilter, currentSearch, activeConversationId, messages } = useInboxStore.getState();
       getConversations(currentFilter, currentSearch)
         .then((convs) => useInboxStore.getState().setConversations(convs))
         .catch(() => undefined);
+      // Re-sync message statuses for the active conversation so that any
+      // MESSAGE_STATUS events missed while the WS was down (e.g. pending→sent
+      // after a Zernio outage recovery) are applied without requiring a page reload.
+      if (activeConversationId) {
+        const convMsgs = messages[activeConversationId] ?? [];
+        const hasStalePending = convMsgs.some((m) => m.status === 'pending' && !m.id.startsWith('temp-'));
+        if (hasStalePending) {
+          getMessages(activeConversationId)
+            .then((fresh) => {
+              for (const freshMsg of fresh) {
+                const inStore = convMsgs.find((m) => m.id === freshMsg.id);
+                if (inStore && inStore.status !== freshMsg.status) {
+                  useInboxStore.getState().updateMessageStatus(freshMsg.id, freshMsg.status);
+                }
+              }
+            })
+            .catch(() => undefined);
+        }
+      }
     });
   };
 
