@@ -185,9 +185,22 @@ func (h *SyncHandler) SyncJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 // SyncSince is called by the background worker — incremental sync since a given time.
-// Uses the global key and default tenant so the worker's existing call site is unchanged.
+// Syncs whatsapp first, then facebook so existing facebook rows stored with the wrong
+// platform get corrected via the ON CONFLICT platform update.
 func (h *SyncHandler) SyncSince(ctx context.Context, since time.Time) (int, error) {
-	return h.syncConversations(ctx, defaultTenantID, h.zernioKey, since, nil)
+	total, err := h.syncPlatform(ctx, defaultTenantID, h.zernioKey, "whatsapp", since, nil)
+	if err != nil {
+		return total, err
+	}
+	// Correct any facebook conversations that were previously stored as whatsapp.
+	// We ignore the count and errors here — facebook sync is best-effort.
+	fbCount, fbErr := h.syncPlatform(ctx, defaultTenantID, h.zernioKey, "facebook", since, nil)
+	if fbErr != nil {
+		log.Printf("[sync] facebook correction pass error (non-fatal): %v", fbErr)
+	} else {
+		log.Printf("[sync] facebook correction pass: %d conversations", fbCount)
+	}
+	return total, nil
 }
 
 func parseSince(s string) time.Time {
@@ -272,11 +285,15 @@ func (h *SyncHandler) fetchPage(ctx context.Context, url, key string) ([]byte, i
 }
 
 func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, key string, since time.Time, emit func(SyncProgress)) (int, error) {
+	return h.syncPlatform(ctx, tenantID, key, "whatsapp", since, emit)
+}
+
+func (h *SyncHandler) syncPlatform(ctx context.Context, tenantID string, key string, platform string, since time.Time, emit func(SyncProgress)) (int, error) {
 	syncMode := "full"
 	if !since.IsZero() {
 		syncMode = "incremental since " + since.Format(time.RFC3339)
 	}
-	log.Printf("[sync] starting %s sync for tenant=%s", syncMode, tenantID)
+	log.Printf("[sync] starting %s sync platform=%s tenant=%s", syncMode, platform, tenantID)
 
 	cursor := ""
 	total := 0
@@ -288,7 +305,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 	page := 0
 
 	for {
-		url := h.zernioBase + "/inbox/conversations?platform=whatsapp&limit=50"
+		url := h.zernioBase + "/inbox/conversations?platform=" + platform + "&limit=50"
 		if cursor != "" {
 			url += "&cursor=" + cursor
 		}
@@ -366,7 +383,7 @@ func (h *SyncHandler) syncConversations(ctx context.Context, tenantID string, ke
 		}
 		cursor = pageData.Pagination.NextCursor
 	}
-	log.Printf("[sync] done — synced %d conversations across %d pages (tenant=%s, mode=%s)", total, page, tenantID, syncMode)
+	log.Printf("[sync] done — synced %d conversations across %d pages (tenant=%s, platform=%s, mode=%s)", total, page, tenantID, platform, syncMode)
 	return total, nil
 }
 
