@@ -674,7 +674,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Viewer Pills */}
       {viewers.length > 0 && (
-        <div className="px-4 py-1.5 flex items-center gap-2 bg-white/80 dark:bg-[#202c33]/80 backdrop-blur-md border-t border-gray-200/60 dark:border-[#313d45]/60">
+        <div className="px-4 py-1.5 flex items-center gap-2 bg-white dark:bg-[#202c33] border-t border-gray-200 dark:border-[#313d45]">
           <span className="text-xs text-gray-400 dark:text-[#8696a0]">{t.viewing}</span>
           {viewers.map((v) => (
             <span key={v.agentId} className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-[#2a3942] rounded-full px-2 py-0.5 text-gray-700 dark:text-[#e9edef]">
