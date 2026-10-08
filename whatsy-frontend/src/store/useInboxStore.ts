@@ -6,6 +6,12 @@ import type {
 } from '../components/types';
 export type { ZernioConversation };
 
+// Facebook PSIDs are pure numeric strings longer than 15 digits (E.164 max is 15).
+function isWhatsApp(c: ZernioConversation): boolean {
+  const digits = (c.participant.phoneNumber ?? '').replace(/\D/g, '');
+  return digits.length <= 15;
+}
+
 export interface ViewerInfo {
   agentId: string;
   name: string;
@@ -86,11 +92,7 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   setConversations: (convs) =>
     set((state) => {
-      // Hide Facebook/non-WhatsApp contacts: PSIDs are > 15 digits, real phone numbers aren't.
-      convs = convs.filter((c) => {
-        const digits = (c.participant.phoneNumber ?? '').replace(/\D/g, '');
-        return digits.length <= 15;
-      });
+      convs = convs.filter(isWhatsApp);
       const locallyRead = new Set(
         state.conversations
           .filter((c) => c.unreadCount === 0 && !c.isMarkedUnread)
@@ -116,7 +118,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   appendConversations: (convs) =>
     set((state) => {
       const existingIds = new Set(state.conversations.map((c) => c.id));
-      const toAdd = convs.filter((c) => !existingIds.has(c.id));
+      const toAdd = convs.filter((c) => !existingIds.has(c.id) && isWhatsApp(c));
       if (toAdd.length === 0) return state;
       const addedUnread = toAdd.filter(isUnread).length;
       return {
@@ -195,7 +197,7 @@ export const useInboxStore = create<InboxState>((set) => ({
     set((state) => {
       const idx = state.conversations.findIndex((c) => c.id === id);
       if (idx === -1) {
-        if (patch && patch.participant && patch.id) {
+        if (patch && patch.participant && patch.id && isWhatsApp(patch as ZernioConversation)) {
           const added = isUnread(patch) ? 1 : 0;
           return {
             conversations: [patch as ZernioConversation, ...state.conversations],
