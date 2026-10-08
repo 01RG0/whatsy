@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -180,6 +182,7 @@ func main() {
 
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
 
+	var syncMu sync.Mutex
 	r.Post("/internal/sync", func(w http.ResponseWriter, r *http.Request) {
 		secret := os.Getenv("WORKER_SECRET")
 		if secret == "" {
@@ -189,13 +192,20 @@ func main() {
 			return
 		}
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if auth != secret {
+		if subtle.ConstantTimeCompare([]byte(auth), []byte(secret)) != 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+		if !syncMu.TryLock() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]string{"error": "sync already running"})
+			return
+		}
+		defer syncMu.Unlock()
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Minute)
 		defer cancel()
 		count, err := syncHandler.SyncSince(ctx, time.Now().Add(-35*time.Minute))
 		if err != nil {
