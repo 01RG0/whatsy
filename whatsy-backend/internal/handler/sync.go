@@ -67,6 +67,7 @@ func (h *SyncHandler) getZernioKey(ctx context.Context, tenantID string) string 
 type zernioConversation struct {
 	ID                  string `json:"id"`
 	AccountID           string `json:"accountId"`
+	Platform            string `json:"platform"` // "whatsapp" | "facebook" | etc.
 	ParticipantID       string `json:"participantId"`
 	ParticipantName     string `json:"participantName"`
 	ParticipantUsername string `json:"participantUsername"`
@@ -410,18 +411,24 @@ func (h *SyncHandler) upsertConversation(ctx context.Context, tenantID string, c
 		}
 	}
 
+	platform := conv.Platform
+	if platform == "" {
+		platform = "whatsapp" // default: we queried with ?platform=whatsapp
+	}
+
 	_, err = h.db.ExecContext(ctx,
 		`INSERT INTO conversations
 		    (student_id, platform, last_message, last_message_at, unread_count, zernio_conversation_id, tenant_id, created_at, updated_at)
-		 VALUES ($1, 'whatsapp', $2, $3, $4, $5, $6::uuid, NOW(), NOW())
+		 VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, NOW(), NOW())
 		 ON CONFLICT (zernio_conversation_id) DO UPDATE
 		    SET student_id      = EXCLUDED.student_id,
+		        platform        = EXCLUDED.platform,
 		        last_message    = EXCLUDED.last_message,
 		        last_message_at = EXCLUDED.last_message_at,
 		        unread_count    = EXCLUDED.unread_count,
 		        tenant_id       = EXCLUDED.tenant_id,
 		        updated_at      = NOW()`,
-		studentID, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID, tenantID,
+		studentID, platform, conv.LastMessage, lastMsgAt, conv.UnreadCount, conv.ID, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert conversation: %w", err)
