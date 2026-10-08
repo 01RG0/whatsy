@@ -180,6 +180,35 @@ func main() {
 
 	r.Post("/api/webhooks/zernio", h.HandleWebhook)
 
+	r.Post("/internal/sync", func(w http.ResponseWriter, r *http.Request) {
+		secret := os.Getenv("WORKER_SECRET")
+		if secret == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]string{"error": "not configured"})
+			return
+		}
+		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if auth != secret {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+		defer cancel()
+		count, err := syncHandler.SyncSince(ctx, time.Now().Add(-35*time.Minute))
+		if err != nil {
+			log.Printf("[internal/sync] error: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"synced": count})
+	})
+
 	r.With(authLimiter.Middleware).Post("/v1/auth/register", authHandler.Register)
 	r.With(authLimiter.Middleware).Post("/v1/auth/register-workspace", authHandler.RegisterWorkspace)
 	r.With(authLimiter.Middleware).Post("/v1/auth/login", authHandler.Login)
