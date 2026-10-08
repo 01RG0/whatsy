@@ -202,7 +202,7 @@ func main() {
 			log.Printf("[internal/sync] error: %v", err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			json.NewEncoder(w).Encode(map[string]string{"error": "sync failed"})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
