@@ -48,11 +48,9 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	if claims != nil {
 		accountID = claims.AgentID
 	}
-	// "platform" is accepted for API compatibility but is a platform name, not
-	// an agent id; it must not overwrite the assigned_to_me filter key.
-	_ = r.URL.Query().Get("platform")
+	platform := r.URL.Query().Get("platform") // e.g. "whatsapp" — filters out Facebook/other platform rows
 
-	conversations, err := h.convRepo.ListForTenant(r.Context(), tenantID, accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), r.URL.Query().Get("search_type"), r.URL.Query().Get("label"), queryLimit(r, 100), r.URL.Query().Get("before"))
+	conversations, err := h.convRepo.ListForTenant(r.Context(), tenantID, accountID, r.URL.Query().Get("filter"), r.URL.Query().Get("search"), r.URL.Query().Get("search_type"), r.URL.Query().Get("label"), queryLimit(r, 100), r.URL.Query().Get("before"), platform)
 	if err != nil {
 		log.Printf("[error] list conversations: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list conversations"})

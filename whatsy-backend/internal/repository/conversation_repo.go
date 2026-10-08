@@ -51,7 +51,7 @@ const conversationJoins = `
 // List returns conversations for the requested view. The current schema has no
 // account column; accountID is therefore used by the assigned_to_me filter.
 // labelID optionally restricts results to conversations with that tag assigned.
-func (r *ConversationRepo) ListForTenant(ctx context.Context, tenantID, accountID, filter, search, searchType, labelID string, limit int, beforeID string) ([]domain.Conversation, error) {
+func (r *ConversationRepo) ListForTenant(ctx context.Context, tenantID, accountID, filter, search, searchType, labelID string, limit int, beforeID string, platform string) ([]domain.Conversation, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -63,6 +63,10 @@ func (r *ConversationRepo) ListForTenant(ctx context.Context, tenantID, accountI
 		return fmt.Sprintf("$%d", len(args))
 	}
 	where = append(where, "c.tenant_id = "+addArg(tenantID)+"::uuid")
+
+	if platform != "" {
+		where = append(where, "c.platform = "+addArg(platform))
+	}
 
 	if beforeID != "" {
 		p := addArg(beforeID)
