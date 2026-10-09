@@ -172,14 +172,18 @@ export const useInboxStore = create<InboxState>((set) => ({
   updateConversation: (conv) =>
     set((state) => {
       let delta = 0;
-      const conversations = state.conversations.map((c) => {
-        if (c.id !== conv.id) return c;
+      const conversations = state.conversations.flatMap((c) => {
+        if (c.id !== conv.id) return [c];
+        if (!isWhatsApp(c)) {
+          if (isUnread(c)) delta -= 1;
+          return [];
+        }
         const wasUnread = isUnread(c);
         const patched = { ...c, ...conv };
         const nowUnread = isUnread(patched);
         if (wasUnread && !nowUnread) delta = -1;
         else if (!wasUnread && nowUnread) delta = 1;
-        return patched;
+        return [patched];
       });
       // Re-sort only when a real new message arrived (lastMessage.createdAt changed).
       // Using updatedAt caused mark-unread/assign/label events to jump chats to the top.
@@ -207,6 +211,13 @@ export const useInboxStore = create<InboxState>((set) => ({
         return state;
       }
       const old = state.conversations[idx];
+      // Evict non-WhatsApp conversations that slipped into the store.
+      if (!isWhatsApp(old)) {
+        return {
+          conversations: state.conversations.filter((c) => c.id !== id),
+          totalUnread: Math.max(0, state.totalUnread - (isUnread(old) ? 1 : 0)),
+        };
+      }
       const updated = patch ? { ...old, ...patch } : old;
       const rest = state.conversations.filter((c) => c.id !== id);
       let delta = 0;
