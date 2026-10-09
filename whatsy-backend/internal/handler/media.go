@@ -79,7 +79,27 @@ func (h *MediaHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
+	// Look up accountId so Zernio can authorize the media download.
+	// Cache key (hash) is computed above from rawURL without accountId — this
+	// matches what cacheMedia stores — so we only append it to the fetch URL.
+	var proxyAccountID string
+	if h.db != nil {
+		_ = h.db.QueryRowContext(r.Context(),
+			`SELECT account_id FROM whatsapp_connections WHERE status='connected' AND COALESCE(account_id, '') <> '' ORDER BY id DESC LIMIT 1`,
+		).Scan(&proxyAccountID)
+		if proxyAccountID == "" {
+			_ = h.db.QueryRowContext(r.Context(),
+				`SELECT account_id FROM whatsapp_connections WHERE COALESCE(account_id, '') <> '' ORDER BY id DESC LIMIT 1`,
+			).Scan(&proxyAccountID)
+		}
+	}
+
+	fetchURL := rawURL
+	if proxyAccountID != "" && strings.Contains(rawURL, "zernio.com") {
+		fetchURL += "?accountId=" + url.QueryEscape(proxyAccountID)
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, fetchURL, nil)
 	if err != nil {
 		log.Printf("[media-proxy] error creating request for %s: %v", rawURL, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "fetch media"})

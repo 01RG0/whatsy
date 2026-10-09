@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -361,11 +362,12 @@ func (s *ChatService) HandleInboundMessage(ctx context.Context, payload zernio.I
 	switch message.Type {
 	case domain.ContentTypeAudio, domain.ContentTypeVoiceNote,
 		domain.ContentTypeImage, domain.ContentTypeVideo:
+		acctID := s.zernioAccountID(ctx, convTenantID)
 		for _, att := range message.Attachments {
 			if att.URL != "" {
 				attURL := att.URL
 				ct := message.Type
-				go s.cacheMedia(attURL, ct)
+				go s.cacheMedia(attURL, ct, acctID)
 			}
 		}
 	}
@@ -949,8 +951,9 @@ func (s *ChatService) cacheSticker(rawURL string) {
 
 // cacheMedia downloads inbound media from Zernio and stores it in the
 // media_cache table so it can be served even after Meta's CDN expires the URL.
-// The cache key is SHA-256 of the raw attachment URL, matching what GetProxy uses.
-func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType) {
+// The cache key is SHA-256 of the normalized URL (without accountId), matching
+// what GetProxy uses. accountID is appended only to the fetch request.
+func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType, accountID string) {
 	// Acquire a semaphore slot; skip if 3 operations are already in flight so we
 	// don't exhaust the DB connection pool during media bursts.
 	select {
@@ -963,6 +966,11 @@ func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType) 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	// Normalize http→https before hashing so cache keys match GetProxy's behavior.
+	if strings.HasPrefix(rawURL, "http://") {
+		rawURL = "https://" + rawURL[len("http://"):]
+	}
+
 	h := sha256.Sum256([]byte(rawURL))
 	hash := hex.EncodeToString(h[:])
 
@@ -972,7 +980,13 @@ func (s *ChatService) cacheMedia(rawURL string, contentType domain.ContentType) 
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	// Append accountId to the fetch URL so Zernio can authorize the download.
+	fetchURL := rawURL
+	if accountID != "" {
+		fetchURL += "?accountId=" + url.QueryEscape(accountID)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
 	if err != nil {
 		log.Printf("[media-cache] build request for %s: %v", rawURL, err)
 		return
